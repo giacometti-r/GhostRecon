@@ -1,0 +1,139 @@
+image:
+  repository: ghostrecon
+  tag: local
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 2
+
+serviceAccount:
+  create: true
+  name: ghostrecon
+
+env:
+  GHOSTRECON_ENVIRONMENT: prod
+  GHOSTRECON_LOG_LEVEL: INFO
+  GHOSTRECON_ATTIO_BASE_URL: https://api.attio.com
+  GHOSTRECON_EMAIL_VERIFIER_URL: http://email-verifier:8080
+
+# Additional secret values are supplied from secrets.sops.yaml via helm-secrets.
+# Database and Redis URLs are generated when their bundled instances are enabled.
+secretEnv: {}
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 17.10-alpine3.23
+    pullPolicy: IfNotPresent
+  auth:
+    username: ghostrecon
+    database: ghostrecon
+    postgresPassword: ""
+    password: ""
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  networkPolicy:
+    enabled: true
+
+redis:
+  enabled: true
+  image:
+    repository: redis
+    tag: 7.4.8-alpine3.21
+    pullPolicy: IfNotPresent
+  auth:
+    password: ""
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  networkPolicy:
+    enabled: true
+
+migrations:
+  enabled: true
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  retryAttempts: 30
+  retryDelaySeconds: 5
+
+tests:
+  enabled: true
+
+services:
+  - gateway-service
+  - event-intelligence-service
+  - incident-intelligence-service
+  - crm-service
+  - ingestion-service
+  - enrichment-service
+  - email-intelligence-service
+  - scoring-routing-service
+  - sequencing-service
+  - meeting-handoff-service
+  - governance-service
+  - console-service
+  - reporting-service
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+emailVerifier:
+  enabled: true
+  image:
+    repository: umutert/emailvalidator
+    tag: latest
+    pullPolicy: IfNotPresent
+  env: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi

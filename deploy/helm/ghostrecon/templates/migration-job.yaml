@@ -1,0 +1,61 @@
+{{- if .Values.migrations.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "ghostrecon.fullname" . }}-migrations
+  labels:
+    {{- include "ghostrecon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    helm.sh/hook: post-install,pre-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrations.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "ghostrecon.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: migrations
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              attempt=1
+              until alembic upgrade head; do
+                if [ "$attempt" -ge {{ .Values.migrations.retryAttempts }} ]; then
+                  echo "database migration failed after $attempt attempts" >&2
+                  exit 1
+                fi
+                echo "database unavailable; retrying migration in {{ .Values.migrations.retryDelaySeconds }} seconds" >&2
+                attempt=$((attempt + 1))
+                sleep {{ .Values.migrations.retryDelaySeconds }}
+              done
+          env:
+            - name: GHOSTRECON_SERVICE_NAME
+              value: migration-job
+          envFrom:
+            - configMapRef:
+                name: ghostrecon-config
+            - secretRef:
+                name: ghostrecon-secrets
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+{{- end }}

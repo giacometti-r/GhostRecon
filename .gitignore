@@ -1,0 +1,60 @@
+# Research input
+deep-research-report.md
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+
+# Python packaging and build outputs
+.venv/
+venv/
+env/
+ENV/
+build/
+dist/
+site/
+*.egg-info/
+src/ghostrecon.egg-info/
+pip-wheel-metadata/
+
+# Test and coverage outputs
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Local environment files
+.env
+.env.*
+*.local
+
+# Tooling and editor state
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*.orig
+*.rej
+
+# Project-specific generated files
+scripts/__pycache__/
+tests/__pycache__/
+
+# SOPS / Age local artifacts and decrypted secrets
+*.dec.yaml
+*.decrypted.yaml
+deploy/helm/ghostrecon/secrets.local.yaml
+deploy/helm/ghostrecon/secrets.dec.yaml
+deploy/helm/ghostrecon/*.dec.yaml
+
+# other
+graphify-out/
+.agents/
+.codex/

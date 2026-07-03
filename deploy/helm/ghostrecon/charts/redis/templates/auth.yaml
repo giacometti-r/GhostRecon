@@ -1,0 +1,14 @@
+{{- include "redis.validate" . -}}
+{{- if .Values.enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "redis.fullname" . }}-auth
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  redis-password: {{ .Values.auth.password | quote }}
+  users.acl: |-
+    user default on #{{ .Values.auth.password | sha256sum }} ~* &* +@all
+{{- end }}

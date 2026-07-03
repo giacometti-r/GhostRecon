@@ -1,0 +1,5 @@
+# Replace the placeholder Age recipient with your real Age public key.
+# Keep the private key outside the repo; SOPS reads it from your local environment or CI secret store.
+creation_rules:
+  - path_regex: secrets\.sops\.yaml$
+    age: ["age158n6phchcwrszh07a3s0g43nd5y85e9p0xpv4amnrp6fm2uftsjqx3zw9l"]

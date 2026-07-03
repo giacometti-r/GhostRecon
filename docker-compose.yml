@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ghostrecon
+      POSTGRES_USER: ghostrecon
+      POSTGRES_PASSWORD: ghostrecon
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ghostrecon -d ghostrecon"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  gateway-service:
+    build: .
+    environment: &service-env
+      GHOSTRECON_ENVIRONMENT: local
+      GHOSTRECON_SERVICE_NAME: gateway-service
+      GHOSTRECON_DATABASE_URL: postgresql+asyncpg://ghostrecon:ghostrecon@postgres:5432/ghostrecon
+      GHOSTRECON_REDIS_URL: redis://redis:6379/0
+      GHOSTRECON_EMAIL_VERIFIER_URL: http://email-verifier:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "--loglevel=INFO"]
+    environment:
+      <<: *service-env
+      GHOSTRECON_SERVICE_NAME: worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  email-verifier:
+    image: umutert/emailvalidator:latest
+    environment:
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "8081:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

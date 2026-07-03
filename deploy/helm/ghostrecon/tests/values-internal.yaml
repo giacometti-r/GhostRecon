@@ -1,0 +1,9 @@
+# Template-only credentials. Do not use these values in a cluster.
+postgresql:
+  auth:
+    postgresPassword: template-admin-password
+    password: template-app-password
+
+redis:
+  auth:
+    password: template-redis-password

@@ -1,0 +1,56 @@
+{{- range $service := .Values.services }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $service }}
+  labels:
+    {{- include "ghostrecon.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $service }}
+spec:
+  replicas: {{ $.Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ghostrecon.name" $ }}
+      app.kubernetes.io/component: {{ $service }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "ghostrecon.name" $ }}
+        app.kubernetes.io/component: {{ $service }}
+    spec:
+      serviceAccountName: {{ $.Values.serviceAccount.name }}
+      securityContext:
+        {{- toYaml $.Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ $service }}
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: GHOSTRECON_SERVICE_NAME
+              value: {{ $service | quote }}
+          envFrom:
+            - configMapRef:
+                name: ghostrecon-config
+            - secretRef:
+                name: ghostrecon-secrets
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            {{- toYaml $.Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+---
+{{- end }}
