@@ -3,9 +3,24 @@ import asyncio
 from celery import Celery
 
 from ghostrecon.common.config import get_settings
-from ghostrecon.models.api import SuppressionCheckRequest
+from ghostrecon.models.api import (
+    ContactEnrichmentCreate,
+    EmailCandidatePersistRequest,
+    EmailVerifyBatchRequest,
+    EntityResolutionCreate,
+    SuppressionCheckRequest,
+)
 from ghostrecon.services.company_crawler import run_company_crawl
 from ghostrecon.services.email_candidates import generate_email_candidates
+from ghostrecon.services.enrichment_workflows import (
+    contact_candidate_to_model,
+    create_contact_enrichment_candidate,
+    create_entity_resolution,
+    email_candidate_to_model,
+    entity_resolution_to_model,
+    persist_email_candidates,
+    verify_email_candidates,
+)
 from ghostrecon.services.event_intelligence import fetch_event_source, parse_pending_event_items
 from ghostrecon.services.governance import evaluate_suppression
 from ghostrecon.services.incident_intelligence import (
@@ -52,6 +67,54 @@ def evaluate_suppression_task(payload: dict[str, object]) -> dict[str, object]:
 def crawl_company_domain(domain: str) -> dict[str, object]:
     run_company_crawl(domain, settings.crawl_user_agent, settings.crawl_respect_robots)
     return {"status": "completed", "domain": domain}
+
+
+@celery_app.task(name="ghostrecon.resolve_entity")
+def resolve_entity_task(payload: dict[str, object], idempotency_key: str) -> dict[str, object]:
+    case = asyncio.run(
+        create_entity_resolution(
+            EntityResolutionCreate.model_validate(payload),
+            idempotency_key=idempotency_key,
+            settings=settings,
+        )
+    )
+    return entity_resolution_to_model(case).model_dump(mode="json")
+
+
+@celery_app.task(name="ghostrecon.enrich_contact_candidate")
+def enrich_contact_candidate_task(
+    payload: dict[str, object], idempotency_key: str
+) -> dict[str, object]:
+    candidate = asyncio.run(
+        create_contact_enrichment_candidate(
+            ContactEnrichmentCreate.model_validate(payload),
+            idempotency_key=idempotency_key,
+            settings=settings,
+        )
+    )
+    return contact_candidate_to_model(candidate).model_dump(mode="json")
+
+
+@celery_app.task(name="ghostrecon.persist_email_candidates")
+def persist_email_candidates_task(
+    payload: dict[str, object], idempotency_key: str
+) -> list[dict[str, object]]:
+    candidates = asyncio.run(
+        persist_email_candidates(
+            EmailCandidatePersistRequest.model_validate(payload),
+            idempotency_key=idempotency_key,
+            settings=settings,
+        )
+    )
+    return [email_candidate_to_model(candidate).model_dump(mode="json") for candidate in candidates]
+
+
+@celery_app.task(name="ghostrecon.verify_email_candidates_batch")
+def verify_email_candidates_batch_task(payload: dict[str, object]) -> list[dict[str, object]]:
+    candidates = asyncio.run(
+        verify_email_candidates(EmailVerifyBatchRequest.model_validate(payload), settings=settings)
+    )
+    return [email_candidate_to_model(candidate).model_dump(mode="json") for candidate in candidates]
 
 
 @celery_app.task(name="ghostrecon.fetch_source")

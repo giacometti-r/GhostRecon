@@ -47,7 +47,7 @@ flowchart TD
 | Console and reporting | FastAPI/Jinja UI, review actions, reporting projections, freshness indicators | Intelligence ingestion, independent dashboard service |
 | CRM | Export batches, provider mapping, retry/reconciliation state | Acquisition, candidate approval, outreach enrollment |
 
-The existing `ingestion-service` remains for Attio webhooks, imports, and other compatibility intake. It is not the primary acquisition path. Sprint 3 implements the shared `SourceDefinition` / `RawSourceItem` foundation, adapter helpers, source-health API, source-ingestion events, and source-fetch Celery task. Sprint 4 implements event intelligence; Sprint 5 implements incident article discovery, candidate incident detection, corroboration inputs, and watchlists.
+The existing `ingestion-service` remains for Attio webhooks, imports, and other compatibility intake. It is not the primary acquisition path. Sprint 3 implements the shared `SourceDefinition` / `RawSourceItem` foundation, adapter helpers, source-health API, source-ingestion events, and source-fetch Celery task. Sprint 4 implements event intelligence; Sprint 5 implements incident article discovery, candidate incident detection, corroboration inputs, and watchlists; Sprint 6 implements entity resolution, permitted contact enrichment, persisted email candidates, verification payloads, and minimal review routing.
 
 ## Runtime Pattern
 
@@ -56,11 +56,11 @@ The existing `ingestion-service` remains for Attio webhooks, imports, and other 
 - PostgreSQL stores canonical entities, source/evidence lineage, audit history, suppression state, export state, and transactional outbox rows.
 - Redis provides queues, locks, rate-limit buckets, and short-lived task state.
 - `console-service` remains the only dashboard UI and consumes `reporting-service` read APIs.
-- Helm deploys implemented microservices independently. Event and incident intelligence services are registered in the chart; the shared source registry foundation remains in the common package.
+- Helm deploys implemented microservices independently. Event, incident, enrichment, and email-intelligence services are registered in the chart; the shared source registry foundation remains in the common package.
 
 ## Canonical and Contract Pattern
 
-- `SourceDefinition` and `RawSourceItem` are implemented as the shared ingestion foundation. Later canonical intelligence entities are `CyberEvent`, `EventParticipant`, `NewsArticle`, `SecurityIncident`, `WatchTarget`, `CrmExportBatch`, and `CrmExportItem`.
+- `SourceDefinition` and `RawSourceItem` are implemented as the shared ingestion foundation. Canonical intelligence and workflow entities now include `CyberEvent`, `EventParticipant`, `NewsArticle`, `SecurityIncident`, `WatchTarget`, `EntityResolutionCase`, `ContactEnrichmentCandidate`, `OrganizationEmailPattern`, `ReviewCandidate`, `CrmExportBatch`, and `CrmExportItem`.
 - All canonical entities retain GhostRecon IDs, source URLs, fetch timestamps, hashes, permission/licensing state, and evidence references.
 - Lead sources include `cyber_event` and `security_incident` in addition to existing sources.
 - Mutating APIs require an idempotency key; events use deterministic aggregate and source keys.

@@ -46,7 +46,7 @@ The pipeline is external sources → normalization and deduplication → contact
 | `sequencing-service` | In-house sequence eligibility and future SMTP/IMAP execution after separate approval. |
 | `meeting-handoff-service` | AE/SE prep packets and meeting-handoff workflows. |
 
-The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event and incident intelligence runtimes are implemented and included in Helm; incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets.
+The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, and email-intelligence runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets; enrichment stores entity-resolution cases, eligible contact candidates, email candidates, verification payloads, and review-required records.
 
 ## Implemented Source Registry Foundation
 
@@ -68,6 +68,15 @@ Sprint 5 adds the incident runtime used by later enrichment, governance, dashboa
 - Candidate-first incident lifecycle with authoritative-source and independent-source corroboration support.
 - Watch-target APIs for company, domain, incident, event-series, and topic monitoring, including idempotent promotion from a global incident.
 
+## Implemented Enrichment and Email Intelligence Runtime
+
+Sprint 6 adds the enrichment and email runtime used by later scoring, governance, dashboard, and CRM-export work:
+
+- PostgreSQL persistence for entity-resolution cases, contact-enrichment candidates, organization email patterns, and minimal review candidates.
+- Source-lineage, policy-snapshot, origin, review-state, idempotency, and optimistic-version fields on contacts and email candidates.
+- Review-routed entity resolution for ambiguous/no-match organizations and fail-closed contact enrichment for missing lineage, prohibited participant reuse, breached data, or out-of-scope incident roles.
+- Stateful email-candidate persistence, organization-pattern learning from verified candidates, verification-payload retention, and review routing for catch-all/ambiguous/failed verification.
+- Gateway and owning-service APIs for enrichment cases, contact candidates, persisted email candidates, verification batches, and read-only review candidates.
 
 ## Source Policy
 
@@ -95,6 +104,8 @@ make dev
 ```
 
 The local stack starts PostgreSQL, Redis, `gateway-service`, a Celery worker, and the email verifier sidecar.
+If a default host port is already in use, override it with `GHOSTRECON_POSTGRES_PORT`,
+`GHOSTRECON_REDIS_PORT`, `GHOSTRECON_HTTP_PORT`, or `GHOSTRECON_EMAIL_VERIFIER_PORT`.
 
 Run one implemented service directly:
 

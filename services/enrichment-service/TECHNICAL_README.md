@@ -11,7 +11,13 @@
 ## Interfaces
 
 - `POST /v1/enrichment/domain`
+- `POST /v1/enrichment/entity-resolutions`
+- `GET /v1/enrichment/entity-resolutions`
+- `POST /v1/enrichment/contact-candidates`
+- `GET /v1/enrichment/contact-candidates`
 - Worker task: `ghostrecon.crawl_company_domain`
+- Worker task: `ghostrecon.resolve_entity`
+- Worker task: `ghostrecon.enrich_contact_candidate`
 
 Target requests add canonical origin IDs, source-item IDs, source-reuse state, and requested role scope. Requests missing required policy context fail closed.
 
@@ -37,6 +43,7 @@ Target requests add canonical origin IDs, source-item IDs, source-reuse state, a
 - Robots disallow: skip and record reason.
 - Permission unknown/prohibited: reject contact extraction and emit a policy-block audit signal.
 - Entity ambiguity: preserve candidates and route to analyst review.
+- Missing lineage, prohibited participant reuse, out-of-scope incident roles, and breached-data provenance: block enrichment and create a review-visible record where appropriate.
 - Feed outage: retry with backoff and retain last successful version/freshness state.
 - Suspected breached data: quarantine metadata, do not persist payload, and alert governance.
 

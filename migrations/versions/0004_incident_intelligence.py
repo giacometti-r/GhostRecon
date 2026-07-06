@@ -80,8 +80,16 @@ def upgrade() -> None:
         sa.UniqueConstraint("dedupe_key", name="uq_security_incidents_dedupe_key"),
     )
     op.create_index("ix_security_incidents_status", "security_incidents", ["status"])
-    op.create_index("ix_security_incidents_source_definition", "security_incidents", ["source_definition_id"])
-    op.create_index("ix_security_incidents_canonical_state", "security_incidents", ["canonical_state"])
+    op.create_index(
+        "ix_security_incidents_source_definition",
+        "security_incidents",
+        ["source_definition_id"],
+    )
+    op.create_index(
+        "ix_security_incidents_canonical_state",
+        "security_incidents",
+        ["canonical_state"],
+    )
 
     op.create_table(
         "security_incident_evidence",
@@ -142,7 +150,9 @@ def upgrade() -> None:
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint("target_type", "canonical_target_key", name="uq_watch_targets_type_key"),
+        sa.UniqueConstraint(
+            "target_type", "canonical_target_key", name="uq_watch_targets_type_key"
+        ),
     )
     op.create_index("ix_watch_targets_type_enabled", "watch_targets", ["target_type", "enabled"])
     op.create_index("ix_watch_targets_origin_incident", "watch_targets", ["origin_incident_id"])
@@ -258,7 +268,9 @@ def _seed_incident_sources() -> None:
                 "checkpoint_state": {},
                 "retry_budget": 3,
                 "policy_state": "unknown",
-                "policy_evidence": {"note": "Discovery seed; terms review required before expansion."},
+                "policy_evidence": {
+                    "note": "Discovery seed; terms review required before expansion."
+                },
                 "policy_reviewed_at": None,
                 "participant_reuse_state": "unknown",
                 "participant_reuse_evidence": {},

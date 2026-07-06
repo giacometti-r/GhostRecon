@@ -7,14 +7,25 @@ from ghostrecon.common.config import get_settings
 from ghostrecon.common.security import verify_attio_signature
 from ghostrecon.events.contracts import EventName, new_event
 from ghostrecon.models.api import (
+    ContactEnrichmentCreate,
+    ContactEnrichmentList,
+    ContactEnrichmentOut,
     CyberEventList,
     CyberEventOut,
     DomainEnrichmentRequest,
+    EmailCandidatePersistRequest,
+    EmailCandidatePersistResult,
     EmailCandidateRequest,
+    EmailVerifyBatchRequest,
+    EmailVerifyBatchResult,
+    EntityResolutionCreate,
+    EntityResolutionList,
+    EntityResolutionOut,
     EventParticipantList,
     EventParticipantOut,
     JobAccepted,
     PrepPacketRequest,
+    ReviewCandidateList,
     ScoreRequest,
     SecurityIncidentList,
     SecurityIncidentOut,
@@ -28,6 +39,19 @@ from ghostrecon.models.api import (
 )
 from ghostrecon.services.email_candidates import generate_email_candidates
 from ghostrecon.services.enrichment import enrich_domain
+from ghostrecon.services.enrichment_workflows import (
+    contact_candidate_to_model,
+    create_contact_enrichment_candidate,
+    create_entity_resolution,
+    email_candidate_to_model,
+    entity_resolution_to_model,
+    list_contact_enrichment_candidates,
+    list_entity_resolutions,
+    list_review_candidates,
+    persist_email_candidates,
+    review_candidate_to_model,
+    verify_email_candidates,
+)
 from ghostrecon.services.event_intelligence import (
     event_to_api,
     get_event,
@@ -306,6 +330,58 @@ async def domain_enrichment(request: DomainEnrichmentRequest):
     return await enrich_domain(request.domain)
 
 
+@gateway_router.post("/v1/enrichment/entity-resolutions", response_model=EntityResolutionOut)
+@enrichment_router.post("/v1/enrichment/entity-resolutions", response_model=EntityResolutionOut)
+async def enrichment_create_entity_resolution(
+    request: EntityResolutionCreate,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> EntityResolutionOut:
+    case = await create_entity_resolution(
+        request, idempotency_key=idempotency_key, settings=get_settings()
+    )
+    return entity_resolution_to_model(case)
+
+
+@gateway_router.get("/v1/enrichment/entity-resolutions", response_model=EntityResolutionList)
+@enrichment_router.get("/v1/enrichment/entity-resolutions", response_model=EntityResolutionList)
+async def enrichment_entity_resolutions(
+    status: str | None = None,
+    origin_type: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> EntityResolutionList:
+    cases = await list_entity_resolutions(
+        status=status, origin_type=origin_type, limit=limit, settings=get_settings()
+    )
+    return EntityResolutionList(cases=[entity_resolution_to_model(case) for case in cases])
+
+
+@gateway_router.post("/v1/enrichment/contact-candidates", response_model=ContactEnrichmentOut)
+@enrichment_router.post("/v1/enrichment/contact-candidates", response_model=ContactEnrichmentOut)
+async def enrichment_create_contact_candidate(
+    request: ContactEnrichmentCreate,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> ContactEnrichmentOut:
+    candidate = await create_contact_enrichment_candidate(
+        request, idempotency_key=idempotency_key, settings=get_settings()
+    )
+    return contact_candidate_to_model(candidate)
+
+
+@gateway_router.get("/v1/enrichment/contact-candidates", response_model=ContactEnrichmentList)
+@enrichment_router.get("/v1/enrichment/contact-candidates", response_model=ContactEnrichmentList)
+async def enrichment_contact_candidates(
+    status: str | None = None,
+    origin_type: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> ContactEnrichmentList:
+    candidates = await list_contact_enrichment_candidates(
+        status=status, origin_type=origin_type, limit=limit, settings=get_settings()
+    )
+    return ContactEnrichmentList(
+        candidates=[contact_candidate_to_model(candidate) for candidate in candidates]
+    )
+
+
 @email_router.post("/v1/email/candidates")
 async def email_candidates(request: EmailCandidateRequest):
     return {
@@ -316,6 +392,32 @@ async def email_candidates(request: EmailCandidateRequest):
             )
         ]
     }
+
+
+@gateway_router.post("/v1/email/candidates/persist", response_model=EmailCandidatePersistResult)
+@email_router.post("/v1/email/candidates/persist", response_model=EmailCandidatePersistResult)
+async def email_persist_candidates(
+    request: EmailCandidatePersistRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> EmailCandidatePersistResult:
+    try:
+        candidates = await persist_email_candidates(
+            request, idempotency_key=idempotency_key, settings=get_settings()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return EmailCandidatePersistResult(
+        candidates=[email_candidate_to_model(candidate) for candidate in candidates]
+    )
+
+
+@gateway_router.post("/v1/email/verify-batch", response_model=EmailVerifyBatchResult)
+@email_router.post("/v1/email/verify-batch", response_model=EmailVerifyBatchResult)
+async def email_verify_batch(request: EmailVerifyBatchRequest) -> EmailVerifyBatchResult:
+    candidates = await verify_email_candidates(request, settings=get_settings())
+    return EmailVerifyBatchResult(
+        candidates=[email_candidate_to_model(candidate) for candidate in candidates]
+    )
 
 
 @email_router.post("/v1/email/verify")
@@ -341,6 +443,22 @@ async def prep_packet(request: PrepPacketRequest):
 @governance_router.post("/v1/suppressions/evaluate")
 async def suppression_check(request: SuppressionCheckRequest):
     return evaluate_suppression(request)
+
+
+@gateway_router.get("/v1/review/candidates", response_model=ReviewCandidateList)
+@governance_router.get("/v1/review/candidates", response_model=ReviewCandidateList)
+@console_router.get("/v1/review/candidates", response_model=ReviewCandidateList)
+async def review_candidates(
+    status: str | None = "open",
+    candidate_type: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> ReviewCandidateList:
+    candidates = await list_review_candidates(
+        status=status, candidate_type=candidate_type, limit=limit, settings=get_settings()
+    )
+    return ReviewCandidateList(
+        candidates=[review_candidate_to_model(candidate) for candidate in candidates]
+    )
 
 
 @console_router.get("/", response_class=HTMLResponse)

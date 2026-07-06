@@ -2,9 +2,9 @@
 
 ## Current Stage
 
-Stage: Sprint 5 global incident-news monitoring and watchlists complete; Sprint 6 entity resolution, company/contact enrichment, and email intelligence is next.
+Stage: Sprint 6 entity resolution, company/contact enrichment, and email intelligence complete; Sprint 7 scoring, corroboration, governance, and review workflows is next.
 
-The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, and incident-news monitoring with watchlists.
+The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, and minimal read-only review routing.
 
 ## Done
 
@@ -64,6 +64,18 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Added incident read APIs, watch-target create/list/patch APIs, and idempotent incident promotion to watchlists, exposed through `incident-intelligence-service` and the gateway scaffold.
 - Added Helm service registration and focused tests for GDELT parsing, incident candidate extraction, event contracts, route responses, metadata-only storage, and watchlist promotion.
 
+### Sprint 6 - Entity Resolution, Company/Contact Enrichment, and Email Intelligence
+
+- Added `EntityResolutionCase`, `ContactEnrichmentCandidate`, `OrganizationEmailPattern`, and `ReviewCandidate` persistence plus Alembic migration coverage.
+- Extended contact and email-candidate records with origin, source-lineage, policy-snapshot, verification, review, idempotency, and optimistic-version fields.
+- Implemented review-routed entity resolution across canonical accounts/domains, preserving alternatives for ambiguous or missing matches.
+- Implemented fail-closed contact enrichment for missing lineage, prohibited participant reuse, breached-data provenance, and out-of-scope incident roles.
+- Added stateful email-candidate persistence, organization email-pattern learning from verified candidates, verification-payload retention, and review routing for catch-all, ambiguous, and failed verification.
+- Added `account.enriched`, `contact.discovered`, `email.candidate_generated`, `email.verified`, and `approval.requested` outbox emission for the Sprint 6 workflow boundary.
+- Added enrichment, email, and read-only review APIs through the gateway and owning services, plus Celery task wrappers for entity resolution, contact enrichment, persisted email candidates, and verification batches.
+- Aligned `ghostrecon.service_apps.runtime:app` with the service router factory so Docker, direct Uvicorn runs, and tests load the same service-specific routes.
+- Added focused tests for source-lineage enforcement, participant reuse policy, incident role scope, breached-data rejection, verification mapping, model/migration surface, and new routes.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -73,15 +85,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
 ## Future Sprints
-
-### Sprint 6 - Entity Resolution, Company/Contact Enrichment, and Email Intelligence
-
-- Resolve organizations and domains across events, incidents, existing canonical accounts, and CRM references.
-- Enrich eligible public business contacts in security, IT, risk, and communications roles.
-- Learn organization-specific email patterns, persist candidates and verification payloads, and batch verification through the sidecar.
-- Extend lead-source taxonomy with `cyber_event` and `security_incident`.
-
-Acceptance: source permission and lineage follow every contact; breached personal data is rejected; ambiguous resolution or email verification routes to review.
 
 ### Sprint 7 - Scoring, Corroboration, Governance, and Review Workflows
 

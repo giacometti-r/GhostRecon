@@ -11,8 +11,12 @@
 ## Interfaces
 
 - `POST /v1/email/candidates`
+- `POST /v1/email/candidates/persist`
 - `POST /v1/email/verify`
+- `POST /v1/email/verify-batch`
 - Worker task: `ghostrecon.generate_email_candidates`
+- Worker task: `ghostrecon.persist_email_candidates`
+- Worker task: `ghostrecon.verify_email_candidates_batch`
 
 Target requests require `contact_id`, origin type/ID, source-item IDs, reuse eligibility, role scope, and policy version. The service re-reads current policy rather than trusting a caller-supplied boolean alone.
 
@@ -23,6 +27,7 @@ Target requests require `contact_id`, origin type/ID, source-item IDs, reuse eli
 - Incident contacts must be public business roles in security, IT, risk, or communications.
 - Breached-data provenance, private addresses, and personal/non-business addresses are rejected.
 - Candidate dedupe keys include normalized email and canonical contact/account.
+- Organization email patterns are learned only from verified candidates and remain evidence for future candidate ordering.
 - Verification is evidence, not consent, lawful basis, CRM approval, or outreach approval.
 
 ## Failure Modes

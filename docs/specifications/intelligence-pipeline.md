@@ -2,7 +2,7 @@
 
 ## Status and Scope
 
-This specification defines the target contracts for Sprints 3–9. It is normative for intelligence source adapters, canonical records, review eligibility, and CRM export. Runtime implementation follows the sprint tracker. As of Sprint 5, the source registry, event intelligence runtime, and incident intelligence/watchlist runtime are implemented.
+This specification defines the target contracts for Sprints 3–9. It is normative for intelligence source adapters, canonical records, review eligibility, and CRM export. Runtime implementation follows the sprint tracker. As of Sprint 6, the source registry, event intelligence runtime, incident intelligence/watchlist runtime, entity-resolution workflow, contact-enrichment workflow, persisted email candidates, verification payloads, and minimal read-only review queue are implemented.
 
 The v1 scope is:
 
