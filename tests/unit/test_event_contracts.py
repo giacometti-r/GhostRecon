@@ -20,3 +20,10 @@ def test_new_event_includes_source_lineage_and_schema_metadata() -> None:
     assert payload["source_definition_id"] == "source-1"
     assert payload["source_item_ids"] == ["raw-1"]
     assert "canonical_url" in payload["payload"]
+
+
+def test_sprint_7_events_are_contract_values() -> None:
+    assert EventName.REVIEW_APPROVED.value == "review.approved"
+    assert EventName.REVIEW_REJECTED.value == "review.rejected"
+    assert EventName.CRM_TARGET_CREATED.value == "crm_target.created"
+    assert EventName.SUPPRESSION_CREATED.value == "suppression.created"

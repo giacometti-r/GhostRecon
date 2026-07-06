@@ -4,7 +4,7 @@
 
 - Define the KPI catalog and projection schemas.
 - Consume versioned intelligence, review, governance, and CRM export events.
-- Materialize event, incident, watchlist, queue, export, reconciliation, and source-health views.
+- Materialize event, incident, watchlist, score, review, CRM-target, export, reconciliation, and source-health views.
 - Expose freshness/watermark metadata with every dashboard response.
 - Support dashboards without locking data into one CRM or engagement provider.
 
@@ -22,6 +22,7 @@ Target reporting interfaces:
 - `GET /v1/reporting/incidents/{incident_id}`
 - `GET /v1/reporting/watch-targets`
 - `GET /v1/reporting/review-queue`
+- `GET /v1/reporting/crm-targets`
 - `GET /v1/reporting/crm-exports`
 - `GET /v1/reporting/source-health`
 
@@ -61,6 +62,8 @@ All collection endpoints use cursor pagination, explicit sorting, role-aware fie
 - Watermark/stale/degraded-state tests under partial source failure.
 - Canonical-to-projection reconciliation tests.
 
-## Sprint 5 Sources
+## Implemented Event Sources
 
 Incident and watchlist projections consume implemented `news_article.ingested`, `security_incident.detected`, `security_incident.corroborated`, and `watch_target.created` outbox events when the projection runtime is added.
+
+Sprint 7 review and CRM-target projections consume `lead.scored`, `approval.requested`, `review.approved`, `review.rejected`, `crm_target.created`, and `suppression.created` outbox events when the projection runtime is added.

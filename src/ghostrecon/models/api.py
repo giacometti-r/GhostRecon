@@ -59,11 +59,32 @@ class ReviewCandidateType(StrEnum):
     ENTITY_RESOLUTION = "entity_resolution"
     CONTACT_ENRICHMENT = "contact_enrichment"
     EMAIL_VERIFICATION = "email_verification"
+    SCORING = "scoring"
+    INCIDENT_CORROBORATION = "incident_corroboration"
 
 
 class ReviewCandidateStatus(StrEnum):
     OPEN = "open"
     SUPERSEDED = "superseded"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class ReviewDecisionAction(StrEnum):
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class CandidateScoreRoute(StrEnum):
+    REJECTED = "rejected"
+    NEEDS_REVIEW = "needs_review"
+    CRM_TARGET_REVIEW = "crm_target_review"
+
+
+class CrmTargetStatus(StrEnum):
+    PENDING_EXPORT = "pending_export"
+    INVALIDATED = "invalidated"
+    EXPORTED = "exported"
 
 
 class SourceKind(StrEnum):
@@ -481,6 +502,8 @@ class ReviewCandidateOut(BaseModel):
     reason: str | None = None
     evidence_summary: dict[str, object] = {}
     policy_snapshot: dict[str, object] = {}
+    policy_snapshot_hash: str | None = None
+    sla_due_at: datetime | None = None
     version: int
     created_at: datetime
     updated_at: datetime
@@ -623,6 +646,148 @@ class ScoreResult(BaseModel):
     composite_score: int = Field(ge=0, le=100)
     threshold_met: bool
     reasons: list[str]
+
+
+class CandidateScoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target_type: str
+    target_id: str
+    origin_type: OriginType | None = None
+    origin_id: str | None = None
+    account: dict[str, object] = {}
+    contact: dict[str, object] | None = None
+    signals: list[dict[str, object]] = []
+    evidence: dict[str, object] = {}
+    source_definition_id: str | None = None
+    source_item_ids: list[str] = []
+    policy_snapshot: dict[str, object] = {}
+
+
+class CandidateScoreOut(BaseModel):
+    id: str | None = None
+    target_type: str
+    target_id: str
+    origin_type: OriginType | None = None
+    origin_id: str | None = None
+    config_version: str
+    fit_score: int = Field(ge=0, le=100)
+    relevance_score: int = Field(ge=0, le=100)
+    recency_score: int = Field(ge=0, le=100)
+    confidence_score: int = Field(ge=0, le=100)
+    evidence_score: int = Field(ge=0, le=100)
+    composite_score: int = Field(ge=0, le=100)
+    route: CandidateScoreRoute
+    reasons: list[str]
+    policy_blockers: list[str] = []
+    policy_snapshot_hash: str
+    created_at: datetime | None = None
+
+
+class ReviewDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int
+    reason_code: str
+    reason: str | None = None
+    policy_snapshot_hash: str | None = None
+    evidence_snapshot: dict[str, object] = {}
+    target_scope: str = "crm_export"
+
+
+class BulkReviewDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    candidate_ids: list[str] = Field(min_length=1, max_length=100)
+    decision: ReviewDecisionAction
+    candidate_versions: dict[str, int]
+    reason_code: str
+    reason: str | None = None
+    policy_snapshot_hash: str | None = None
+    evidence_snapshot: dict[str, object] = {}
+
+
+class ReviewDecisionOut(BaseModel):
+    id: str
+    review_candidate_id: str | None = None
+    target_type: str
+    target_id: str
+    decision: ReviewDecisionAction
+    actor: str
+    reason_code: str
+    reason: str | None = None
+    policy_snapshot_hash: str | None = None
+    created_at: datetime
+
+
+class BulkReviewDecisionResult(BaseModel):
+    decisions: list[ReviewDecisionOut]
+
+
+class CrmTargetOut(BaseModel):
+    id: str
+    review_candidate_id: str | None = None
+    review_decision_id: str | None = None
+    target_type: str
+    target_id: str
+    origin_type: OriginType | None = None
+    origin_id: str | None = None
+    source_definition_id: str | None = None
+    source_item_ids: list[object] = []
+    status: CrmTargetStatus
+    export_status: str = "not_exported"
+    policy_snapshot: dict[str, object] = {}
+    approval_snapshot: dict[str, object] = {}
+    version: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class CrmTargetList(BaseModel):
+    crm_targets: list[CrmTargetOut]
+
+
+class SuppressionCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr | None = None
+    domain: str | None = None
+    contact_id: str | None = None
+    channel: str = "email"
+    target_type: str | None = None
+    target_id: str | None = None
+    reason: str
+    source: str = "governance"
+    active: bool = True
+    expires_at: datetime | None = None
+    policy_snapshot: dict[str, object] = {}
+
+
+class SuppressionOut(BaseModel):
+    id: str
+    email: EmailStr | None = None
+    domain: str | None = None
+    contact_id: str | None = None
+    channel: str
+    target_type: str | None = None
+    target_id: str | None = None
+    reason: str
+    source: str
+    active: bool
+    expires_at: datetime | None = None
+    policy_snapshot: dict[str, object] = {}
+    created_at: datetime
+
+
+class IncidentDecisionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int
+    method: CorroborationMethod = CorroborationMethod.ANALYST_DECISION
+    reason_code: str
+    reason: str | None = None
+    evidence_snapshot: dict[str, object] = {}
+    policy_snapshot: dict[str, object] = {}
 
 
 class SuppressionCheckRequest(BaseModel):

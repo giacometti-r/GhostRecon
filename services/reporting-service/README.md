@@ -16,12 +16,12 @@ It does not own canonical intelligence, review decisions, CRM writes, or a separ
 - Event map/calendar/table and participant detail.
 - Incident feed, evidence timelines, affected companies, and watchlist matches.
 - Enrichment and analyst-review queues.
-- Typed CRM targets, export batches, failures, and reconciliation.
+- Typed CRM targets, future export batches, failures, and reconciliation.
 - Source health, ingestion watermarks, service degradation, and projection freshness.
 
 ## Dependencies
 
-- PostgreSQL canonical, event/outbox, review, audit, and export tables.
+- PostgreSQL canonical, event/outbox, score, review, CRM-target, audit, and future export tables.
 - Event/incident intelligence source checkpoints and lineage.
 - Prometheus for service/process metrics.
 - Optional future warehouse/BI exports.

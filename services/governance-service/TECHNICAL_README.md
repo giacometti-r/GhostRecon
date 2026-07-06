@@ -6,20 +6,19 @@
 - Validate deterministic incident corroboration inputs and own audited analyst decisions.
 - Evaluate suppression and store do-not-contact state.
 - Track lawful basis, retention class, policy version, approval/rejection, and revocation.
-- Own immutable audit events for decisions, replay, and policy-sensitive state changes.
+- Own immutable audit/outbox events for decisions, incident corrections, suppressions, inert CRM targets, replay, and policy-sensitive state changes.
 
 ## Interfaces
 
-Implemented baseline:
-
+- `POST /v1/suppressions`
 - `POST /v1/suppressions/evaluate`
-
-Target interfaces:
-
+- `GET /v1/review/candidates`
+- `GET /v1/review/crm-targets`
 - `POST /v1/review/candidates/{candidate_id}/approve`
 - `POST /v1/review/candidates/{candidate_id}/reject`
 - `POST /v1/review/candidates/bulk-decision`
-- policy/corroboration administration endpoints restricted by role.
+- `POST /v1/governance/incidents/{incident_id}/corroborate`
+- `POST /v1/governance/incidents/{incident_id}/reject`
 
 Every mutation requires actor, reason where required, optimistic version, `Idempotency-Key`, and policy/evidence snapshot.
 
@@ -30,14 +29,17 @@ Every mutation requires actor, reason where required, optimistic version, `Idemp
 - `unknown` and `prohibited` fail closed.
 - Incidents start `candidate`; corroboration requires authoritative disclosure, independent-source threshold, or audited analyst decision.
 - Generated/verified email does not establish lawful basis or outreach approval.
-- CRM export approval does not establish sequence eligibility.
+- Review approval creates an inert CRM target with `export_status=not_exported`; CRM export remains a separate Sprint 9 workflow.
+- CRM target approval does not establish sequence eligibility.
 - The most restrictive current rule wins when records conflict.
+- Bulk review requires open candidates, one candidate type, one policy snapshot hash, a bounded count, and per-candidate optimistic versions.
 
 ## Failure Modes
 
 - Database/policy projection unavailable: deny policy-sensitive eligibility.
 - Conflicting policy/suppression rows: apply the most restrictive rule and alert.
 - Stale optimistic version/evidence: reject decision and require refresh.
+- Missing lineage, unknown/prohibited reuse, uncorroborated incident, active suppression, missing lawful basis, missing/expired retention, or stale evidence: fail closed and reject approval.
 - Replay/export requested for ineligible target: reject and audit.
 - Audit write failure: fail the mutation; never commit unaudited approval.
 
@@ -48,3 +50,4 @@ Every mutation requires actor, reason where required, optimistic version, `Idemp
 - Database-backed suppression and retention tests.
 - Approval invalidation, optimistic conflict, bulk decision, and replay authorization tests.
 - CRM-versus-outreach approval separation tests.
+- Route tests for approval/rejection, CRM-target reads, suppression creation, and incident analyst decisions.

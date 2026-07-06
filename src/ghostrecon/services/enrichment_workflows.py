@@ -807,6 +807,8 @@ def review_candidate_to_api(candidate: ReviewCandidate) -> dict[str, object]:
         "reason": candidate.reason,
         "evidence_summary": candidate.evidence_summary or {},
         "policy_snapshot": candidate.policy_snapshot or {},
+        "policy_snapshot_hash": getattr(candidate, "policy_snapshot_hash", None),
+        "sla_due_at": getattr(candidate, "sla_due_at", None),
         "version": candidate.version,
         "created_at": candidate.created_at,
         "updated_at": candidate.updated_at,

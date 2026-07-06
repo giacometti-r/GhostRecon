@@ -3,7 +3,7 @@
 ## Responsibilities
 
 - Publish the service map and aggregate OpenAPI discovery where appropriate.
-- Route intelligence, review, CRM export, reporting, and existing workflow APIs to owning services.
+- Route intelligence, scoring, governance, review, CRM export, reporting, and existing workflow APIs to owning services.
 - Own cross-cutting authentication, coarse authorization, correlation IDs, idempotency propagation, request limits, and response/error shape.
 - Avoid business logic, canonical data ownership, policy decisions, and reporting projections.
 
@@ -12,12 +12,13 @@
 - `GET /v1/service-map`
 - Standard endpoints: `/healthz`, `/readyz`, `/metrics`, `/docs`, `/openapi.json`
 - Target route families are defined in `docs/specifications/intelligence-pipeline.md` and `docs/specifications/dashboard.md`.
+- Sprint 7 implemented route families include `/v1/scoring/candidates`, `/v1/suppressions`, `/v1/governance/incidents/*`, `/v1/review/candidates/*`, and `/v1/review/crm-targets`.
 
 ## Request Rules
 
 - Preserve `Authorization`, correlation ID, `Idempotency-Key`, actor/role context, and trace headers through trusted internal calls.
 - Reject missing idempotency keys on designated mutations before forwarding.
-- Enforce maximum query/date windows, page sizes, bulk-action counts, and body sizes.
+- Enforce maximum query/date windows, page sizes, bulk-action counts, optimistic-version requirements, and body sizes.
 - Return typed downstream errors with correlation/audit IDs; do not retry non-idempotent mutations automatically.
 - Strip internal-only source payload fields and credentials from responses.
 

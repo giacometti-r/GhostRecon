@@ -23,10 +23,12 @@ flowchart TD
   EMAIL --> SCORE[scoring-routing-service]
   SCORE --> GOV[governance-service]
   GOV --> REVIEW[console-service review]
-  REVIEW --> EXPORT[crm-service / CrmExportBatch]
+  REVIEW --> TARGETS[CRM targets / no export side effect]
+  TARGETS --> EXPORT[crm-service / CrmExportBatch]
   EXPORT --> ATTIO[Attio]
   CANON --> REPORT[reporting-service]
   REVIEW --> REPORT
+  TARGETS --> REPORT
   EXPORT --> REPORT
   REPORT --> CONSOLE[console-service dashboards]
   GATE[gateway-service] --> EIS
@@ -43,11 +45,11 @@ flowchart TD
 | Event intelligence | Event-source adapters, event/series normalization, participant-source permissions | Contact generation, CRM writes |
 | Incident intelligence | Article discovery, incident candidates, corroboration evidence, watchlists | Full-article archives, breached data, CRM writes |
 | Enrichment and email intelligence | Entity resolution and permitted public-business-contact enrichment | Source-reuse decisions, final approval |
-| Scoring and governance | Explainable scores, corroboration policy, suppression, retention, approvals, audits | Dashboard read models, vendor-specific CRM mapping |
+| Scoring and governance | Explainable scores, corroboration policy, suppression, retention, approvals, inert CRM targets, audits | Dashboard read models, vendor-specific CRM mapping |
 | Console and reporting | FastAPI/Jinja UI, review actions, reporting projections, freshness indicators | Intelligence ingestion, independent dashboard service |
 | CRM | Export batches, provider mapping, retry/reconciliation state | Acquisition, candidate approval, outreach enrollment |
 
-The existing `ingestion-service` remains for Attio webhooks, imports, and other compatibility intake. It is not the primary acquisition path. Sprint 3 implements the shared `SourceDefinition` / `RawSourceItem` foundation, adapter helpers, source-health API, source-ingestion events, and source-fetch Celery task. Sprint 4 implements event intelligence; Sprint 5 implements incident article discovery, candidate incident detection, corroboration inputs, and watchlists; Sprint 6 implements entity resolution, permitted contact enrichment, persisted email candidates, verification payloads, and minimal review routing.
+The existing `ingestion-service` remains for Attio webhooks, imports, and other compatibility intake. It is not the primary acquisition path. Sprint 3 implements the shared `SourceDefinition` / `RawSourceItem` foundation, adapter helpers, source-health API, source-ingestion events, and source-fetch Celery task. Sprint 4 implements event intelligence; Sprint 5 implements incident article discovery, candidate incident detection, corroboration inputs, and watchlists; Sprint 6 implements entity resolution, permitted contact enrichment, persisted email candidates, verification payloads, and minimal review routing; Sprint 7 implements versioned scoring, governance review decisions, incident analyst decisions, suppression persistence, and non-exported CRM targets.
 
 ## Runtime Pattern
 
@@ -60,7 +62,7 @@ The existing `ingestion-service` remains for Attio webhooks, imports, and other 
 
 ## Canonical and Contract Pattern
 
-- `SourceDefinition` and `RawSourceItem` are implemented as the shared ingestion foundation. Canonical intelligence and workflow entities now include `CyberEvent`, `EventParticipant`, `NewsArticle`, `SecurityIncident`, `WatchTarget`, `EntityResolutionCase`, `ContactEnrichmentCandidate`, `OrganizationEmailPattern`, `ReviewCandidate`, `CrmExportBatch`, and `CrmExportItem`.
+- `SourceDefinition` and `RawSourceItem` are implemented as the shared ingestion foundation. Canonical intelligence and workflow entities now include `CyberEvent`, `EventParticipant`, `NewsArticle`, `SecurityIncident`, `WatchTarget`, `EntityResolutionCase`, `ContactEnrichmentCandidate`, `OrganizationEmailPattern`, `ReviewCandidate`, `CandidateScore`, `ReviewDecision`, and `CrmTarget`. `CrmExportBatch` and `CrmExportItem` remain Sprint 9 export entities.
 - All canonical entities retain GhostRecon IDs, source URLs, fetch timestamps, hashes, permission/licensing state, and evidence references.
 - Lead sources include `cyber_event` and `security_incident` in addition to existing sources.
 - Mutating APIs require an idempotency key; events use deterministic aggregate and source keys.
@@ -82,5 +84,6 @@ The existing `ingestion-service` remains for Attio webhooks, imports, and other 
 - Published participant reuse must be explicitly permitted; `unknown` and `prohibited` disable contact extraction and CRM export.
 - Store permitted excerpts and metadata, not unlicensed full articles.
 - Incident contact discovery is limited to public business roles in security, IT, risk, and communications; breached personal data is prohibited.
-- CRM export requires analyst approval. CRM export and sequencing approval are separate decisions.
+- Review approval requires current source lineage, corroboration, suppression, retention, lawful-basis, evidence-freshness, policy-hash, and optimistic-version checks.
+- Review approval creates an inert CRM target only. CRM export and sequencing approval are separate later decisions.
 - Suppression, retention, lawful basis, and approval state are re-evaluated before any outbound action.

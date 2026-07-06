@@ -44,11 +44,11 @@ Mutating watchlist APIs require `Idempotency-Key` and actor context through the 
 ## Operator Rules
 
 - Every incident starts as `candidate`.
-- Corroborate only through authoritative disclosure, independent-source threshold, or later audited analyst decision.
+- Corroborate only through authoritative disclosure, independent-source threshold, or Sprint 7 audited analyst decision.
 - Treat syndicated copies and shared upstream reports as one evidence family.
 - Promotion creates a watch target linked to the originating incident; it does not duplicate or auto-corroborate the case.
 - Store article metadata and permitted excerpts, not unlicensed full text.
-- Limit follow-on contact discovery to later Sprint 6 public business roles in security, IT, risk, and communications.
+- Limit follow-on contact discovery to implemented public business roles in security, IT, risk, and communications.
 
 ## Health and Metrics
 

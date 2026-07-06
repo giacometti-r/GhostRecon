@@ -2,7 +2,7 @@
 
 ## Responsibilities
 
-- Render FastAPI/Jinja operator pages for implemented intelligence and planned review/reporting workflows.
+- Render FastAPI/Jinja operator pages for implemented intelligence plus review/reporting workflows.
 - Consume `reporting-service` read APIs for events, incidents, watchlists, queues, exports, KPIs, source health, and freshness.
 - Call owning feature-service write APIs through the gateway; never mutate reporting projections directly.
 - Provide human-in-the-loop controls for intelligence corroboration, enrichment, CRM eligibility, replay, and policy-sensitive actions.
@@ -13,6 +13,11 @@
 Implemented baseline:
 
 - `GET /`
+- `GET /v1/review/candidates`
+- `GET /v1/review/crm-targets`
+- `POST /v1/review/candidates/{candidate_id}/approve`
+- `POST /v1/review/candidates/{candidate_id}/reject`
+- `POST /v1/review/candidates/bulk-decision`
 
 Target view routes:
 
@@ -31,7 +36,7 @@ Mutation forms map to APIs specified in `docs/specifications/intelligence-pipeli
 - Every mutation repeats authorization in the owning API and records actor/reason/audit context.
 - Bulk review requires homogeneous policy context, a bounded count, preview, and per-item outcomes.
 - Unknown/prohibited participant reuse disables actions in UI and API; the UI control alone is not the enforcement boundary.
-- CRM approval/export controls never invoke sequence enrollment.
+- CRM-target approval controls never invoke CRM export or sequence enrollment.
 - Render source content as escaped text; sanitize bounded excerpts and external links.
 
 ## Failure Modes

@@ -17,7 +17,8 @@ flowchart LR
   EMAIL --> SCORE[Scoring and corroboration]
   SCORE --> GOV[Governance and policy checks]
   GOV --> REVIEW[Analyst review in console-service]
-  REVIEW --> CRM[crm-service export batches]
+  REVIEW --> TARGETS[Approved CRM targets]
+  TARGETS --> CRM[crm-service export batches]
   CRM --> ATTIO[Attio approved sales records]
   EVENTS --> REPORT[reporting-service]
   INCIDENTS --> REPORT
@@ -26,7 +27,7 @@ flowchart LR
   REPORT --> CONSOLE[console-service dashboards]
 ```
 
-The pipeline is external sources → normalization and deduplication → contact enrichment → scoring and governance → analyst review → CRM export → reporting. Event or incident intelligence never enrolls a contact into outreach automatically. The shared Sprint 3 source registry foundation now persists source definitions, raw source items, source policy metadata, freshness/checkpoint state, hashes, permitted excerpts, and source-ingestion events for later event and incident services.
+The pipeline is external sources → normalization and deduplication → contact enrichment → scoring and governance → analyst review → inert CRM targets → CRM export → reporting. Event or incident intelligence never enrolls a contact into outreach automatically. The shared Sprint 3 source registry foundation now persists source definitions, raw source items, source policy metadata, freshness/checkpoint state, hashes, permitted excerpts, and source-ingestion events for later event and incident services.
 
 ## Microservices
 
@@ -38,15 +39,15 @@ The pipeline is external sources → normalization and deduplication → contact
 | `ingestion-service` | Attio webhook/import compatibility and idempotent inbound event intake; not the primary acquisition path. |
 | `enrichment-service` | Entity resolution and public company/contact enrichment from approved sources. |
 | `email-intelligence-service` | Eligible business-email candidate generation and verification. |
-| `scoring-routing-service` | Fit, relevance, evidence, confidence, and routing rules. |
-| `governance-service` | Source permissions, suppression, retention, approval, audit, and replay controls. |
+| `scoring-routing-service` | Versioned fit, relevance, recency, evidence, confidence, and review-routing rules. |
+| `governance-service` | Source permissions, incident corroboration/rejection, suppression, retention, review decisions, audit, and inert CRM-target controls. |
 | `console-service` | Existing FastAPI/Jinja intelligence dashboard and analyst review interface. |
 | `reporting-service` | Intelligence, source-health, review, export, and revenue-workflow read models. |
 | `crm-service` | Review-gated Attio export and provider-neutral `CrmClient` boundary. |
 | `sequencing-service` | In-house sequence eligibility and future SMTP/IMAP execution after separate approval. |
 | `meeting-handoff-service` | AE/SE prep packets and meeting-handoff workflows. |
 
-The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, and email-intelligence runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets; enrichment stores entity-resolution cases, eligible contact candidates, email candidates, verification payloads, and review-required records.
+The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, email-intelligence, scoring, and governance runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets; enrichment stores entity-resolution cases, eligible contact candidates, email candidates, verification payloads, and review-required records; governance stores score records, review decisions, suppressions, and non-exported CRM targets.
 
 ## Implemented Source Registry Foundation
 
@@ -70,13 +71,23 @@ Sprint 5 adds the incident runtime used by later enrichment, governance, dashboa
 
 ## Implemented Enrichment and Email Intelligence Runtime
 
-Sprint 6 adds the enrichment and email runtime used by later scoring, governance, dashboard, and CRM-export work:
+Sprint 6 adds the enrichment and email runtime used by implemented scoring/governance and later dashboard/CRM-export work:
 
 - PostgreSQL persistence for entity-resolution cases, contact-enrichment candidates, organization email patterns, and minimal review candidates.
 - Source-lineage, policy-snapshot, origin, review-state, idempotency, and optimistic-version fields on contacts and email candidates.
 - Review-routed entity resolution for ambiguous/no-match organizations and fail-closed contact enrichment for missing lineage, prohibited participant reuse, breached data, or out-of-scope incident roles.
 - Stateful email-candidate persistence, organization-pattern learning from verified candidates, verification-payload retention, and review routing for catch-all/ambiguous/failed verification.
-- Gateway and owning-service APIs for enrichment cases, contact candidates, persisted email candidates, verification batches, and read-only review candidates.
+- Gateway and owning-service APIs for enrichment cases, contact candidates, persisted email candidates, verification batches, and initial review candidates.
+
+## Implemented Scoring and Governance Runtime
+
+Sprint 7 adds the scoring and decision workflow used by dashboard and CRM-export work:
+
+- PostgreSQL persistence for versioned candidate scores, review decisions, inert CRM targets, expanded suppressions, policy snapshot hashes, and incident optimistic versions.
+- `sprint7.v1` scoring across fit, relevance, recency, confidence, and evidence components with explainable routing to rejection, review, or CRM-target review.
+- Governance APIs for review approval/rejection, guarded bulk review, CRM-target reads, suppression creation/evaluation, incident corroboration, and incident false-positive rejection.
+- Fail-closed approval policy for missing lineage, unknown/prohibited participant reuse, uncorroborated incidents, active suppressions, stale evidence, missing retention, missing lawful basis, stale policy hashes, and optimistic-version conflicts.
+- Approved candidates create CRM targets with `export_status=not_exported`; Sprint 9 owns provider export and Sprint 10 owns sequencing/outreach.
 
 ## Source Policy
 
@@ -154,7 +165,7 @@ Keep the Age private key outside the repository and encrypt `deploy/helm/ghostre
 
 ## Compliance and Safety
 
-GhostRecon stores source lineage, source-reuse policy, idempotency keys, evidence links, suppression state, review decisions, export audits, and retention metadata. Crawler behavior must remain allowlisted, bounded, robots-aware by default, and limited to publicly visible pages. Generated email candidates are not verified contacts. A CRM export approval is not an outreach approval; sequencing performs its own current suppression, lawful-basis, and approval checks.
+GhostRecon stores source lineage, source-reuse policy, idempotency keys, evidence links, suppression state, review decisions, inert CRM targets, export audits, and retention metadata. Crawler behavior must remain allowlisted, bounded, robots-aware by default, and limited to publicly visible pages. Generated email candidates are not verified contacts. Review approval creates only a CRM target; CRM export and outreach approval remain separate downstream decisions.
 
 ## Documentation
 

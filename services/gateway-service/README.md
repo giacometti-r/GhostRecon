@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`gateway-service` is the authenticated API entrypoint for GhostRecon. It exposes a stable route map for intelligence search, watchlists, review, reporting, CRM exports, and existing workflow services while keeping business logic in feature services.
+`gateway-service` is the authenticated API entrypoint for GhostRecon. It exposes a stable route map for intelligence search, watchlists, scoring, governance, review, reporting, CRM exports, and existing workflow services while keeping business logic in feature services.
 
 ## Runtime
 
@@ -12,10 +12,12 @@
 - Readiness: `/readyz`
 - Metrics: `/metrics`
 
-## Target Route Families
+## Route Families
 
 - `/v1/intelligence/events`, `/participants`, `/incidents`, `/watch-targets`, and `/sources/health`.
-- `/v1/review/candidates` and `/review/crm-targets`.
+- `/v1/scoring/candidates`.
+- `/v1/suppressions`, `/v1/suppressions/evaluate`, and `/v1/governance/incidents/*`.
+- `/v1/review/candidates`, review approve/reject/bulk-decision routes, and `/v1/review/crm-targets`.
 - `/v1/crm/exports`.
 - `/v1/reporting/*` and `/v1/kpis/catalog`.
 - Existing enrichment, email, scoring, governance, sequencing, and handoff APIs.
@@ -39,4 +41,11 @@
 
 ```bash
 GHOSTRECON_SERVICE_NAME=gateway-service uvicorn ghostrecon.service_apps.runtime:app --reload
+```
+
+## Verification
+
+```bash
+pytest tests/unit/test_enrichment_routes.py
+python scripts/smoke_import.py
 ```

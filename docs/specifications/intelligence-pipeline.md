@@ -2,7 +2,7 @@
 
 ## Status and Scope
 
-This specification defines the target contracts for Sprints 3–9. It is normative for intelligence source adapters, canonical records, review eligibility, and CRM export. Runtime implementation follows the sprint tracker. As of Sprint 6, the source registry, event intelligence runtime, incident intelligence/watchlist runtime, entity-resolution workflow, contact-enrichment workflow, persisted email candidates, verification payloads, and minimal read-only review queue are implemented.
+This specification defines the target contracts for Sprints 3–9. It is normative for intelligence source adapters, canonical records, review eligibility, and CRM export. Runtime implementation follows the sprint tracker. As of Sprint 7, the source registry, event intelligence runtime, incident intelligence/watchlist runtime, entity-resolution workflow, contact-enrichment workflow, persisted email candidates, verification payloads, versioned scoring, governance decisions, suppression persistence, incident analyst decisions, and inert CRM targets are implemented.
 
 The v1 scope is:
 
@@ -29,7 +29,8 @@ flowchart LR
   ENRICH --> SCORE[Score relevance, confidence, and evidence]
   SCORE --> POLICY[Corroboration, reuse, suppression, and retention policy]
   POLICY --> REVIEW[Analyst review]
-  REVIEW --> EXPORT[CrmExportBatch / CrmExportItem]
+  REVIEW --> TARGET[CrmTarget]
+  TARGET --> EXPORT[CrmExportBatch / CrmExportItem]
   EXPORT --> RECONCILE[Provider reconciliation]
   INTEL --> REPORT[Reporting projections]
   REVIEW --> REPORT
@@ -92,6 +93,10 @@ All IDs are GhostRecon-generated UUIDs unless an external identifier is explicit
 | `NewsArticle` | `id`, canonical URL, publisher, title, permitted excerpt, published/retrieved timestamps, original language, translated-title metadata and provenance, content hash, syndication cluster, and source-item lineage. Unlicensed full text is forbidden. |
 | `SecurityIncident` | `id`, status, affected-company references/candidates, incident type/attack vector, first/last observed windows, geography, confidence, evidence links, corroboration method, analyst decision reference, and canonical/merge state. Status begins as `candidate`. |
 | `WatchTarget` | `id`, `target_type`, canonical target key, display name, query configuration, enabled state, owner, origin incident when promoted, created-by actor, and timestamps. `target_type` is `company`, `domain`, `incident`, `event_series`, or `topic`. |
+| `CandidateScore` | `id`, target type/ID, origin type/ID, scoring config version, component scores, composite score, route, reasons, policy snapshot hash, source lineage, and idempotency key. Sprint 7 uses `sprint7.v1`. |
+| `ReviewCandidate` | `id`, candidate type, target type/ID, origin, source lineage, status, reason code, evidence summary, policy snapshot/hash, SLA due time, version, and idempotency key. |
+| `ReviewDecision` | `id`, optional review candidate ID, target type/ID, decision, actor, reason code/text, evidence snapshot, policy snapshot/hash, idempotency key, and timestamp. |
+| `CrmTarget` | `id`, review candidate/decision IDs, target type/ID, origin, source lineage, status, export status, policy snapshot, approval snapshot, version, and timestamps. It is inert until Sprint 9 export. |
 | `CrmExportBatch` | `id`, provider/workspace, requested-by actor, review-selection snapshot, idempotency key, status, item counts, started/completed timestamps, and reconciliation summary. A batch contains only approved targets. |
 | `CrmExportItem` | `id`, batch ID, target type/ID, operation, dependency IDs, stable provider-match key, status, attempt count, provider record/list-entry IDs, last error, and reconciliation state. |
 
@@ -157,6 +162,12 @@ All events use the common envelope:
 | `security_incident.detected` | incident intelligence | incident ID, candidate companies, confidence, evidence IDs, status=`candidate` |
 | `security_incident.corroborated` | incident intelligence/governance | incident ID, method, evidence snapshot or analyst audit ID |
 | `watch_target.created` | incident intelligence | watch-target ID/type/key, owner, origin incident if present |
+| `lead.scored` | scoring routing | score ID, target ID/type, config version, component scores, composite score, route, reasons |
+| `approval.requested` | enrichment/scoring/governance | review candidate ID, candidate type, target type/ID, reason code |
+| `review.approved` | governance | review decision ID, review candidate ID, target type/ID, actor, reason, policy hash |
+| `review.rejected` | governance | review decision ID, review candidate or incident ID, target type/ID, actor, reason |
+| `crm_target.created` | governance | CRM target ID, review decision ID, target type/ID, source lineage, export status=`not_exported` |
+| `suppression.created` | governance | suppression ID, scope, channel, reason, actor/audit context |
 | `crm_export.batch_started` | CRM | batch ID, provider, approved selection hash, item count |
 | `crm_export.item_succeeded` | CRM | batch/item/target IDs, provider record IDs, reconciliation state |
 | `crm_export.item_failed` | CRM | batch/item/target IDs, retryability, typed error, attempt count |
@@ -166,7 +177,7 @@ Event payload changes require a new `schema_version`. Consumers must ignore unkn
 
 ## HTTP APIs
 
-The gateway exposes these target routes; feature services own the behavior.
+The gateway exposes these implemented and target routes; feature services own the behavior.
 
 ### Search and Detail
 
@@ -189,18 +200,28 @@ Search APIs support cursor pagination, explicit sort, UTC date ranges, geography
 
 Promotion returns the existing watch target on an idempotent retry and always returns `origin_incident_id`.
 
-### Review and CRM Targets
+### Scoring, Governance, Review, and CRM Targets
 
+- `POST /v1/scoring/candidates`
+- `POST /v1/suppressions`
+- `POST /v1/suppressions/evaluate`
+- `POST /v1/governance/incidents/{incident_id}/corroborate`
+- `POST /v1/governance/incidents/{incident_id}/reject`
 - `GET /v1/review/candidates`
 - `GET /v1/review/crm-targets`
 - `POST /v1/review/candidates/{candidate_id}/approve`
 - `POST /v1/review/candidates/{candidate_id}/reject`
 - `POST /v1/review/candidates/bulk-decision`
+
+Implemented Sprint 7 review mutations require `Idempotency-Key`, `X-Actor`, reason code, optimistic version, and current policy evidence. Approval creates `CrmTarget` rows with `export_status=not_exported`; it does not call CRM providers or sequencing.
+
+### CRM Export
+
 - `POST /v1/crm/exports`
 - `GET /v1/crm/exports/{batch_id}`
 - `POST /v1/crm/exports/{batch_id}/retry-failed`
 
-Every mutation requires an `Idempotency-Key`, authenticated actor, reason where required, optimistic version, and audit record. Bulk decisions reject mixed candidate types or policy states that cannot be evaluated under one displayed evidence snapshot.
+Sprint 9 export mutations require an `Idempotency-Key`, authenticated actor, approved CRM-target selection, and audit record. Bulk review decisions reject mixed candidate types or policy states that cannot be evaluated under one displayed evidence snapshot.
 
 ## Review Eligibility
 
@@ -215,11 +236,11 @@ A review candidate contains:
 - score reasons and policy version; and
 - proposed decision and downstream effect.
 
-An approved candidate becomes a CRM target only when current policy permits export. Approval is invalidated by a material source-policy change, canonical merge, suppression change, stale evidence beyond policy, or target-data change covered by optimistic locking.
+An approved candidate becomes a CRM target only when current policy permits export eligibility. Approval is invalidated by a material source-policy change, canonical merge, suppression change, stale evidence beyond policy, missing lawful basis/retention, or target-data change covered by optimistic locking. A CRM target is not a CRM export and not outreach approval.
 
 ## CRM Export Contract
 
-`CrmClient` provides provider-neutral operations for object/schema validation, stable-identifier upsert, relationship/list insertion, batch status, and reconciliation. Provider-specific names never appear in upstream review contracts.
+`CrmClient` provides provider-neutral operations for object/schema validation, stable-identifier upsert, relationship/list insertion, batch status, and reconciliation. Provider-specific names never appear in upstream review contracts. Sprint 9 export consumes approved Sprint 7 `CrmTarget` rows.
 
 ### Attio Mapping
 

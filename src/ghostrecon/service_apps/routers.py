@@ -7,9 +7,14 @@ from ghostrecon.common.config import get_settings
 from ghostrecon.common.security import verify_attio_signature
 from ghostrecon.events.contracts import EventName, new_event
 from ghostrecon.models.api import (
+    BulkReviewDecisionRequest,
+    BulkReviewDecisionResult,
+    CandidateScoreOut,
+    CandidateScoreRequest,
     ContactEnrichmentCreate,
     ContactEnrichmentList,
     ContactEnrichmentOut,
+    CrmTargetList,
     CyberEventList,
     CyberEventOut,
     DomainEnrichmentRequest,
@@ -23,15 +28,20 @@ from ghostrecon.models.api import (
     EntityResolutionOut,
     EventParticipantList,
     EventParticipantOut,
+    IncidentDecisionRequest,
     JobAccepted,
     PrepPacketRequest,
     ReviewCandidateList,
+    ReviewDecisionOut,
+    ReviewDecisionRequest,
     ScoreRequest,
     SecurityIncidentList,
     SecurityIncidentOut,
     SequenceEligibilityRequest,
     SourceHealthList,
     SuppressionCheckRequest,
+    SuppressionCreate,
+    SuppressionOut,
     WatchTargetCreate,
     WatchTargetList,
     WatchTargetOut,
@@ -59,7 +69,19 @@ from ghostrecon.services.event_intelligence import (
     list_participants,
     participant_to_api,
 )
-from ghostrecon.services.governance import evaluate_suppression
+from ghostrecon.services.governance import (
+    approve_review_candidate,
+    bulk_decide_review_candidates,
+    corroborate_incident,
+    create_suppression,
+    crm_target_to_model,
+    evaluate_suppression_with_store,
+    list_crm_targets,
+    reject_incident,
+    reject_review_candidate,
+    review_decision_to_model,
+    suppression_to_model,
+)
 from ghostrecon.services.incident_intelligence import (
     create_watch_target,
     get_incident,
@@ -71,7 +93,11 @@ from ghostrecon.services.incident_intelligence import (
     watch_target_to_api,
 )
 from ghostrecon.services.meeting import build_prep_packet
-from ghostrecon.services.scoring import score_lead
+from ghostrecon.services.scoring import (
+    candidate_score_to_model,
+    create_candidate_score,
+    score_lead,
+)
 from ghostrecon.services.sequencing import evaluate_sequence_eligibility
 from ghostrecon.services.source_registry import list_source_health
 
@@ -430,6 +456,18 @@ async def lead_score(request: ScoreRequest):
     return score_lead(request)
 
 
+@gateway_router.post("/v1/scoring/candidates", response_model=CandidateScoreOut)
+@scoring_router.post("/v1/scoring/candidates", response_model=CandidateScoreOut)
+async def candidate_score(
+    request: CandidateScoreRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+) -> CandidateScoreOut:
+    score = await create_candidate_score(
+        request, idempotency_key=idempotency_key, settings=get_settings()
+    )
+    return candidate_score_to_model(score)
+
+
 @sequencing_router.post("/v1/sequences/evaluate")
 async def sequence_eligibility(request: SequenceEligibilityRequest):
     return evaluate_sequence_eligibility(request)
@@ -440,9 +478,23 @@ async def prep_packet(request: PrepPacketRequest):
     return build_prep_packet(request)
 
 
+@gateway_router.post("/v1/suppressions", response_model=SuppressionOut)
+@governance_router.post("/v1/suppressions", response_model=SuppressionOut)
+async def suppression_create(
+    request: SuppressionCreate,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SuppressionOut:
+    suppression = await create_suppression(
+        request, actor=actor, idempotency_key=idempotency_key, settings=get_settings()
+    )
+    return suppression_to_model(suppression)
+
+
+@gateway_router.post("/v1/suppressions/evaluate")
 @governance_router.post("/v1/suppressions/evaluate")
 async def suppression_check(request: SuppressionCheckRequest):
-    return evaluate_suppression(request)
+    return await evaluate_suppression_with_store(request, settings=get_settings())
 
 
 @gateway_router.get("/v1/review/candidates", response_model=ReviewCandidateList)
@@ -459,6 +511,159 @@ async def review_candidates(
     return ReviewCandidateList(
         candidates=[review_candidate_to_model(candidate) for candidate in candidates]
     )
+
+
+@gateway_router.post(
+    "/v1/review/candidates/{candidate_id}/approve", response_model=ReviewDecisionOut
+)
+@governance_router.post(
+    "/v1/review/candidates/{candidate_id}/approve", response_model=ReviewDecisionOut
+)
+@console_router.post(
+    "/v1/review/candidates/{candidate_id}/approve", response_model=ReviewDecisionOut
+)
+async def review_candidate_approve(
+    candidate_id: str,
+    request: ReviewDecisionRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> ReviewDecisionOut:
+    try:
+        decision = await approve_review_candidate(
+            candidate_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if decision is None:
+        raise HTTPException(status_code=404, detail="review candidate not found")
+    return review_decision_to_model(decision)
+
+
+@gateway_router.post(
+    "/v1/review/candidates/{candidate_id}/reject", response_model=ReviewDecisionOut
+)
+@governance_router.post(
+    "/v1/review/candidates/{candidate_id}/reject", response_model=ReviewDecisionOut
+)
+@console_router.post(
+    "/v1/review/candidates/{candidate_id}/reject", response_model=ReviewDecisionOut
+)
+async def review_candidate_reject(
+    candidate_id: str,
+    request: ReviewDecisionRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> ReviewDecisionOut:
+    try:
+        decision = await reject_review_candidate(
+            candidate_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if decision is None:
+        raise HTTPException(status_code=404, detail="review candidate not found")
+    return review_decision_to_model(decision)
+
+
+@gateway_router.post(
+    "/v1/review/candidates/bulk-decision", response_model=BulkReviewDecisionResult
+)
+@governance_router.post(
+    "/v1/review/candidates/bulk-decision", response_model=BulkReviewDecisionResult
+)
+@console_router.post(
+    "/v1/review/candidates/bulk-decision", response_model=BulkReviewDecisionResult
+)
+async def review_candidates_bulk_decision(
+    request: BulkReviewDecisionRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> BulkReviewDecisionResult:
+    try:
+        decisions = await bulk_decide_review_candidates(
+            request, actor=actor, idempotency_key=idempotency_key, settings=get_settings()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return BulkReviewDecisionResult(
+        decisions=[review_decision_to_model(decision) for decision in decisions]
+    )
+
+
+@gateway_router.get("/v1/review/crm-targets", response_model=CrmTargetList)
+@governance_router.get("/v1/review/crm-targets", response_model=CrmTargetList)
+@console_router.get("/v1/review/crm-targets", response_model=CrmTargetList)
+async def review_crm_targets(
+    status: str | None = None,
+    target_type: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> CrmTargetList:
+    targets = await list_crm_targets(
+        status=status, target_type=target_type, limit=limit, settings=get_settings()
+    )
+    return CrmTargetList(crm_targets=[crm_target_to_model(target) for target in targets])
+
+
+@gateway_router.post(
+    "/v1/governance/incidents/{incident_id}/corroborate", response_model=ReviewDecisionOut
+)
+@governance_router.post(
+    "/v1/governance/incidents/{incident_id}/corroborate", response_model=ReviewDecisionOut
+)
+async def governance_corroborate_incident(
+    incident_id: str,
+    request: IncidentDecisionRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> ReviewDecisionOut:
+    try:
+        decision = await corroborate_incident(
+            incident_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if decision is None:
+        raise HTTPException(status_code=404, detail="incident not found")
+    return review_decision_to_model(decision)
+
+
+@gateway_router.post(
+    "/v1/governance/incidents/{incident_id}/reject", response_model=ReviewDecisionOut
+)
+@governance_router.post(
+    "/v1/governance/incidents/{incident_id}/reject", response_model=ReviewDecisionOut
+)
+async def governance_reject_incident(
+    incident_id: str,
+    request: IncidentDecisionRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> ReviewDecisionOut:
+    try:
+        decision = await reject_incident(
+            incident_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if decision is None:
+        raise HTTPException(status_code=404, detail="incident not found")
+    return review_decision_to_model(decision)
 
 
 @console_router.get("/", response_class=HTMLResponse)

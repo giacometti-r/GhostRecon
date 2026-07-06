@@ -101,10 +101,94 @@ def _review_candidate() -> SimpleNamespace:
         reason_code="catch_all_domain",
         reason="Email verification result requires analyst review.",
         evidence_summary={},
-        policy_snapshot={},
+        policy_snapshot={"lawful_basis": "legitimate_interest"},
+        policy_snapshot_hash="policy-hash",
+        sla_due_at=now,
         version=1,
         created_at=now,
         updated_at=now,
+    )
+
+
+def _candidate_score() -> SimpleNamespace:
+    now = datetime(2026, 7, 6, tzinfo=UTC)
+    return SimpleNamespace(
+        id="score-1",
+        target_type="contact",
+        target_id="contact-1",
+        origin_type="security_incident",
+        origin_id="incident-1",
+        config_version="sprint7.v1",
+        component_scores={
+            "fit": 80,
+            "relevance": 80,
+            "recency": 100,
+            "confidence": 82,
+            "evidence": 100,
+            "policy_blockers": [],
+        },
+        composite_score=87,
+        route="crm_target_review",
+        reasons=["Composite score is ready for CRM-target review"],
+        policy_snapshot_hash="policy-hash",
+        created_at=now,
+    )
+
+
+def _review_decision(decision: str = "approved") -> SimpleNamespace:
+    now = datetime(2026, 7, 6, tzinfo=UTC)
+    return SimpleNamespace(
+        id=f"decision-{decision}",
+        review_candidate_id="review-1",
+        target_type="email_candidate",
+        target_id="email-candidate-1",
+        decision=decision,
+        actor="analyst@example.com",
+        reason_code=f"{decision}_by_analyst",
+        reason="Analyst decision.",
+        policy_snapshot_hash="policy-hash",
+        created_at=now,
+    )
+
+
+def _crm_target() -> SimpleNamespace:
+    now = datetime(2026, 7, 6, tzinfo=UTC)
+    return SimpleNamespace(
+        id="crm-target-1",
+        review_candidate_id="review-1",
+        review_decision_id="decision-approved",
+        target_type="email_candidate",
+        target_id="email-candidate-1",
+        origin_type="security_incident",
+        origin_id="incident-1",
+        source_definition_id="source-1",
+        source_item_ids=["raw-1"],
+        status="pending_export",
+        export_status="not_exported",
+        policy_snapshot={},
+        approval_snapshot={},
+        version=1,
+        created_at=now,
+        updated_at=now,
+    )
+
+
+def _suppression() -> SimpleNamespace:
+    now = datetime(2026, 7, 6, tzinfo=UTC)
+    return SimpleNamespace(
+        id="suppression-1",
+        email="ada@example.com",
+        domain="example.com",
+        contact_id="contact-1",
+        channel="email",
+        target_type="contact",
+        target_id="contact-1",
+        reason="Do not contact request.",
+        source="governance",
+        active=True,
+        expires_at=None,
+        policy_snapshot={},
+        created_at=now,
     )
 
 
@@ -190,3 +274,115 @@ def test_review_candidates_route_is_read_only_queue(monkeypatch) -> None:
 
     assert payload["candidates"][0]["status"] == "open"
     assert payload["candidates"][0]["candidate_type"] == "email_verification"
+
+
+def test_scoring_candidate_route_persists_versioned_score(monkeypatch) -> None:
+    async def fake_create_score(*args, **kwargs):
+        return _candidate_score()
+
+    monkeypatch.setattr(routers, "create_candidate_score", fake_create_score)
+
+    client = TestClient(build_app(Settings(service_name="scoring-routing-service")))
+    payload = client.post(
+        "/v1/scoring/candidates",
+        headers={"Idempotency-Key": "idem-score"},
+        json={
+            "target_type": "contact",
+            "target_id": "contact-1",
+            "origin_type": "security_incident",
+            "origin_id": "incident-1",
+            "source_definition_id": "source-1",
+            "source_item_ids": ["raw-1"],
+            "policy_snapshot": {"lawful_basis": "legitimate_interest"},
+        },
+    ).json()
+
+    assert payload["config_version"] == "sprint7.v1"
+    assert payload["route"] == "crm_target_review"
+
+
+def test_review_decision_routes_and_crm_targets(monkeypatch) -> None:
+    async def fake_approve(*args, **kwargs):
+        return _review_decision("approved")
+
+    async def fake_reject(*args, **kwargs):
+        return _review_decision("rejected")
+
+    async def fake_bulk(*args, **kwargs):
+        return [_review_decision("approved")]
+
+    async def fake_targets(*args, **kwargs):
+        return [_crm_target()]
+
+    monkeypatch.setattr(routers, "approve_review_candidate", fake_approve)
+    monkeypatch.setattr(routers, "reject_review_candidate", fake_reject)
+    monkeypatch.setattr(routers, "bulk_decide_review_candidates", fake_bulk)
+    monkeypatch.setattr(routers, "list_crm_targets", fake_targets)
+
+    client = TestClient(build_app(Settings(service_name="governance-service")))
+    approved = client.post(
+        "/v1/review/candidates/review-1/approve",
+        headers={"Idempotency-Key": "idem-approve", "X-Actor": "analyst@example.com"},
+        json={"version": 1, "reason_code": "approved_by_analyst"},
+    ).json()
+    rejected = client.post(
+        "/v1/review/candidates/review-1/reject",
+        headers={"Idempotency-Key": "idem-reject", "X-Actor": "analyst@example.com"},
+        json={"version": 1, "reason_code": "false_positive"},
+    ).json()
+    bulk = client.post(
+        "/v1/review/candidates/bulk-decision",
+        headers={"Idempotency-Key": "idem-bulk", "X-Actor": "analyst@example.com"},
+        json={
+            "candidate_ids": ["review-1"],
+            "decision": "approved",
+            "candidate_versions": {"review-1": 1},
+            "reason_code": "bulk_approved",
+        },
+    ).json()
+    targets = client.get("/v1/review/crm-targets").json()
+
+    assert approved["decision"] == "approved"
+    assert rejected["decision"] == "rejected"
+    assert bulk["decisions"][0]["decision"] == "approved"
+    assert targets["crm_targets"][0]["export_status"] == "not_exported"
+
+
+def test_suppression_and_incident_governance_routes(monkeypatch) -> None:
+    async def fake_create_suppression(*args, **kwargs):
+        return _suppression()
+
+    async def fake_corroborate(*args, **kwargs):
+        return _review_decision("approved")
+
+    async def fake_reject_incident(*args, **kwargs):
+        return _review_decision("rejected")
+
+    monkeypatch.setattr(routers, "create_suppression", fake_create_suppression)
+    monkeypatch.setattr(routers, "corroborate_incident", fake_corroborate)
+    monkeypatch.setattr(routers, "reject_incident", fake_reject_incident)
+
+    client = TestClient(build_app(Settings(service_name="gateway-service")))
+    suppression = client.post(
+        "/v1/suppressions",
+        headers={"Idempotency-Key": "idem-suppression"},
+        json={"email": "ada@example.com", "reason": "Do not contact request."},
+    ).json()
+    corroborated = client.post(
+        "/v1/governance/incidents/incident-1/corroborate",
+        headers={"Idempotency-Key": "idem-corroborate"},
+        json={
+            "version": 1,
+            "method": "analyst_decision",
+            "reason_code": "analyst_verified",
+        },
+    ).json()
+    rejected = client.post(
+        "/v1/governance/incidents/incident-1/reject",
+        headers={"Idempotency-Key": "idem-reject-incident"},
+        json={"version": 1, "reason_code": "false_positive"},
+    ).json()
+
+    assert suppression["id"] == "suppression-1"
+    assert corroborated["decision"] == "approved"
+    assert rejected["decision"] == "rejected"

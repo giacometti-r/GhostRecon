@@ -17,8 +17,8 @@ The console renders reporting read models and invokes owning feature-service API
 - Global event map, calendar, table, detail, and published participant roles.
 - Global incident feed, evidence timeline, affected-company resolution, and watchlist state.
 - Company/domain/incident/event-series/topic watchlists and follow-on coverage.
-- Contact-enrichment and analyst-review queues with bounded bulk decisions.
-- Typed CRM targets, export batches, partial failures, and reconciliation.
+- Contact-enrichment and analyst-review queues with implemented approve/reject and bounded bulk-decision APIs.
+- Typed inert CRM targets, future export batches, partial failures, and reconciliation.
 - Source freshness and degraded-service indicators.
 
 Detailed filters, actions, permissions, and acceptance criteria are in `docs/specifications/dashboard.md`.
@@ -27,7 +27,7 @@ Detailed filters, actions, permissions, and acceptance criteria are in `docs/spe
 
 - Reporting service for dashboard projections, KPIs, and freshness metadata.
 - Event/incident intelligence services for detail and watchlist mutations.
-- Governance service for approvals, rejection, suppressions, retention, and policy decisions.
+- Governance service for approvals, rejection, suppressions, retention, incident decisions, CRM targets, and policy decisions.
 - CRM service for approved export batch actions and reconciliation.
 - Gateway authentication/authorization and Redis/Celery operation state.
 

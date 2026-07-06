@@ -2,9 +2,9 @@
 
 ## Current Stage
 
-Stage: Sprint 6 entity resolution, company/contact enrichment, and email intelligence complete; Sprint 7 scoring, corroboration, governance, and review workflows is next.
+Stage: Sprint 7 scoring, corroboration, governance, and review workflows complete; Sprint 8 intelligence dashboard, review queue, and reporting is next.
 
-The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, and minimal read-only review routing.
+The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, and inert CRM targets awaiting export.
 
 ## Done
 
@@ -76,6 +76,16 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Aligned `ghostrecon.service_apps.runtime:app` with the service router factory so Docker, direct Uvicorn runs, and tests load the same service-specific routes.
 - Added focused tests for source-lineage enforcement, participant reuse policy, incident role scope, breached-data rejection, verification mapping, model/migration surface, and new routes.
 
+### Sprint 7 - Scoring, Corroboration, Governance, and Review Workflows
+
+- Added `CandidateScore`, `ReviewDecision`, and `CrmTarget` persistence plus Alembic migration coverage for scoring components, review decisions, inert CRM targets, policy snapshot hashes, SLA metadata, suppression scope, and optimistic incident versions.
+- Implemented versioned `sprint7.v1` fit, relevance, recency, confidence, and evidence scoring for event/incident/enrichment/email-derived candidates while keeping the legacy lead scoring API compatible.
+- Added governance-owned approval, rejection, bulk-review, incident corroboration, incident false-positive rejection, suppression creation, suppression evaluation, and CRM-target read APIs through the gateway and owning services.
+- Enforced fail-closed policy checks for source lineage, participant reuse, incident corroboration, suppression, retention, lawful basis, stale evidence, policy snapshot hashes, and optimistic versions before approval.
+- Added `review.approved`, `review.rejected`, `crm_target.created`, and `suppression.created` events plus audit rows for governance decisions.
+- Produced approved CRM targets as non-exported approval artifacts only; CRM export remains a separate Sprint 9 workflow and outreach remains a separate Sprint 10 workflow.
+- Added focused tests for scoring configuration/routing, policy blockers, model/migration surface, event contracts, review decision routes, CRM-target routes, suppression routes, and incident governance routes.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -85,15 +95,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
 ## Future Sprints
-
-### Sprint 7 - Scoring, Corroboration, Governance, and Review Workflows
-
-- Version fit, relevance, recency, confidence, and evidence scoring configuration.
-- Enforce incident corroboration, participant-reuse policy, suppression, retention, and lawful-basis rules.
-- Add approval/rejection APIs, reason codes, bulk-review safeguards, SLA timers, and complete audit trails.
-- Produce typed review candidates and CRM targets without initiating outreach.
-
-Acceptance: false-positive rejection, analyst override, suppression, retention, approval auditing, and policy fail-closed behavior pass integration tests.
 
 ### Sprint 8 - Intelligence Dashboard, Review Queue, and Reporting
 
