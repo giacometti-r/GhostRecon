@@ -747,6 +747,77 @@ class CrmTargetList(BaseModel):
     crm_targets: list[CrmTargetOut]
 
 
+class DashboardRole(StrEnum):
+    VIEWER = "viewer"
+    ANALYST = "analyst"
+    GOVERNANCE_REVIEWER = "governance_reviewer"
+    ADMINISTRATOR = "administrator"
+
+
+class ReportingOperatorContext(BaseModel):
+    actor: str = "system"
+    role: DashboardRole = DashboardRole.VIEWER
+
+
+class ReportingMetadata(BaseModel):
+    generated_at: datetime
+    watermarks: dict[str, object] = {}
+    projection_version: str
+    stale: bool = False
+    degraded_dependencies: list[str] = []
+
+
+class ReportingEventList(BaseModel):
+    metadata: ReportingMetadata
+    events: list[CyberEventOut]
+    next_cursor: str | None = None
+
+
+class ReportingEventDetail(BaseModel):
+    metadata: ReportingMetadata
+    event: CyberEventOut
+
+
+class ReportingIncidentList(BaseModel):
+    metadata: ReportingMetadata
+    incidents: list[SecurityIncidentOut]
+    next_cursor: str | None = None
+
+
+class ReportingIncidentDetail(BaseModel):
+    metadata: ReportingMetadata
+    incident: SecurityIncidentOut
+
+
+class ReportingWatchTargetList(BaseModel):
+    metadata: ReportingMetadata
+    watch_targets: list[WatchTargetOut]
+    next_cursor: str | None = None
+
+
+class ReportingReviewQueue(BaseModel):
+    metadata: ReportingMetadata
+    candidates: list[ReviewCandidateOut]
+    next_cursor: str | None = None
+
+
+class ReportingCrmTargetList(BaseModel):
+    metadata: ReportingMetadata
+    crm_targets: list[CrmTargetOut]
+    next_cursor: str | None = None
+
+
+class ReportingSourceHealthList(BaseModel):
+    metadata: ReportingMetadata
+    sources: list[SourceHealth]
+    next_cursor: str | None = None
+
+
+class ReportingKpiCatalog(BaseModel):
+    metadata: ReportingMetadata
+    kpis: dict[str, list[str]]
+
+
 class SuppressionCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

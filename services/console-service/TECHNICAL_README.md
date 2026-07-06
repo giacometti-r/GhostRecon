@@ -2,11 +2,13 @@
 
 ## Responsibilities
 
-- Render FastAPI/Jinja operator pages for implemented intelligence plus review/reporting workflows.
+- Render the internal operator dashboard for implemented intelligence plus review/reporting workflows.
 - Consume `reporting-service` read APIs for events, incidents, watchlists, queues, exports, KPIs, source health, and freshness.
 - Call owning feature-service write APIs through the gateway; never mutate reporting projections directly.
 - Provide human-in-the-loop controls for intelligence corroboration, enrichment, CRM eligibility, replay, and policy-sensitive actions.
 - Enforce CSRF protection, authenticated sessions, server-side role checks, optimistic versions, and idempotency keys.
+
+Sprint 8 does not add dashboard UI dependencies. The future dashboard implementation should use Python Dash inside this service boundary and keep callbacks read-only against reporting APIs unless explicitly invoking gateway mutations.
 
 ## Interfaces
 
@@ -29,6 +31,13 @@ Target view routes:
 - `GET /operations/sources`
 
 Mutation forms map to APIs specified in `docs/specifications/intelligence-pipeline.md`; routes do not implement feature business rules locally.
+
+Future Dash setup:
+
+- Mount Dash under the existing console application and service deployment.
+- Use `/v1/reporting/*` and `/v1/kpis/catalog` for read callbacks.
+- Pass actor, role, reason, optimistic version, and idempotency headers to gateway mutations.
+- Do not add an independent dashboard service, datastore, or direct canonical-table access from UI callbacks.
 
 ## Permissions and UI Safety
 

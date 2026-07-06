@@ -81,3 +81,28 @@ def test_candidate_score_fails_closed_for_policy_blockers() -> None:
     assert "missing_source_lineage" in result.policy_blockers
     assert "participant_reuse_unknown" in result.policy_blockers
     assert "missing_lawful_basis" in result.policy_blockers
+
+
+def test_candidate_score_treats_missing_numeric_fields_as_zero() -> None:
+    result = score_candidate_preview(
+        CandidateScoreRequest(
+            target_type="contact",
+            target_id="contact-1",
+            origin_type="security_incident",
+            origin_id="incident-1",
+            account={"employee_count": None, "source_confidence": None},
+            contact={"source_confidence": None},
+            signals=[{"signal_type": "kev", "signal_strength": None}],
+            evidence={
+                "confidence": None,
+                "independent_source_count": None,
+                "evidence_freshness_days": None,
+            },
+        )
+    )
+
+    assert result.fit_score == 0
+    assert result.relevance_score == 35
+    assert result.confidence_score == 0
+    assert result.evidence_score == 0
+    assert result.route == "rejected"

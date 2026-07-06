@@ -2,20 +2,18 @@
 
 ## Responsibilities
 
-- Define the KPI catalog and projection schemas.
-- Consume versioned intelligence, review, governance, and CRM export events.
-- Materialize event, incident, watchlist, score, review, CRM-target, export, reconciliation, and source-health views.
+- Define the KPI catalog and reporting response schemas.
+- Serve Sprint 8 query-backed event, incident, watchlist, review, CRM-target, and source-health read models.
+- Prepare for later materialized projections over versioned intelligence, review, governance, and CRM export events.
 - Expose freshness/watermark metadata with every dashboard response.
 - Support dashboards without locking data into one CRM or engagement provider.
 
 ## Interfaces
 
-Implemented baseline:
+Implemented Sprint 8:
 
 - `GET /v1/kpis/catalog`
-
-Target reporting interfaces:
-
+- `GET /v1/reporting/kpis/catalog`
 - `GET /v1/reporting/events`
 - `GET /v1/reporting/events/{event_id}`
 - `GET /v1/reporting/incidents`
@@ -23,10 +21,9 @@ Target reporting interfaces:
 - `GET /v1/reporting/watch-targets`
 - `GET /v1/reporting/review-queue`
 - `GET /v1/reporting/crm-targets`
-- `GET /v1/reporting/crm-exports`
 - `GET /v1/reporting/source-health`
 
-All collection endpoints use cursor pagination, explicit sorting, role-aware field projection, and filters from `docs/specifications/dashboard.md`.
+CRM export batches and reconciliation endpoints remain Sprint 9 work. All implemented collection endpoints use cursor pagination, explicit sorting, role-aware field projection, and filters from `docs/specifications/dashboard.md`.
 
 ## KPI Families
 
@@ -41,7 +38,8 @@ All collection endpoints use cursor pagination, explicit sorting, role-aware fie
 
 ## Projection Rules
 
-- Projections reference canonical GhostRecon IDs and source/evidence summaries, not copied unlicensed bodies.
+- Sprint 8 read models query canonical tables directly and reference canonical GhostRecon IDs and source/evidence summaries, not copied unlicensed bodies.
+- Materialized projections may replace query-backed reads later without changing the public reporting response metadata shape.
 - Merges/tombstones redirect to the surviving canonical record and remain auditable.
 - Reprocessing an event is idempotent by event ID/schema version.
 - A read response includes `generated_at`, watermarks, projection version, `stale`, and degraded dependencies.
@@ -56,7 +54,7 @@ All collection endpoints use cursor pagination, explicit sorting, role-aware fie
 
 ## Testing
 
-- KPI catalog and schema-version tests.
+- KPI catalog, reporting route, metadata, and schema-version tests.
 - Idempotent projection/rebuild and canonical-merge tests.
 - Filter, pagination, role-field, and query performance tests.
 - Watermark/stale/degraded-state tests under partial source failure.

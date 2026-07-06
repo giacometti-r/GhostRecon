@@ -2,15 +2,18 @@
 
 ## Purpose
 
-`console-service` is the single internal FastAPI/Jinja UI for intelligence dashboards, analyst review, approvals, watchlists, suppressions, replay, CRM export status, reconciliation, and health. The intelligence roadmap extends this service; it does not introduce another dashboard service.
+`console-service` is the single internal UI boundary for intelligence dashboards, analyst review, approvals, watchlists, suppressions, replay, CRM export status, reconciliation, and health. The intelligence roadmap extends this service; it does not introduce another dashboard service.
 
 The console renders reporting read models and invokes owning feature-service APIs for mutations. It does not own canonical intelligence, policy, scoring, or CRM export logic.
+
+Sprint 8 implements backend reporting readiness only. A later UI sprint should implement the dashboard with Python Dash hosted from this service boundary, consuming reporting APIs for reads and gateway/owning service APIs for mutations.
 
 ## Runtime
 
 - Entrypoint: `uvicorn ghostrecon.service_apps.runtime:app --host 0.0.0.0 --port 8080`
 - Required env: `GHOSTRECON_SERVICE_NAME=console-service`
-- v1 UI: server-rendered FastAPI/Jinja pages with progressive enhancement.
+- Current UI: minimal FastAPI HTML placeholder plus implemented review APIs.
+- Future UI: Python Dash dashboard mounted within `console-service`; no Dash dependency is required until that sprint.
 
 ## Dashboard Sections
 

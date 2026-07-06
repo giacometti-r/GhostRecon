@@ -2,9 +2,9 @@
 
 ## Current Stage
 
-Stage: Sprint 7 scoring, corroboration, governance, and review workflows complete; Sprint 8 intelligence dashboard, review queue, and reporting is next.
+Stage: Sprint 8 backend reporting and dashboard readiness complete; the Python Dash dashboard UI follow-up is next, with provider-neutral CRM export still sequenced after dashboard review readiness.
 
-The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, and inert CRM targets awaiting export.
+The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, inert CRM targets awaiting export, and reporting-service dashboard read APIs with freshness/degraded metadata.
 
 ## Done
 
@@ -86,6 +86,16 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Produced approved CRM targets as non-exported approval artifacts only; CRM export remains a separate Sprint 9 workflow and outreach remains a separate Sprint 10 workflow.
 - Added focused tests for scoring configuration/routing, policy blockers, model/migration surface, event contracts, review decision routes, CRM-target routes, suppression routes, and incident governance routes.
 
+### Sprint 8 - Backend Reporting and Dashboard Readiness
+
+- Fixed the Sprint 7 type gate by making defaulted scoring numeric coercion non-optional without changing scoring outputs.
+- Added metadata-wrapped reporting contracts for events, event detail, incidents, incident detail, watch targets, review queues, CRM targets, source health, and KPI catalog.
+- Implemented query-backed reporting read models over canonical tables and existing service-owned converters; materialized projections remain a later scaling option.
+- Added cursor pagination, stable sorting, dashboard filters, projection version, generated-at timestamps, source watermarks, stale flags, and degraded dependency names on reporting responses.
+- Added operator role context through `X-Operator-Role` and viewer-level redaction for review, CRM-target, and source-health policy details.
+- Kept dashboard UI implementation deferred; documented Python Dash as the future console UI direction without adding Dash dependencies.
+- Added focused reporting tests for route contracts, metadata/freshness, cursor behavior, role projection, KPI catalog, and scoring numeric-coercion regression.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -96,12 +106,13 @@ The repository contains the production-oriented microservice scaffold, shared Py
 
 ## Future Sprints
 
-### Sprint 8 - Intelligence Dashboard, Review Queue, and Reporting
+### Sprint 8B - Python Dash Intelligence Dashboard UI
 
-- Build the dashboard in the existing FastAPI/Jinja `console-service`; do not create another dashboard service.
-- Back dashboard views with `reporting-service` read models and freshness metadata.
+- Build the dashboard in the existing `console-service` using Python Dash; do not create another dashboard service.
+- Back dashboard views with the Sprint 8 `reporting-service` read APIs and freshness metadata.
 - Implement event map/calendar/table, participant details, incident feed, watchlists, enrichment/review queues, export batches, reconciliation failures, and source health.
 - Add role-based view/action permissions and auditable bulk review.
+- Keep Dash callbacks read-only against reporting APIs; write actions must call owning feature services through the gateway.
 
 Acceptance: dashboard filters/actions meet `docs/specifications/dashboard.md`; stale and degraded services are visible; bulk decisions remain idempotent and auditable.
 

@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse
 
 from ghostrecon.common.config import get_settings
@@ -17,6 +17,7 @@ from ghostrecon.models.api import (
     CrmTargetList,
     CyberEventList,
     CyberEventOut,
+    DashboardRole,
     DomainEnrichmentRequest,
     EmailCandidatePersistRequest,
     EmailCandidatePersistResult,
@@ -31,6 +32,16 @@ from ghostrecon.models.api import (
     IncidentDecisionRequest,
     JobAccepted,
     PrepPacketRequest,
+    ReportingCrmTargetList,
+    ReportingEventDetail,
+    ReportingEventList,
+    ReportingIncidentDetail,
+    ReportingIncidentList,
+    ReportingKpiCatalog,
+    ReportingOperatorContext,
+    ReportingReviewQueue,
+    ReportingSourceHealthList,
+    ReportingWatchTargetList,
     ReviewCandidateList,
     ReviewDecisionOut,
     ReviewDecisionRequest,
@@ -93,6 +104,17 @@ from ghostrecon.services.incident_intelligence import (
     watch_target_to_api,
 )
 from ghostrecon.services.meeting import build_prep_packet
+from ghostrecon.services.reporting import (
+    get_reporting_crm_targets,
+    get_reporting_event_detail,
+    get_reporting_events,
+    get_reporting_incident_detail,
+    get_reporting_incidents,
+    get_reporting_kpi_catalog,
+    get_reporting_review_queue,
+    get_reporting_source_health,
+    get_reporting_watch_targets,
+)
 from ghostrecon.services.scoring import (
     candidate_score_to_model,
     create_candidate_score,
@@ -114,6 +136,20 @@ console_router = APIRouter(tags=["console"])
 reporting_router = APIRouter(tags=["reporting"])
 event_intelligence_router = APIRouter(tags=["event-intelligence"])
 incident_intelligence_router = APIRouter(tags=["incident-intelligence"])
+
+
+def reporting_operator_context(
+    actor: str = Header(default="system", alias="X-Actor"),
+    operator_role: str = Header(default=DashboardRole.VIEWER.value, alias="X-Operator-Role"),
+) -> ReportingOperatorContext:
+    try:
+        role = DashboardRole(operator_role)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="unsupported operator role") from exc
+    return ReportingOperatorContext(actor=actor, role=role)
+
+
+REPORTING_OPERATOR_CONTEXT = Depends(reporting_operator_context)
 
 
 @gateway_router.get("/v1/service-map")
@@ -141,6 +177,194 @@ async def service_map() -> dict[str, list[str]]:
 @event_intelligence_router.get("/v1/intelligence/sources/health", response_model=SourceHealthList)
 async def source_health(kind: str | None = None) -> SourceHealthList:
     return SourceHealthList(sources=await list_source_health(kind, get_settings()))
+
+
+@gateway_router.get("/v1/reporting/events", response_model=ReportingEventList)
+@reporting_router.get("/v1/reporting/events", response_model=ReportingEventList)
+async def reporting_events(
+    series: str | None = None,
+    source: str | None = None,
+    country: str | None = None,
+    event_format: str | None = None,
+    topic: str | None = None,
+    cursor: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingEventList:
+    try:
+        return await get_reporting_events(
+            series=series,
+            source=source,
+            country=country,
+            event_format=event_format,
+            topic=topic,
+            cursor=cursor,
+            limit=limit,
+            operator=operator,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/reporting/events/{event_id}", response_model=ReportingEventDetail)
+@reporting_router.get("/v1/reporting/events/{event_id}", response_model=ReportingEventDetail)
+async def reporting_event_detail(
+    event_id: str,
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingEventDetail:
+    detail = await get_reporting_event_detail(event_id, operator=operator, settings=get_settings())
+    if detail is None:
+        raise HTTPException(status_code=404, detail="event not found")
+    return detail
+
+
+@gateway_router.get("/v1/reporting/incidents", response_model=ReportingIncidentList)
+@reporting_router.get("/v1/reporting/incidents", response_model=ReportingIncidentList)
+async def reporting_incidents(
+    status: str | None = None,
+    source: str | None = None,
+    company: str | None = None,
+    attack_vector: str | None = None,
+    incident_type: str | None = None,
+    cursor: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingIncidentList:
+    try:
+        return await get_reporting_incidents(
+            status=status,
+            source=source,
+            company=company,
+            attack_vector=attack_vector,
+            incident_type=incident_type,
+            cursor=cursor,
+            limit=limit,
+            operator=operator,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get(
+    "/v1/reporting/incidents/{incident_id}", response_model=ReportingIncidentDetail
+)
+@reporting_router.get(
+    "/v1/reporting/incidents/{incident_id}", response_model=ReportingIncidentDetail
+)
+async def reporting_incident_detail(
+    incident_id: str,
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingIncidentDetail:
+    detail = await get_reporting_incident_detail(
+        incident_id, operator=operator, settings=get_settings()
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="incident not found")
+    return detail
+
+
+@gateway_router.get("/v1/reporting/watch-targets", response_model=ReportingWatchTargetList)
+@reporting_router.get("/v1/reporting/watch-targets", response_model=ReportingWatchTargetList)
+async def reporting_watch_targets(
+    target_type: str | None = None,
+    enabled: bool | None = None,
+    owner: str | None = None,
+    cursor: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingWatchTargetList:
+    try:
+        return await get_reporting_watch_targets(
+            target_type=target_type,
+            enabled=enabled,
+            owner=owner,
+            cursor=cursor,
+            limit=limit,
+            operator=operator,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/reporting/review-queue", response_model=ReportingReviewQueue)
+@reporting_router.get("/v1/reporting/review-queue", response_model=ReportingReviewQueue)
+async def reporting_review_queue(
+    status: str | None = "open",
+    candidate_type: str | None = None,
+    target_type: str | None = None,
+    cursor: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingReviewQueue:
+    try:
+        return await get_reporting_review_queue(
+            status=status,
+            candidate_type=candidate_type,
+            target_type=target_type,
+            cursor=cursor,
+            limit=limit,
+            operator=operator,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/reporting/crm-targets", response_model=ReportingCrmTargetList)
+@reporting_router.get("/v1/reporting/crm-targets", response_model=ReportingCrmTargetList)
+async def reporting_crm_targets(
+    status: str | None = None,
+    target_type: str | None = None,
+    export_status: str | None = None,
+    cursor: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingCrmTargetList:
+    try:
+        return await get_reporting_crm_targets(
+            status=status,
+            target_type=target_type,
+            export_status=export_status,
+            cursor=cursor,
+            limit=limit,
+            operator=operator,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/reporting/source-health", response_model=ReportingSourceHealthList)
+@reporting_router.get("/v1/reporting/source-health", response_model=ReportingSourceHealthList)
+async def reporting_source_health(
+    kind: str | None = None,
+    freshness_status: str | None = None,
+    cursor: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingSourceHealthList:
+    try:
+        return await get_reporting_source_health(
+            kind=kind,
+            freshness_status=freshness_status,
+            cursor=cursor,
+            limit=limit,
+            operator=operator,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/reporting/kpis/catalog", response_model=ReportingKpiCatalog)
+@reporting_router.get("/v1/reporting/kpis/catalog", response_model=ReportingKpiCatalog)
+async def reporting_kpi_catalog(
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingKpiCatalog:
+    return await get_reporting_kpi_catalog(operator=operator, settings=get_settings())
 
 
 @gateway_router.get("/v1/intelligence/events", response_model=CyberEventList)
@@ -680,15 +904,12 @@ async def console_home() -> str:
     """
 
 
-@reporting_router.get("/v1/kpis/catalog")
-async def kpi_catalog() -> dict[str, list[str]]:
-    return {
-        "coverage": ["accounts_touched_per_rep", "buying_group_coverage", "enrichment_rate"],
-        "speed": ["trigger_to_first_touch_seconds", "meeting_to_prep_packet_seconds"],
-        "quality": ["bounce_rate", "duplicate_rate", "routing_error_rate"],
-        "pipeline": ["meeting_to_sql_rate", "sql_to_opportunity_rate", "pipeline_created"],
-        "ops_health": ["workflow_failure_rate", "replay_rate", "mttr_seconds", "sla_breaches"],
-    }
+@gateway_router.get("/v1/kpis/catalog", response_model=ReportingKpiCatalog)
+@reporting_router.get("/v1/kpis/catalog", response_model=ReportingKpiCatalog)
+async def kpi_catalog(
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingKpiCatalog:
+    return await get_reporting_kpi_catalog(operator=operator, settings=get_settings())
 
 
 ROUTERS = {

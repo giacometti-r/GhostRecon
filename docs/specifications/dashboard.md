@@ -2,9 +2,20 @@
 
 ## Product Boundary
 
-The intelligence dashboard is implemented in the existing FastAPI/Jinja `console-service` and backed by `reporting-service` read models. No separate dashboard service or independent copy of business state is introduced.
+The intelligence dashboard belongs in the existing `console-service` and is backed by `reporting-service` read models. No separate dashboard service or independent copy of business state is introduced.
 
 The dashboard supports investigation, watchlist management, enrichment review, governance decisions, CRM export, reconciliation, and source operations. It does not send outreach.
+
+Sprint 8 is backend-only: it ships reporting read APIs and dashboard readiness documentation, but no Dash UI or Dash dependency. The later UI implementation should use Python Dash inside the `console-service` boundary.
+
+## Future Dash Architecture
+
+- Host the future Python Dash app from `console-service` so operators still use one internal dashboard service.
+- Keep Dash callbacks read-only against `/v1/reporting/*` and `/v1/kpis/catalog`; mutation callbacks must call owning feature-service APIs through the gateway.
+- Reuse the same authenticated session, CSRF posture, server-side role checks, and audit headers as other console actions.
+- Do not query canonical tables directly from Dash callbacks and do not create a second dashboard datastore.
+- Add Dash dependencies only when the UI sprint starts; Sprint 8 intentionally leaves Python package and Helm dependencies unchanged.
+- Treat the dashboard as the operator control plane: stale source visibility, review safety, CRM-export separation, and auditability are required product behavior, not optional visual polish.
 
 ## Users and Permissions
 
@@ -179,11 +190,13 @@ The console consumes target read endpoints:
 - `GET /v1/reporting/incidents/{incident_id}`
 - `GET /v1/reporting/watch-targets`
 - `GET /v1/reporting/review-queue`
-- `GET /v1/reporting/crm-exports`
+- `GET /v1/reporting/crm-targets`
 - `GET /v1/reporting/source-health`
 - `GET /v1/reporting/kpis/catalog`
 
-Each response includes `generated_at`, source watermark(s), projection version, stale boolean, and degraded dependencies. Write actions call the owning feature service through the gateway, not reporting projections.
+`GET /v1/reporting/crm-exports` and reconciliation endpoints remain Sprint 9 CRM-export work. Sprint 8 exposes current inert CRM targets only.
+
+Each response includes `generated_at`, source watermark(s), projection version, stale boolean, and degraded dependencies. Collection endpoints accept `limit`, `cursor`, stable filters, and operator role context through `X-Operator-Role`. Write actions call the owning feature service through the gateway, not reporting projections.
 
 ## KPI Families
 

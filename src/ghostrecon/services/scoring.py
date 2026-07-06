@@ -262,7 +262,7 @@ def _component_scores(request: CandidateScoreRequest) -> tuple[dict[str, int], l
     if account.get("named_account_flag"):
         fit += 30
         reasons.append("Named account")
-    if _optional_int(account.get("employee_count"), 0) >= 250:
+    if _int_or_default(account.get("employee_count")) >= 250:
         fit += 20
         reasons.append("Employee count matches target segment")
     if account.get("security_stack") or account.get("tech_stack"):
@@ -286,16 +286,16 @@ def _component_scores(request: CandidateScoreRequest) -> tuple[dict[str, int], l
         relevance += 25
         reasons.append("Incident context is present")
     for signal in signals:
-        strength = _optional_int(signal.get("signal_strength"), 0)
+        strength = _int_or_default(signal.get("signal_strength"))
         relevance += min(max(strength, 0), 20)
         if signal.get("signal_type"):
             reasons.append(f"Relevant signal: {signal.get('signal_type')}")
 
     confidence = max(
         [
-            _optional_int(evidence.get("confidence"), 0),
-            _optional_int(account.get("source_confidence"), 0),
-            _optional_int(contact.get("source_confidence"), 0),
+            _int_or_default(evidence.get("confidence")),
+            _int_or_default(account.get("source_confidence")),
+            _int_or_default(contact.get("source_confidence")),
         ]
     )
     if confidence >= 70:
@@ -304,7 +304,7 @@ def _component_scores(request: CandidateScoreRequest) -> tuple[dict[str, int], l
         reasons.append("Source confidence missing")
 
     evidence_score = 0
-    independent_sources = _optional_int(evidence.get("independent_source_count"), 0)
+    independent_sources = _int_or_default(evidence.get("independent_source_count"))
     if evidence.get("authoritative"):
         evidence_score += 60
         reasons.append("Authoritative evidence")
@@ -436,6 +436,13 @@ def _optional_int(value: object, default: int | None = None) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _int_or_default(value: object, default: int = 0) -> int:
+    coerced = _optional_int(value, default)
+    if coerced is None:
+        return default
+    return coerced
 
 
 def _clamp(value: int) -> int:
