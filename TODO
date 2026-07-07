@@ -1,0 +1,1 @@
+- Remove confidence in email_candidates.py, only use email verifier

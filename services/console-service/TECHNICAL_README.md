@@ -8,36 +8,45 @@
 - Provide human-in-the-loop controls for intelligence corroboration, enrichment, CRM eligibility, replay, and policy-sensitive actions.
 - Enforce CSRF protection, authenticated sessions, server-side role checks, optimistic versions, and idempotency keys.
 
-Sprint 8 does not add dashboard UI dependencies. The future dashboard implementation should use Python Dash inside this service boundary and keep callbacks read-only against reporting APIs unless explicitly invoking gateway mutations.
+Sprint 12 mounts Python Dash inside this service boundary and keeps callbacks read-only against reporting APIs unless explicitly invoking gateway/owning-service mutations.
 
 ## Interfaces
 
 Implemented baseline:
 
-- `GET /`
+- `GET /` and Dash routes under the console root.
 - `GET /v1/review/candidates`
 - `GET /v1/review/crm-targets`
 - `POST /v1/review/candidates/{candidate_id}/approve`
 - `POST /v1/review/candidates/{candidate_id}/reject`
 - `POST /v1/review/candidates/bulk-decision`
 
-Target view routes:
+Implemented Dash routes:
 
 - `GET /events`, `GET /events/{event_id}`
 - `GET /incidents`, `GET /incidents/{incident_id}`
 - `GET /watchlists`
-- `GET /review/enrichment`, `GET /review/candidates`
+- `GET /review`, `GET /review/enrichment`
 - `GET /crm/exports`, `GET /crm/exports/{batch_id}`
+- `GET /sequences`
+- `GET /meetings`, `GET /meetings/{meeting_id}`
 - `GET /operations/sources`
 
 Mutation forms map to APIs specified in `docs/specifications/intelligence-pipeline.md`; routes do not implement feature business rules locally.
 
-Future Dash setup:
+Dash setup:
 
-- Mount Dash under the existing console application and service deployment.
-- Use `/v1/reporting/*` and `/v1/kpis/catalog` for read callbacks.
-- Pass actor, role, reason, optimistic version, and idempotency headers to gateway mutations.
+- Dash is mounted by `ghostrecon.service_apps.factory` only when `GHOSTRECON_SERVICE_NAME=console-service`.
+- Use `/v1/reporting/*`, `/v1/reporting/kpis/catalog`, and `/v1/kpis/catalog` for reporting-backed read callbacks.
+- Use owning read APIs for sequence enrollment state and CRM export batch detail where reporting projections do not yet exist.
+- Pass actor, role, reason, optimistic version, and idempotency headers to gateway mutations through `ConsoleApiClient`.
 - Do not add an independent dashboard service, datastore, or direct canonical-table access from UI callbacks.
+
+Configuration:
+
+- `GHOSTRECON_GATEWAY_BASE_URL`: gateway base URL, default `http://gateway-service:8080`.
+- `GHOSTRECON_CONSOLE_REQUEST_TIMEOUT_SECONDS`: synchronous callback request timeout, default `10`.
+- `GHOSTRECON_CONSOLE_HTTP_PORT`: Compose host port for local console runs, default `8082`.
 
 ## Permissions and UI Safety
 
@@ -46,6 +55,7 @@ Future Dash setup:
 - Bulk review requires homogeneous policy context, a bounded count, preview, and per-item outcomes.
 - Unknown/prohibited participant reuse disables actions in UI and API; the UI control alone is not the enforcement boundary.
 - CRM-target approval controls never invoke CRM export or sequence enrollment.
+- Source-health operations are read-only until source pause/replay/acknowledge APIs exist.
 - Render source content as escaped text; sanitize bounded excerpts and external links.
 
 ## Failure Modes
@@ -66,3 +76,6 @@ Future Dash setup:
 - Participant-permission and policy-change invalidation tests.
 - Bulk decision conflict/idempotency/audit tests.
 - CRM partial-failure/reconciliation view tests.
+- Console API client timeout/header/idempotency tests.
+- Dash mount tests proving `/`, `/healthz`, `/readyz`, `/metrics`, and `/v1/*` coexist.
+- Existing service test suite plus `make helm-check`.

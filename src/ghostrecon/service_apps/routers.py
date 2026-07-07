@@ -1,7 +1,6 @@
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
-from fastapi.responses import HTMLResponse
 
 from ghostrecon.common.config import get_settings
 from ghostrecon.common.security import verify_attio_signature
@@ -1311,20 +1310,6 @@ async def governance_reject_incident(
     if decision is None:
         raise HTTPException(status_code=404, detail="incident not found")
     return review_decision_to_model(decision)
-
-
-@console_router.get("/", response_class=HTMLResponse)
-async def console_home() -> str:
-    return """
-    <!doctype html>
-    <html lang="en">
-      <head><title>GhostRecon Console</title></head>
-      <body>
-        <h1>GhostRecon Console</h1>
-        <p>Queues, approvals, replay controls, suppressions, and operational health live here.</p>
-      </body>
-    </html>
-    """
 
 
 @gateway_router.get("/v1/kpis/catalog", response_model=ReportingKpiCatalog)

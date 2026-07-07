@@ -2,9 +2,9 @@
 
 ## Current Stage
 
-Stage: Sprint 11 Google Calendar meeting handoff complete; Sprint 12 hardening and pilot readiness is next. The Python Dash dashboard UI is deferred until backend CRM export, sequencing, meeting handoff, hardening, and pilot-readiness workflows are complete.
+Stage: Sprint 12 Python Dash intelligence dashboard UI complete; Sprint 13 hardening and pilot readiness is next, using the completed operator console as part of pilot operations.
 
-The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, and persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, and meeting reporting read APIs.
+The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
 ## Done
 
@@ -127,6 +127,18 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Added reporting-service meeting list/detail read APIs and meeting KPI catalog entries.
 - Updated service, architecture, operations, dashboard, Helm, and source-policy documentation for Google Calendar meeting handoff.
 
+### Sprint 12 - Python Dash Intelligence Dashboard UI
+
+- Added Python Dash, Plotly, and Lucide-compatible icon support inside the existing `console-service`; no independent dashboard service, datastore, or canonical-table access was introduced.
+- Mounted the Dash app at the console root while preserving FastAPI system routes and existing `/v1/review/*` APIs.
+- Added a gateway-backed console API client that propagates actor, role, timeout, authorization, idempotency, stale, and degraded-state context.
+- Implemented dashboard routes for overview, events, event detail, incidents, incident detail, watchlists, review/enrichment queues, CRM targets/export batches, sequence state, meetings, meeting detail, and source health.
+- Added reporting-backed freshness/degraded banners, cursor-aware tables, linkable filter state, map/calendar table fallbacks, and role-aware action controls.
+- Wired existing owner-service mutations for review decisions, bounded bulk review, incident watch promotion, watch target toggle, CRM export/retry, sequence pause/resume/cancel, and meeting prep/outcome/cancel/CRM retry.
+- Kept source-health operations read-only until owning source-operations APIs exist in hardening/pilot work.
+- Added local Compose support for `console-service` on `GHOSTRECON_CONSOLE_HTTP_PORT`, plus Helm defaults for the internal gateway URL.
+- Updated dashboard, service, architecture, operations, Helm, README, and sprint documentation for the implemented Dash console.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -137,18 +149,8 @@ The repository contains the production-oriented microservice scaffold, shared Py
 
 ## Future Sprints
 
-### Sprint 12 - Hardening and Pilot
+### Sprint 13 - Hardening and Pilot
 
 - Add load tests, backup/restore drills, SLO alerts, stale-source alerts, runbooks, PodDisruptionBudgets, and external-secret templates.
 - Exercise source outages, rate limits, partial CRM failures, reconciliation, replay, retention, and disaster recovery.
-- Run a pilot with one territory or segment and document production-readiness signoff.
-
-### Sprint 13 - Python Dash Intelligence Dashboard UI
-
-- Build the dashboard in the existing `console-service` using Python Dash; do not create another dashboard service.
-- Back dashboard views with the completed reporting, CRM export, sequencing, meeting handoff, source health, and hardening-state read APIs.
-- Implement event map/calendar/table, participant details, incident feed, watchlists, enrichment/review queues, CRM export batches, reconciliation failures, sequence state, meeting handoff, and source health.
-- Add role-based view/action permissions and auditable bulk review/export/retry controls.
-- Keep Dash callbacks read-only against reporting APIs; write actions must call owning feature services through the gateway.
-
-Acceptance: dashboard filters/actions meet `docs/specifications/dashboard.md`; stale and degraded services are visible; bulk decisions and export retries remain idempotent and auditable; dashboard actions do not bypass backend authorization.
+- Run a pilot with one territory or segment through the implemented Dash console and document production-readiness signoff.

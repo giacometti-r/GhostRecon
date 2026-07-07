@@ -46,13 +46,13 @@ The pipeline is external sources → normalization and deduplication → contact
 | `email-intelligence-service` | Eligible business-email candidate generation and verification. |
 | `scoring-routing-service` | Versioned fit, relevance, recency, evidence, confidence, and review-routing rules. |
 | `governance-service` | Source permissions, incident corroboration/rejection, suppression, retention, review decisions, audit, and inert CRM-target controls. |
-| `console-service` | Existing FastAPI/Jinja intelligence dashboard and analyst review interface. |
+| `console-service` | Python Dash operator dashboard plus analyst review APIs inside the existing FastAPI service boundary. |
 | `reporting-service` | Intelligence, source-health, review, export, and revenue-workflow read models. |
 | `crm-service` | Review-gated Attio export and provider-neutral `CrmClient` boundary. |
 | `sequencing-service` | In-house sequence enrollment, SMTP/IMAP execution, reply/bounce/unsubscribe handling, and rate-limit enforcement after separate approval. |
 | `meeting-handoff-service` | Google Calendar booking, AE/SE prep packets, meeting outcomes, follow-up tasks, and CRM handoff sync. |
 
-The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, email-intelligence, scoring, governance, CRM export, sequencing, and meeting-handoff runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets; enrichment stores entity-resolution cases, eligible contact candidates, email candidates, verification payloads, and review-required records; governance stores score records, review decisions, suppressions, and CRM targets; CRM export stores provider batch/item state; sequencing stores templates, enrollments, outbound attempts, inbound reply/bounce/unsubscribe events, and suppression linkage; meeting handoff stores Google Calendar event state, prep packets, outcomes, follow-up tasks, and CRM sync status.
+The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, email-intelligence, scoring, governance, CRM export, sequencing, meeting-handoff, reporting, and console dashboard runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets; enrichment stores entity-resolution cases, eligible contact candidates, email candidates, verification payloads, and review-required records; governance stores score records, review decisions, suppressions, and CRM targets; CRM export stores provider batch/item state; sequencing stores templates, enrollments, outbound attempts, inbound reply/bounce/unsubscribe events, and suppression linkage; meeting handoff stores Google Calendar event state, prep packets, outcomes, follow-up tasks, and CRM sync status.
 
 ## Implemented Source Registry Foundation
 
@@ -109,6 +109,16 @@ Sprint 9, Sprint 10, and Sprint 11 add review-gated sales activation after gover
 - Google Calendar uses service-account credentials, optional delegated subject, and free-busy/event APIs behind a fakeable adapter for tests/local use.
 - Meeting outcomes and follow-up tasks sync through `CrmClient`, preserving provider-neutral Attio boundaries and retryable CRM sync state.
 
+## Implemented Dash Console
+
+Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
+
+- Dash is mounted at `/` while FastAPI keeps `/healthz`, `/readyz`, `/metrics`, `/docs`, and existing `/v1/*` review APIs.
+- Dashboard reads use `gateway-service`/`reporting-service` APIs with `X-Actor` and `X-Operator-Role` context; callbacks never query canonical tables.
+- Mutating controls call owning feature-service APIs through the gateway for review decisions, bounded bulk review, CRM export/retry, watchlist promotion/toggle, sequence pause/resume/cancel, and meeting handoff actions.
+- Every route surfaces freshness/degraded metadata where reporting provides it and preserves table alternatives for map/calendar views.
+- Source-health operations are visible but read-only until source-operations APIs are implemented during hardening/pilot work.
+
 ## Source Policy
 
 - Event adapters cover official conference pages, Schema.org `Event` data, ICS, RSS/Atom, and approved provider APIs. Initial series include DEF CON, Black Hat, BSides, OWASP, and FIRST.
@@ -119,7 +129,7 @@ Sprint 9, Sprint 10, and Sprint 11 add review-gated sales activation after gover
 
 ## Production Defaults
 
-- Python 3.12, FastAPI, Jinja, Pydantic, SQLAlchemy, Alembic, Celery, Redis, and PostgreSQL.
+- Python 3.12, FastAPI, Dash, Plotly, Pydantic, SQLAlchemy, Alembic, Celery, Redis, and PostgreSQL.
 - Structured JSON logs, Prometheus metrics at `/metrics`, liveness at `/healthz`, and readiness at `/readyz`.
 - Kubernetes deployment through Helm in `deploy/helm/ghostrecon`.
 - SOPS + Age secret management for Helm values.
@@ -135,15 +145,25 @@ make test
 make dev
 ```
 
-The local stack starts PostgreSQL, Redis, `gateway-service`, a Celery worker, and the email verifier sidecar.
+The local stack starts PostgreSQL, Redis, `gateway-service`, `console-service`, a Celery worker, and the email verifier sidecar.
 If a default host port is already in use, override it with `GHOSTRECON_POSTGRES_PORT`,
-`GHOSTRECON_REDIS_PORT`, `GHOSTRECON_HTTP_PORT`, or `GHOSTRECON_EMAIL_VERIFIER_PORT`.
+`GHOSTRECON_REDIS_PORT`, `GHOSTRECON_HTTP_PORT`, `GHOSTRECON_CONSOLE_HTTP_PORT`, or
+`GHOSTRECON_EMAIL_VERIFIER_PORT`. The gateway defaults to `http://localhost:8080`;
+the Dash console defaults to `http://localhost:8082`.
 
 Run one implemented service directly:
 
 ```bash
 GHOSTRECON_SERVICE_NAME=enrichment-service \
 uvicorn ghostrecon.service_apps.runtime:app --reload --port 8080
+```
+
+Run the console directly against a local gateway:
+
+```bash
+GHOSTRECON_SERVICE_NAME=console-service \
+GHOSTRECON_GATEWAY_BASE_URL=http://localhost:8080 \
+uvicorn ghostrecon.service_apps.runtime:app --reload --port 8082
 ```
 
 Run migrations:

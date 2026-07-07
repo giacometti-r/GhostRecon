@@ -1,6 +1,6 @@
 # Operations Runbook
 
-This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, and the remaining intelligence-first target state for later sprints.
+This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, Sprint 12 Dash console runtime, and the remaining intelligence-first target state for later sprints.
 
 ## Health and Freshness
 
@@ -10,6 +10,7 @@ This runbook covers the implemented platform baseline, Sprint 3 source registry 
 - `GET /v1/intelligence/sources/health`: source checkpoint, last-success, lag, error, freshness, enabled/degraded, and policy state for registered sources.
 - Dashboard responses must expose `generated_at`, data-window end, and stale/degraded markers.
 - Meeting reporting responses expose meeting watermarks and CRM sync failure state; process health does not prove Google Calendar or Attio meeting sync is current.
+- The Dash console can be live while gateway, reporting, or owner-service callbacks are degraded. Check console process health separately from dashboard data freshness and action failures.
 
 Do not equate process health with data freshness. A service can be live while its sources or reporting projections are stale.
 
@@ -75,6 +76,14 @@ Do not equate process health with data freshness. A service can be live while it
 2. Keep mutating actions blocked if their evidence or policy projection is stale.
 3. Rebuild only the affected read model, then compare counts and canonical IDs with source tables.
 4. Clear stale state only after lag returns inside the documented objective.
+
+### Dash Console Outage or Callback Failures
+
+1. Check `console-service` `/healthz`, `/readyz`, and pod/container logs separately from `gateway-service` and `reporting-service`.
+2. Confirm `GHOSTRECON_GATEWAY_BASE_URL`, `GHOSTRECON_CONSOLE_REQUEST_TIMEOUT_SECONDS`, and any ingress/proxy headers for `X-Actor` and `X-Operator-Role`.
+3. If pages render but actions fail, inspect the owning service route, status code, idempotency key, actor, role, optimistic version, and audit/correlation ID.
+4. If reporting callbacks time out, keep the stale/degraded banner visible and avoid bypassing the console by mutating canonical tables.
+5. Source-health pause/replay/acknowledge controls are intentionally read-only until owning source-operations APIs are implemented.
 
 ### Attio Webhook Delivery Failures
 

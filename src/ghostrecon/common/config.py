@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     attio_meetings_list_api_slug: str = "ghostrecon-meetings"
 
     email_verifier_url: AnyHttpUrl = Field(default="http://email-verifier:8080")
+    gateway_base_url: AnyHttpUrl = Field(default="http://gateway-service:8080")
+    console_request_timeout_seconds: int = Field(default=10, ge=1)
+    console_http_port: int = Field(default=8082, ge=1, le=65535)
     google_calendar_id: str | None = None
     google_client_email: str | None = None
     google_private_key: str | None = None

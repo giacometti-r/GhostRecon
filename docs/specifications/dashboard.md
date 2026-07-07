@@ -6,16 +6,28 @@ The intelligence dashboard belongs in the existing `console-service` and is back
 
 The dashboard supports investigation, watchlist management, enrichment review, governance decisions, CRM export, sequencing state, meeting handoff, reconciliation, and source operations. It does not send outreach directly; sequencing actions call backend APIs that enforce approval, suppression, lawful-basis, and rate-limit checks. Meeting actions call the owning meeting-handoff APIs so Google Calendar invites, prep packets, and CRM follow-up sync keep backend policy gates.
 
-Sprint 8 is backend-only: it ships reporting read APIs and dashboard readiness documentation, but no Dash UI or Dash dependency. The later UI implementation should use Python Dash inside the `console-service` boundary.
+Sprint 12 implements the UI with Python Dash mounted at `/` inside `console-service`. The service still exposes FastAPI health, metrics, docs, and `/v1/*` routes before the Dash catch-all route.
 
-## Future Dash Architecture
+## Dash Architecture
 
-- Host the future Python Dash app from `console-service` so operators still use one internal dashboard service.
-- Keep Dash callbacks read-only against `/v1/reporting/*` and `/v1/kpis/catalog`; mutation callbacks must call owning feature-service APIs through the gateway.
-- Reuse the same authenticated session, CSRF posture, server-side role checks, and audit headers as other console actions.
-- Do not query canonical tables directly from Dash callbacks and do not create a second dashboard datastore.
-- Add Dash dependencies only when the UI sprint starts; Sprint 8 intentionally leaves Python package and Helm dependencies unchanged.
+- Host Python Dash from `console-service` so operators still use one internal dashboard service.
+- Keep Dash read callbacks on `/v1/reporting/*`, `/v1/reporting/kpis/catalog`, `/v1/kpis/catalog`, and documented owning read APIs such as `/v1/sequences/*`.
+- Route mutation callbacks through gateway/owning APIs, never reporting projections or canonical tables.
+- Propagate `X-Actor`, `X-Operator-Role`, idempotency keys, reason text, and optimistic versions to owning APIs.
+- Do not create an independent dashboard datastore or direct canonical-table access from UI callbacks.
 - Treat the dashboard as the operator control plane: stale source visibility, review safety, CRM-export separation, and auditability are required product behavior, not optional visual polish.
+
+## Implemented Routes
+
+- `/`: KPI, source, review, CRM target, and meeting summary.
+- `/events` and `/events/{event_id}`: event table/calendar/map fallback and participant detail.
+- `/incidents` and `/incidents/{incident_id}`: incident feed/detail and watchlist promotion.
+- `/watchlists`: watch target list and enabled-state toggle.
+- `/review` and `/review/enrichment`: analyst review, bounded visible-page bulk review, contact enrichment, and entity resolution queues.
+- `/crm/exports` and `/crm/exports/{batch_id}`: CRM target selection, export start, batch detail, and retry failed items.
+- `/sequences`: sequence enrollment state and pause/resume/cancel controls.
+- `/meetings` and `/meetings/{meeting_id}`: meeting handoff state, prep packet, outcome, cancel, and CRM-sync retry controls.
+- `/operations/sources`: reporting-backed source freshness and degraded-state visibility.
 
 ## Users and Permissions
 
@@ -199,7 +211,7 @@ Source cards and table rows show:
 
 States are `healthy`, `delayed`, `degraded`, `paused`, and `disabled`. Operators can filter by adapter, kind, owner, state, policy, and freshness breach.
 
-Administrator actions include pause/resume, run bounded test fetch, replay from a durable checkpoint, and acknowledge degraded state. The UI must not expose raw credentials or unrestricted arbitrary URLs.
+Administrator actions should eventually include pause/resume, bounded test fetch, replay from a durable checkpoint, and degraded-state acknowledgment. Sprint 12 keeps these controls read-only because owning source-operations APIs do not exist yet. The UI must not expose raw credentials or unrestricted arbitrary URLs.
 
 ## Reporting-Service Read APIs
 

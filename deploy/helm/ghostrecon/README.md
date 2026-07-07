@@ -47,6 +47,22 @@ helm test ghostrecon --namespace ghostrecon --logs
 
 The test verifies PostgreSQL access with a non-superuser role and Redis authentication.
 
+## Dash Console
+
+Sprint 12 deploys the Python Dash dashboard as `console-service` in the normal
+`services` list. It uses the same application image and receives the internal
+gateway URL from chart values:
+
+```yaml
+env:
+  GHOSTRECON_GATEWAY_BASE_URL: http://gateway-service:8080
+  GHOSTRECON_CONSOLE_REQUEST_TIMEOUT_SECONDS: "10"
+```
+
+Expose `console-service` only through authenticated internal ingress or
+port-forwarding. The service keeps `/healthz`, `/readyz`, `/metrics`, `/docs`,
+and `/v1/*` routes ahead of the Dash catch-all route.
+
 ## Google Calendar Meeting Handoff
 
 Sprint 11 meeting handoff uses Google Calendar service-account credentials.
