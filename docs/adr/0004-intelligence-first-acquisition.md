@@ -38,7 +38,7 @@ Attio remains the first CRM and the authority for approved sales records. `crm-s
 
 - Sprints 0–2 remain valid; future sequencing changes to intelligence acquisition before CRM production export.
 - New canonical entities, contracts, source-health controls, evidence rules, and review APIs are required.
-- `ingestion-service` remains useful for CRM webhooks and imports but no longer defines the acquisition architecture.
+- `ingestion-service` remains useful for source imports but no longer defines the acquisition architecture.
 - CRM provider constraints stay isolated inside `CrmClient` adapters.
 - Source outages, stale feeds, false positives, policy ambiguity, partial exports, and reconciliation become dashboard-visible operating states.
 - Runtime implementation follows the revised sprint roadmap; this ADR and its linked specifications define the target state.

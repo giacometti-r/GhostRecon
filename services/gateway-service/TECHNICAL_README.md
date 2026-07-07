@@ -337,15 +337,6 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
 
-##### `async attio_webhook(request: Request, attio_signature: str | None = Header(default=None), x_attio_signature: str | None = Header(default=None), idempotency_key: str | None = Header(default=None)) -> JobAccepted`
-
-- Inputs: `request` (Request), `attio_signature` (str | None), `x_attio_signature` (str | None), `idempotency_key` (str | None)
-- Output: Returns `JobAccepted`.
-- Why: `attio_webhook` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
-- How: It calls `Header`, `get_settings`, `JobAccepted`, `request.body`, `verify_attio_signature`, `Response`, `uuid4`; uses idempotency lookup.
-- Side effects: runs asynchronously and may await database or provider operations.
-- Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
-
 ##### `async domain_enrichment(request: DomainEnrichmentRequest) -> Any`
 
 - Inputs: `request` (DomainEnrichmentRequest)

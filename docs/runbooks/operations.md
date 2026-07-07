@@ -85,13 +85,13 @@ Do not equate process health with data freshness. A service can be live while it
 4. If reporting callbacks time out, keep the stale/degraded banner visible and avoid bypassing the console by mutating canonical tables.
 5. Source-health pause/replay/acknowledge controls are intentionally read-only until owning source-operations APIs are implemented.
 
-### Attio Webhook Delivery Failures
+### Attio API Export Failures
 
-Attio webhook intake is a compatibility path, not primary acquisition.
+Attio interaction runs through the CRM service's Attio API adapter.
 
-1. Check `ingestion-service` logs for signature failures and 5xx responses.
-2. Confirm `GHOSTRECON_ATTIO_WEBHOOK_SECRET`.
-3. Check queue depth and worker availability.
+1. Check `crm-service` logs for Attio API status codes and retryable provider errors.
+2. Confirm `GHOSTRECON_ATTIO_ACCESS_TOKEN`, `GHOSTRECON_ATTIO_BASE_URL`, and Attio list slug settings.
+3. Check CRM export batch/item state and retry failed retryable items through the CRM export retry API.
 4. Replay only after checking idempotency and canonical-record state.
 
 ### Crawler Backlog

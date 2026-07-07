@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Owns source registration, duplicate detection, source adapter parsing, source health state, and fast webhook acknowledgement. It owns source registry, parser adapters, and webhook ingress and should remain aligned with the implementation modules listed below.
+Owns source registration, duplicate detection, source adapter parsing, source health state, and idempotent source intake. It owns source registry and parser adapters and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
@@ -20,14 +20,13 @@ Owns source registration, duplicate detection, source adapter parsing, source he
 
 ## APIs And Jobs
 
-- `POST /webhooks/attio` via `attio_webhook` (service router).
 - Worker/helper entrypoint: `source fetch workers call create_adapter and fetch_source_by_id`.
 
 ## Dependencies
 
 - configured source definitions.
 - raw source item table.
-- Attio webhook secret.
+- Configured source definitions.
 
 ## Operations
 
@@ -52,5 +51,5 @@ GHOSTRECON_SERVICE_NAME=ingestion-service uvicorn ghostrecon.service_apps.runtim
 ## Verification
 
 ```bash
-pytest tests/unit/test_source_registry.py tests/unit/test_source_adapters.py tests/unit/test_attio_signature.py
+pytest tests/unit/test_source_registry.py tests/unit/test_source_adapters.py
 ```

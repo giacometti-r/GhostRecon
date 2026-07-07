@@ -2,7 +2,7 @@
 
 GhostRecon is an intelligence-first cyber-event and incident monitoring platform for cybersecurity revenue teams. It discovers global events, permitted published participants, and affected companies from external sources; normalizes and corroborates that intelligence; enriches eligible business contacts; and requires analyst approval before exporting sales records to a CRM.
 
-Attio is the first CRM implementation and remains authoritative for approved sales records. CRM ingestion is a compatibility path, not the primary acquisition path. `deep-research-report.md` remains historical research; [ADR 0004](docs/adr/0004-intelligence-first-acquisition.md) records the implementation direction.
+Attio is the first CRM implementation and remains authoritative for approved sales records through the Attio API. CRM ingestion is not the primary acquisition path. `deep-research-report.md` remains historical research; [ADR 0004](docs/adr/0004-intelligence-first-acquisition.md) records the implementation direction.
 
 ## Primary Flow
 
@@ -41,7 +41,7 @@ The pipeline is external sources → normalization and deduplication → contact
 | `gateway-service` | Authenticated API entrypoint and route map for intelligence, review, reporting, and export APIs. |
 | `event-intelligence-service` | Global cybersecurity event, series, and permitted published-participant discovery on top of the implemented shared source registry. |
 | `incident-intelligence-service` | Global cyber-incident news discovery, affected-company identification, corroboration evidence, and watchlists on top of the shared source registry. |
-| `ingestion-service` | Attio webhook/import compatibility and idempotent inbound event intake; not the primary acquisition path. |
+| `ingestion-service` | Source registry, duplicate detection, source adapter parsing, and idempotent inbound event intake; not the primary acquisition path. |
 | `enrichment-service` | Entity resolution and public company/contact enrichment from approved sources. |
 | `email-intelligence-service` | Eligible business-email candidate generation and verification. |
 | `scoring-routing-service` | Versioned fit, relevance, recency, evidence, confidence, and review-routing rules. |

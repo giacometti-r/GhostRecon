@@ -22,7 +22,6 @@ class Settings(BaseSettings):
 
     attio_base_url: AnyHttpUrl = Field(default="https://api.attio.com")
     attio_access_token: str | None = None
-    attio_webhook_secret: str | None = None
     attio_read_rps: int = 80
     attio_write_rps: int = 20
     attio_events_list_api_slug: str = "ghostrecon-cyber-events"

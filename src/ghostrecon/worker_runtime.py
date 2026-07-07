@@ -47,11 +47,6 @@ celery_app.conf.update(
 )
 
 
-@celery_app.task(name="ghostrecon.process_attio_webhook")
-def process_attio_webhook(payload: dict[str, object], idempotency_key: str) -> dict[str, object]:
-    return {"status": "processed", "idempotency_key": idempotency_key, "payload": payload}
-
-
 @celery_app.task(name="ghostrecon.generate_email_candidates")
 def generate_email_candidate_task(full_name: str, domain: str) -> list[dict[str, object]]:
     return [

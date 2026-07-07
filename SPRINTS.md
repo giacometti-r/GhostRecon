@@ -22,7 +22,7 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Added the Python package scaffold under `src/ghostrecon`.
 - Added canonical API schemas, database models, and the initial Alembic migration.
 - Added shared FastAPI and Celery runtime entrypoints.
-- Added deterministic business logic for scoring, suppression, email candidates, sequence eligibility, prep packets, enrichment, and Attio webhook signature verification.
+- Added deterministic business logic for scoring, suppression, email candidates, sequence eligibility, prep packets, enrichment, and CRM service workflows.
 - Added Dockerfile, Docker Compose, Helm chart, Kubernetes examples, Makefile, CI workflow, and smoke-import script.
 - Added unit tests for deterministic service logic.
 - Added SOPS + Age-ready Helm secret scaffolding with placeholders.

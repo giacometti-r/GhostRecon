@@ -1,9 +1,8 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 
 from ghostrecon.common.config import get_settings
-from ghostrecon.common.security import verify_attio_signature
 from ghostrecon.events.contracts import EventName, new_event
 from ghostrecon.models.api import (
     BulkReviewDecisionRequest,
@@ -34,7 +33,6 @@ from ghostrecon.models.api import (
     EventParticipantList,
     EventParticipantOut,
     IncidentDecisionRequest,
-    JobAccepted,
     MeetingActionRequest,
     MeetingCreateRequest,
     MeetingHandoffList,
@@ -694,23 +692,6 @@ async def crm_export_retry_failed(
     if batch is None:
         raise HTTPException(status_code=404, detail="crm export batch not found")
     return batch
-
-
-@ingestion_router.post("/webhooks/attio", status_code=202)
-async def attio_webhook(
-    request: Request,
-    attio_signature: str | None = Header(default=None),
-    x_attio_signature: str | None = Header(default=None),
-    idempotency_key: str | None = Header(default=None),
-) -> JobAccepted:
-    settings = get_settings()
-    body = await request.body()
-    signature = attio_signature or x_attio_signature
-    if not verify_attio_signature(body, signature, settings.attio_webhook_secret):
-        return Response(status_code=401)  # type: ignore[return-value]
-    # The worker stores and processes the raw payload. The API path must ACK quickly.
-    _ = idempotency_key or str(uuid4())
-    return JobAccepted(job_id=uuid4())
 
 
 @enrichment_router.post("/v1/enrichment/domain")

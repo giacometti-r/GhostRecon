@@ -11,7 +11,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 | Exposure | Method | Path | Handler |
 | --- | --- | --- | --- |
-| service | `POST` | `/webhooks/attio` | `attio_webhook` |
+| service | n/a | Source fetch worker | `fetch_source_by_id` |
 
 ## Data Flow And Contracts
 

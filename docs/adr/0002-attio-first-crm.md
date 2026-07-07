@@ -16,7 +16,7 @@ CRM export is review-gated, idempotent, and never enrolls a record into outreach
 
 ## Consequences
 
-- Attio webhooks/imports remain supported compatibility inputs, not the primary acquisition flow.
+- Attio integration uses the Attio API behind `CrmClient`.
 - Attio production export moves to Sprint 9.
 - The Attio adapter maps custom `cyber_events` and `security_incidents` objects plus standard People and Companies records.
 - Provider-specific list/object constraints are contained inside the adapter.
