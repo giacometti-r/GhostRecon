@@ -111,6 +111,62 @@ class CrmExportOperation(StrEnum):
     ADD_TO_LIST = "add_to_list"
 
 
+class SequenceStatus(StrEnum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ARCHIVED = "archived"
+
+
+class SequenceEnrollmentStatus(StrEnum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+    CANCELED = "canceled"
+    SUPPRESSED = "suppressed"
+    FAILED = "failed"
+
+
+class OutboundEmailStatus(StrEnum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED_RETRYABLE = "failed_retryable"
+    FAILED_TERMINAL = "failed_terminal"
+    SKIPPED_POLICY = "skipped_policy"
+
+
+class InboundEmailEventType(StrEnum):
+    REPLY = "reply"
+    BOUNCE = "bounce"
+    UNSUBSCRIBE = "unsubscribe"
+
+
+class MeetingStatus(StrEnum):
+    SCHEDULED = "scheduled"
+    COMPLETED = "completed"
+    CANCELED = "canceled"
+    FAILED_SYNC = "failed_sync"
+
+
+class MeetingOutcomeStatus(StrEnum):
+    COMPLETED = "completed"
+    NO_SHOW = "no_show"
+    RESCHEDULED = "rescheduled"
+    DISQUALIFIED = "disqualified"
+
+
+class MeetingCrmSyncStatus(StrEnum):
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED_RETRYABLE = "failed_retryable"
+    FAILED_TERMINAL = "failed_terminal"
+
+
+class MeetingFollowUpTaskStatus(StrEnum):
+    OPEN = "open"
+    COMPLETED = "completed"
+    CANCELED = "canceled"
+
+
 class SourceKind(StrEnum):
     EVENT = "event"
     INCIDENT = "incident"
@@ -969,6 +1025,151 @@ class PrepPacket(BaseModel):
     risks: list[str]
 
 
+class MeetingAttendee(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    name: str | None = None
+    optional: bool = False
+
+
+class MeetingCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    crm_target_id: str
+    sequence_enrollment_id: str | None = None
+    account_id: str | None = None
+    contact_id: str | None = None
+    subject: str = Field(min_length=1, max_length=512)
+    description: str | None = None
+    location: str | None = None
+    start_at: datetime
+    end_at: datetime
+    timezone: str = "UTC"
+    attendees: list[MeetingAttendee] = []
+    policy_snapshot: dict[str, object] = {}
+    send_updates: bool | None = None
+
+
+class MeetingActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class MeetingFollowUpTaskCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=512)
+    description: str | None = None
+    owner: str | None = None
+    due_at: datetime | None = None
+
+
+class MeetingOutcomeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    outcome_status: MeetingOutcomeStatus = MeetingOutcomeStatus.COMPLETED
+    outcome_notes: str | None = None
+    next_steps: list[str] = []
+    follow_up_tasks: list[MeetingFollowUpTaskCreate] = []
+
+
+class CalendarAvailabilityRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    attendees: list[EmailStr] = Field(min_length=1, max_length=50)
+    time_min: datetime
+    time_max: datetime
+    timezone: str = "UTC"
+
+
+class CalendarBusySlot(BaseModel):
+    start: datetime
+    end: datetime
+
+
+class CalendarAvailabilityResult(BaseModel):
+    calendars: dict[str, list[CalendarBusySlot]]
+    provider: str = "google"
+
+
+class MeetingPrepPacketOut(BaseModel):
+    id: str
+    meeting_id: str
+    account_summary: str
+    stakeholder_map: list[object] = []
+    likely_security_priorities: list[object] = []
+    suggested_questions: list[object] = []
+    risks: list[object] = []
+    source_snapshot: dict[str, object] = {}
+    generated_by: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class MeetingFollowUpTaskOut(BaseModel):
+    id: str
+    meeting_id: str
+    title: str
+    description: str | None = None
+    owner: str | None = None
+    due_at: datetime | None = None
+    status: MeetingFollowUpTaskStatus
+    crm_sync_status: MeetingCrmSyncStatus
+    provider_task_id: str | None = None
+    last_error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class MeetingHandoffOut(BaseModel):
+    id: str
+    crm_target_id: str | None = None
+    sequence_enrollment_id: str | None = None
+    account_id: str | None = None
+    contact_id: str | None = None
+    status: MeetingStatus
+    subject: str
+    description: str | None = None
+    location: str | None = None
+    start_at: datetime
+    end_at: datetime
+    timezone: str
+    attendees: list[object] = []
+    calendar_provider: str
+    calendar_id: str | None = None
+    provider_event_id: str | None = None
+    provider_html_link: str | None = None
+    outcome_status: MeetingOutcomeStatus | None = None
+    outcome_notes: str | None = None
+    next_steps: list[object] = []
+    crm_sync_status: MeetingCrmSyncStatus
+    crm_sync_error: str | None = None
+    crm_retry_after_seconds: int | None = None
+    policy_snapshot: dict[str, object] = {}
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    prep_packet: MeetingPrepPacketOut | None = None
+    follow_up_tasks: list[MeetingFollowUpTaskOut] = []
+
+
+class MeetingHandoffList(BaseModel):
+    meetings: list[MeetingHandoffOut]
+
+
+class ReportingMeetingList(BaseModel):
+    metadata: ReportingMetadata
+    meetings: list[MeetingHandoffOut]
+    next_cursor: str | None = None
+
+
+class ReportingMeetingDetail(BaseModel):
+    metadata: ReportingMetadata
+    meeting: MeetingHandoffOut
+
+
 class SequenceEligibilityRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -982,6 +1183,149 @@ class SequenceEligibilityResult(BaseModel):
     next_action: str
     requires_approval: bool
     reasons: list[str]
+
+
+class SequenceStepCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    step_order: int | None = Field(default=None, ge=1)
+    delay_seconds: int = Field(default=0, ge=0)
+    subject_template: str = Field(min_length=1, max_length=512)
+    body_template: str = Field(min_length=1)
+    channel: str = "email"
+
+
+class SequenceCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255)
+    owner_id: str | None = None
+    channel: str = "email"
+    rate_limit_policy: dict[str, object] = {}
+    steps: list[SequenceStepCreate] = Field(min_length=1, max_length=20)
+
+
+class SequenceStepOut(BaseModel):
+    id: str
+    sequence_id: str
+    step_order: int
+    channel: str
+    delay_seconds: int
+    subject_template: str
+    body_template: str
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class SequenceOut(BaseModel):
+    id: str
+    name: str
+    owner_id: str | None = None
+    channel: str
+    status: SequenceStatus
+    rate_limit_policy: dict[str, object] = {}
+    created_at: datetime
+    updated_at: datetime
+    steps: list[SequenceStepOut] = []
+
+
+class SequenceEnrollmentCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sequence_id: str
+    crm_target_id: str
+    contact_id: str | None = None
+    account_id: str | None = None
+    start_at: datetime | None = None
+    outreach_approved: bool
+    approval_reason: str = Field(min_length=1, max_length=500)
+    policy_snapshot: dict[str, object] = {}
+
+
+class SequenceEnrollmentActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class OutboundEmailOut(BaseModel):
+    id: str
+    enrollment_id: str
+    sequence_step_id: str
+    contact_id: str
+    channel: str
+    to_email: EmailStr
+    from_email: EmailStr
+    subject: str
+    status: OutboundEmailStatus
+    provider_message_id: str | None = None
+    attempt_count: int
+    last_error: str | None = None
+    retry_after_seconds: int | None = None
+    scheduled_at: datetime
+    sent_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class SequenceEnrollmentOut(BaseModel):
+    id: str
+    sequence_id: str
+    crm_target_id: str
+    contact_id: str
+    account_id: str | None = None
+    status: SequenceEnrollmentStatus
+    approval_actor: str
+    approval_reason: str
+    current_step_order: int
+    next_step_at: datetime | None = None
+    pause_reason: str | None = None
+    policy_snapshot: dict[str, object] = {}
+    version: int
+    created_at: datetime
+    updated_at: datetime
+    completed_at: datetime | None = None
+    outbound_emails: list[OutboundEmailOut] = []
+
+
+class SequenceEnrollmentList(BaseModel):
+    enrollments: list[SequenceEnrollmentOut]
+
+
+class InboundEmailEventCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_type: InboundEmailEventType
+    from_email: EmailStr | None = None
+    to_email: EmailStr | None = None
+    message_id: str | None = None
+    provider_message_id: str | None = None
+    provider_payload: dict[str, object] = {}
+    occurred_at: datetime | None = None
+
+
+class UnsubscribeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: EmailStr
+    domain: str | None = None
+    channel: str = "email"
+    reason: str = "unsubscribe"
+    provider_payload: dict[str, object] = {}
+
+
+class InboundEmailEventOut(BaseModel):
+    id: str
+    enrollment_id: str | None = None
+    outbound_email_id: str | None = None
+    event_type: InboundEmailEventType
+    from_email: EmailStr | None = None
+    to_email: EmailStr | None = None
+    message_id: str | None = None
+    provider_payload: dict[str, object] = {}
+    occurred_at: datetime
+    created_at: datetime
 
 
 class JobAccepted(BaseModel):

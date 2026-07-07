@@ -3,7 +3,7 @@
 ## Responsibilities
 
 - Define the KPI catalog and reporting response schemas.
-- Serve Sprint 8 query-backed event, incident, watchlist, review, CRM-target, and source-health read models.
+- Serve Sprint 8 query-backed event, incident, watchlist, review, CRM-target, and source-health read models plus Sprint 11 meeting handoff read models.
 - Prepare for later materialized projections over versioned intelligence, review, governance, and CRM export events.
 - Expose freshness/watermark metadata with every dashboard response.
 - Support dashboards without locking data into one CRM or engagement provider.
@@ -21,9 +21,11 @@ Implemented Sprint 8:
 - `GET /v1/reporting/watch-targets`
 - `GET /v1/reporting/review-queue`
 - `GET /v1/reporting/crm-targets`
+- `GET /v1/reporting/meetings`
+- `GET /v1/reporting/meetings/{meeting_id}`
 - `GET /v1/reporting/source-health`
 
-CRM export batches and reconciliation endpoints remain Sprint 9 work. All implemented collection endpoints use cursor pagination, explicit sorting, role-aware field projection, and filters from `docs/specifications/dashboard.md`.
+CRM export batches and reconciliation endpoints remain Sprint 9 work. Meeting reporting reads persisted handoff, prep-packet, follow-up task, Google Calendar, and CRM sync state. All implemented collection endpoints use cursor pagination, explicit sorting, role-aware field projection, and filters from `docs/specifications/dashboard.md`.
 
 ## KPI Families
 
@@ -34,7 +36,8 @@ CRM export batches and reconciliation endpoints remain Sprint 9 work. All implem
 - Entity/contact resolution yield and correction rate.
 - Review age/SLA, approval/rejection, conflict, and policy-block rate.
 - CRM batch latency, item outcomes, retries, rate limits, and reconciliation age.
-- Sequence, pipeline, meeting, and pre-sales outcomes after approved activation.
+- Sequence enrollment, send, reply, bounce, unsubscribe, and rate-limit outcomes.
+- Meeting booked count, prep-packet latency, outcome rate, CRM sync failures, and follow-up task completion after approved activation.
 
 ## Projection Rules
 
@@ -65,3 +68,5 @@ CRM export batches and reconciliation endpoints remain Sprint 9 work. All implem
 Incident and watchlist projections consume implemented `news_article.ingested`, `security_incident.detected`, `security_incident.corroborated`, and `watch_target.created` outbox events when the projection runtime is added.
 
 Sprint 7 review and CRM-target projections consume `lead.scored`, `approval.requested`, `review.approved`, `review.rejected`, `crm_target.created`, and `suppression.created` outbox events when the projection runtime is added.
+
+Sprint 11 meeting projections consume `meeting.booked`, `meeting.prep_packet_generated`, `meeting.outcome_recorded`, `meeting.follow_up_task_created`, and `crm.synced` outbox events when the projection runtime is added.

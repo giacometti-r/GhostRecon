@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`reporting-service` builds provider-neutral read models and KPI definitions for intelligence acquisition, source health, analyst review, CRM export, and downstream revenue workflows. It is the data backend for the existing `console-service` dashboard.
+`reporting-service` builds provider-neutral read models and KPI definitions for intelligence acquisition, source health, analyst review, CRM export, sequencing, meeting handoff, and downstream revenue workflows. It is the data backend for the existing `console-service` dashboard.
 
 It does not own canonical intelligence, review decisions, CRM writes, or a separate UI.
 
@@ -19,6 +19,7 @@ Sprint 8 uses query-backed read models over canonical tables and service-owned s
 - Incident feed, evidence timelines, affected companies, and watchlist matches.
 - Enrichment and analyst-review queues.
 - Typed CRM targets, future export batches, failures, and reconciliation.
+- Meeting handoff, prep-packet, outcome, follow-up task, Google Calendar, and CRM sync state.
 - Source health, ingestion watermarks, service degradation, and projection freshness.
 
 Implemented Sprint 8 APIs:
@@ -30,6 +31,8 @@ Implemented Sprint 8 APIs:
 - `GET /v1/reporting/watch-targets`
 - `GET /v1/reporting/review-queue`
 - `GET /v1/reporting/crm-targets`
+- `GET /v1/reporting/meetings`
+- `GET /v1/reporting/meetings/{meeting_id}`
 - `GET /v1/reporting/source-health`
 - `GET /v1/reporting/kpis/catalog`
 - `GET /v1/kpis/catalog`

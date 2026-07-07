@@ -11,6 +11,7 @@ from ghostrecon.models.api import (
     SuppressionCheckRequest,
 )
 from ghostrecon.services.company_crawler import run_company_crawl
+from ghostrecon.services.crm_exports import process_crm_export_batch
 from ghostrecon.services.email_candidates import generate_email_candidates
 from ghostrecon.services.enrichment_workflows import (
     contact_candidate_to_model,
@@ -27,6 +28,8 @@ from ghostrecon.services.incident_intelligence import (
     fetch_incident_source,
     parse_pending_incident_items,
 )
+from ghostrecon.services.meeting import retry_meeting_crm_sync
+from ghostrecon.services.sequencing import poll_inbound_email_events, process_due_sequence_steps
 from ghostrecon.services.source_registry import fetch_source_by_id
 
 settings = get_settings()
@@ -140,3 +143,25 @@ def fetch_incident_source_task(source_definition_id: str) -> dict[str, object]:
 @celery_app.task(name="ghostrecon.parse_pending_incident_items")
 def parse_pending_incident_items_task(source_definition_id: str | None = None) -> dict[str, object]:
     return asyncio.run(parse_pending_incident_items(source_definition_id, settings))
+
+
+@celery_app.task(name="ghostrecon.process_crm_export_batch")
+def process_crm_export_batch_task(batch_id: str) -> dict[str, object]:
+    result = asyncio.run(process_crm_export_batch(batch_id, settings=settings))
+    return result.model_dump(mode="json")
+
+
+@celery_app.task(name="ghostrecon.process_due_sequence_steps")
+def process_due_sequence_steps_task(limit: int = 50) -> dict[str, object]:
+    return asyncio.run(process_due_sequence_steps(limit=limit, settings=settings))
+
+
+@celery_app.task(name="ghostrecon.poll_sequence_inbound_email")
+def poll_sequence_inbound_email_task(limit: int = 50) -> dict[str, object]:
+    return asyncio.run(poll_inbound_email_events(limit=limit, settings=settings))
+
+
+@celery_app.task(name="ghostrecon.retry_meeting_crm_sync")
+def retry_meeting_crm_sync_task(meeting_id: str, actor: str = "system") -> dict[str, object] | None:
+    result = asyncio.run(retry_meeting_crm_sync(meeting_id, actor=actor, settings=settings))
+    return result.model_dump(mode="json") if result else None

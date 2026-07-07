@@ -27,6 +27,8 @@ from ghostrecon.services.incident_intelligence import (
     fetch_incident_source,
     parse_pending_incident_items,
 )
+from ghostrecon.services.meeting import retry_meeting_crm_sync
+from ghostrecon.services.sequencing import poll_inbound_email_events, process_due_sequence_steps
 from ghostrecon.services.source_registry import fetch_source_by_id
 
 settings = get_settings()
@@ -140,3 +142,19 @@ def parse_pending_incident_items_task(source_definition_id: str | None = None) -
 def process_crm_export_batch_task(batch_id: str) -> dict[str, object]:
     result = asyncio.run(process_crm_export_batch(batch_id, settings=settings))
     return result.model_dump(mode="json")
+
+
+@celery_app.task(name="ghostrecon.process_due_sequence_steps")
+def process_due_sequence_steps_task(limit: int = 50) -> dict[str, object]:
+    return asyncio.run(process_due_sequence_steps(limit=limit, settings=settings))
+
+
+@celery_app.task(name="ghostrecon.poll_sequence_inbound_email")
+def poll_sequence_inbound_email_task(limit: int = 50) -> dict[str, object]:
+    return asyncio.run(poll_inbound_email_events(limit=limit, settings=settings))
+
+
+@celery_app.task(name="ghostrecon.retry_meeting_crm_sync")
+def retry_meeting_crm_sync_task(meeting_id: str, actor: str = "system") -> dict[str, object] | None:
+    result = asyncio.run(retry_meeting_crm_sync(meeting_id, actor=actor, settings=settings))
+    return result.model_dump(mode="json") if result else None

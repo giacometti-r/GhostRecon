@@ -4,7 +4,7 @@
 
 The intelligence dashboard belongs in the existing `console-service` and is backed by `reporting-service` read models. No separate dashboard service or independent copy of business state is introduced.
 
-The dashboard supports investigation, watchlist management, enrichment review, governance decisions, CRM export, reconciliation, and source operations. It does not send outreach.
+The dashboard supports investigation, watchlist management, enrichment review, governance decisions, CRM export, sequencing state, meeting handoff, reconciliation, and source operations. It does not send outreach directly; sequencing actions call backend APIs that enforce approval, suppression, lawful-basis, and rate-limit checks. Meeting actions call the owning meeting-handoff APIs so Google Calendar invites, prep packets, and CRM follow-up sync keep backend policy gates.
 
 Sprint 8 is backend-only: it ships reporting read APIs and dashboard readiness documentation, but no Dash UI or Dash dependency. The later UI implementation should use Python Dash inside the `console-service` boundary.
 
@@ -37,6 +37,7 @@ Server-side authorization is required for every action. Hiding a button is not a
 - Mutations show the exact records and downstream effect before confirmation.
 - Bulk actions are bounded and unavailable for mixed policy/reuse states that require different decisions.
 - Approval can create CRM eligibility; it cannot enroll or send a sequence.
+- CRM export success can make a target available for sequencing review and meeting handoff, but it cannot enroll or send a sequence without separate outreach approval or create a meeting without meeting-specific suppression checks.
 
 ## Navigation and Views
 
@@ -164,9 +165,29 @@ Actions:
 - mark an externally resolved mismatch with evidence when authorized; and
 - download a permitted audit summary.
 
-No export page exposes a sequence-enrollment action.
+No export page auto-enrolls a sequence.
 
-### 7. Source Health
+### 7. Sequence State and Outreach Controls
+
+Sequence views show:
+
+- sequence template, owner, channel, active status, and step timing;
+- enrollment actor, separate outreach approval reason, current step, next-step time, and pause/completion state;
+- outbound attempt status, provider message ID, retry/backoff, and last error;
+- reply, bounce, and unsubscribe events with durable suppression linkage; and
+- per-domain, per-sender, and per-channel rate-limit state.
+
+Actions:
+
+- create or select an approved sequence template;
+- enroll only exported/current CRM targets with explicit outreach approval;
+- pause, resume, or cancel an enrollment;
+- ingest unsubscribe events; and
+- inspect reply/bounce history.
+
+The UI must never offer a send-now bypass. The backend re-checks suppression, lawful basis, verified email, do-not-contact state, approval, and rate limits before each outbound action.
+
+### 8. Source Health
 
 Source cards and table rows show:
 
@@ -191,10 +212,12 @@ The console consumes target read endpoints:
 - `GET /v1/reporting/watch-targets`
 - `GET /v1/reporting/review-queue`
 - `GET /v1/reporting/crm-targets`
+- `GET /v1/reporting/meetings`
+- `GET /v1/reporting/meetings/{meeting_id}`
 - `GET /v1/reporting/source-health`
 - `GET /v1/reporting/kpis/catalog`
 
-`GET /v1/reporting/crm-exports` and reconciliation endpoints remain Sprint 9 CRM-export work. Sprint 8 exposes current inert CRM targets only.
+Sequencing write/read actions use the owning `/v1/sequences/*` APIs through the gateway. Meeting booking, prep-packet generation, outcome recording, cancellation, availability, and CRM-sync retry use `/v1/meetings/*` and `/v1/calendar/availability` through the gateway. Reporting projections can add workflow summaries later, but dashboard actions must not query or mutate sequencing or meeting tables directly.
 
 Each response includes `generated_at`, source watermark(s), projection version, stale boolean, and degraded dependencies. Collection endpoints accept `limit`, `cursor`, stable filters, and operator role context through `X-Operator-Role`. Write actions call the owning feature service through the gateway, not reporting projections.
 
@@ -208,7 +231,8 @@ Each response includes `generated_at`, source watermark(s), projection version, 
 - email candidate verification and rejection rate;
 - review age/SLA, approval/rejection, bulk conflict, and policy-block rate;
 - CRM batch latency, item success/partial failure, retry, and reconciliation age; and
-- downstream pipeline and meeting outcomes only after approved CRM activation.
+- sequence enrollment, send, reply, bounce, unsubscribe, and rate-limit outcomes; and
+- meetings booked, prep-packet latency, outcome rate, CRM sync failures, and follow-up task completion after approved CRM activation.
 
 ## Empty, Loading, Error, and Stale States
 
@@ -236,6 +260,8 @@ Each response includes `generated_at`, source watermark(s), projection version, 
 - Contact and analyst queues expose policy/evidence context and support audited, conflict-safe bulk review.
 - Review approval creates only current CRM eligibility and never outreach enrollment.
 - Typed CRM target selection, dependency ordering, idempotent batch retry, rate limits, partial failures, and reconciliation are visible and tested.
+- Sequence enrollment requires separate outreach approval, and send/reply/bounce/unsubscribe states are visible without exposing a backend bypass.
+- Meeting handoff requires an exported/current CRM target, shows Google Calendar event state, exposes prep-packet/outcome/follow-up task status, and surfaces retryable CRM sync failures.
 - Source and reporting staleness are visible even when process health endpoints are green.
 - Role tests prove viewers cannot mutate, analysts cannot change source policy, and governance/admin actions require appropriate reasons.
 - Linkable filter state, cursor pagination, table map-alternatives, sanitized excerpts, and WCAG keyboard flows pass acceptance tests.

@@ -34,3 +34,21 @@ def test_sprint_9_crm_export_events_are_contract_values() -> None:
     assert EventName.CRM_EXPORT_ITEM_SUCCEEDED.value == "crm_export.item_succeeded"
     assert EventName.CRM_EXPORT_ITEM_FAILED.value == "crm_export.item_failed"
     assert EventName.CRM_EXPORT_BATCH_COMPLETED.value == "crm_export.batch_completed"
+
+
+def test_sprint_10_sequence_events_are_contract_values() -> None:
+    assert EventName.SEQUENCE_ENROLLED.value == "sequence.enrolled"
+    assert EventName.SEQUENCE_PAUSED.value == "sequence.paused"
+    assert EventName.SEQUENCE_COMPLETED.value == "sequence.completed"
+    assert EventName.EMAIL_SENT.value == "email.sent"
+    assert EventName.REPLY_RECEIVED.value == "reply.received"
+    assert EventName.BOUNCE_RECEIVED.value == "bounce.received"
+    assert EventName.UNSUBSCRIBE_RECEIVED.value == "unsubscribe.received"
+
+
+def test_sprint_11_meeting_events_are_contract_values() -> None:
+    assert EventName.MEETING_BOOKED.value == "meeting.booked"
+    assert EventName.MEETING_PREP_PACKET_GENERATED.value == "meeting.prep_packet_generated"
+    assert EventName.MEETING_OUTCOME_RECORDED.value == "meeting.outcome_recorded"
+    assert EventName.MEETING_FOLLOW_UP_TASK_CREATED.value == "meeting.follow_up_task_created"
+    assert EventName.CRM_SYNCED.value == "crm.synced"

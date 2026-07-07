@@ -47,6 +47,22 @@ helm test ghostrecon --namespace ghostrecon --logs
 
 The test verifies PostgreSQL access with a non-superuser role and Redis authentication.
 
+## Google Calendar Meeting Handoff
+
+Sprint 11 meeting handoff uses Google Calendar service-account credentials.
+Set non-secret defaults in `values.yaml`:
+
+```yaml
+env:
+  GHOSTRECON_GOOGLE_CALENDAR_ID: primary
+  GHOSTRECON_GOOGLE_CALENDAR_SEND_UPDATES: "true"
+```
+
+Put the service-account email, escaped private key, and optional delegated
+Workspace subject in the encrypted values file under `secretEnv`. Production
+deployments should grant the service account direct calendar access or Workspace
+domain-wide delegation for the delegated subject.
+
 ## Datastore Modes
 
 Bundled mode is enabled by default:

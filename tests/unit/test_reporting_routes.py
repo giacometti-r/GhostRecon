@@ -8,12 +8,15 @@ from ghostrecon.models.api import (
     CrmTargetOut,
     CyberEventOut,
     DashboardRole,
+    MeetingHandoffOut,
     ReportingCrmTargetList,
     ReportingEventDetail,
     ReportingEventList,
     ReportingIncidentDetail,
     ReportingIncidentList,
     ReportingKpiCatalog,
+    ReportingMeetingDetail,
+    ReportingMeetingList,
     ReportingMetadata,
     ReportingOperatorContext,
     ReportingReviewQueue,
@@ -116,6 +119,26 @@ def _crm_target() -> CrmTargetOut:
     )
 
 
+def _meeting() -> MeetingHandoffOut:
+    return MeetingHandoffOut(
+        id="meeting-1",
+        crm_target_id="crm-target-1",
+        status="scheduled",
+        subject="Security discovery",
+        start_at=NOW,
+        end_at=NOW,
+        timezone="UTC",
+        attendees=[{"email": "ada@example.com"}],
+        calendar_provider="fake",
+        provider_event_id="fake-meeting-1",
+        crm_sync_status="pending",
+        policy_snapshot={"lawful_basis": "legitimate_interest"},
+        version=1,
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+
 def _source_health(status: SourceHealthStatus = SourceHealthStatus.FRESH) -> SourceHealth:
     return SourceHealth(
         source_definition_id="source-1",
@@ -161,11 +184,20 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     async def fake_crm_targets(**kwargs):
         return ReportingCrmTargetList(metadata=_metadata(), crm_targets=[_crm_target()])
 
+    async def fake_meetings(**kwargs):
+        return ReportingMeetingList(metadata=_metadata(), meetings=[_meeting()])
+
+    async def fake_meeting_detail(*args, **kwargs):
+        return ReportingMeetingDetail(metadata=_metadata(), meeting=_meeting())
+
     async def fake_source_health(**kwargs):
         return ReportingSourceHealthList(metadata=_metadata(stale=True), sources=[_source_health()])
 
     async def fake_kpis(**kwargs):
-        return ReportingKpiCatalog(metadata=_metadata(), kpis={"review": ["approval_rate"]})
+        return ReportingKpiCatalog(
+            metadata=_metadata(),
+            kpis={"review": ["approval_rate"], "meeting_handoff": ["meetings_booked"]},
+        )
 
     monkeypatch.setattr(routers, "get_reporting_events", fake_events)
     monkeypatch.setattr(routers, "get_reporting_event_detail", fake_event_detail)
@@ -174,6 +206,8 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     monkeypatch.setattr(routers, "get_reporting_watch_targets", fake_watch_targets)
     monkeypatch.setattr(routers, "get_reporting_review_queue", fake_review_queue)
     monkeypatch.setattr(routers, "get_reporting_crm_targets", fake_crm_targets)
+    monkeypatch.setattr(routers, "get_reporting_meetings", fake_meetings)
+    monkeypatch.setattr(routers, "get_reporting_meeting_detail", fake_meeting_detail)
     monkeypatch.setattr(routers, "get_reporting_source_health", fake_source_health)
     monkeypatch.setattr(routers, "get_reporting_kpi_catalog", fake_kpis)
 
@@ -187,6 +221,8 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     watch_targets = client.get("/v1/reporting/watch-targets", headers=headers).json()
     review_queue = client.get("/v1/reporting/review-queue", headers=headers).json()
     crm_targets = client.get("/v1/reporting/crm-targets", headers=headers).json()
+    meetings = client.get("/v1/reporting/meetings", headers=headers).json()
+    meeting_detail = client.get("/v1/reporting/meetings/meeting-1", headers=headers).json()
     source_health = client.get("/v1/reporting/source-health", headers=headers).json()
     kpis = client.get("/v1/reporting/kpis/catalog", headers=headers).json()
     legacy_kpis = client.get("/v1/kpis/catalog", headers=headers).json()
@@ -199,8 +235,11 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     assert watch_targets["watch_targets"][0]["origin_incident_id"] is None
     assert review_queue["candidates"][0]["evidence_summary"] == {"score": 60}
     assert crm_targets["crm_targets"][0]["export_status"] == "not_exported"
+    assert meetings["meetings"][0]["provider_event_id"] == "fake-meeting-1"
+    assert meeting_detail["meeting"]["subject"] == "Security discovery"
     assert source_health["metadata"]["stale"] is True
     assert kpis["kpis"]["review"] == ["approval_rate"]
+    assert kpis["kpis"]["meeting_handoff"] == ["meetings_booked"]
     assert legacy_kpis["kpis"]["review"] == ["approval_rate"]
     assert seen_roles == [DashboardRole.ANALYST]
 

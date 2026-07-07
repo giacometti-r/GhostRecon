@@ -20,14 +20,19 @@ flowchart LR
   REVIEW --> TARGETS[Approved CRM targets]
   TARGETS --> CRM[crm-service export batches]
   CRM --> ATTIO[Attio approved sales records]
+  ATTIO --> SEQ[sequencing-service separately approved outreach]
+  SEQ --> MEET[meeting-handoff-service Google Calendar handoff]
+  MEET --> CRM
   EVENTS --> REPORT[reporting-service]
   INCIDENTS --> REPORT
   REVIEW --> REPORT
   CRM --> REPORT
+  SEQ --> REPORT
+  MEET --> REPORT
   REPORT --> CONSOLE[console-service dashboards]
 ```
 
-The pipeline is external sources → normalization and deduplication → contact enrichment → scoring and governance → analyst review → inert CRM targets → CRM export → reporting. Event or incident intelligence never enrolls a contact into outreach automatically. The shared Sprint 3 source registry foundation now persists source definitions, raw source items, source policy metadata, freshness/checkpoint state, hashes, permitted excerpts, and source-ingestion events for later event and incident services.
+The pipeline is external sources → normalization and deduplication → contact enrichment → scoring and governance → analyst review → inert CRM targets → CRM export → separately approved sequencing → Google Calendar meeting handoff → reporting. Event or incident intelligence never enrolls a contact into outreach automatically. CRM export also never enrolls outreach; `sequencing-service` requires its own approval and re-checks suppression, lawful basis, and current contact evidence before every send. Meeting handoff requires an exported/current CRM target, checks suppression before calendar invites, and syncs meeting outcomes/follow-up tasks through `CrmClient`. The shared Sprint 3 source registry foundation now persists source definitions, raw source items, source policy metadata, freshness/checkpoint state, hashes, permitted excerpts, and source-ingestion events for later event and incident services.
 
 ## Microservices
 
@@ -44,10 +49,10 @@ The pipeline is external sources → normalization and deduplication → contact
 | `console-service` | Existing FastAPI/Jinja intelligence dashboard and analyst review interface. |
 | `reporting-service` | Intelligence, source-health, review, export, and revenue-workflow read models. |
 | `crm-service` | Review-gated Attio export and provider-neutral `CrmClient` boundary. |
-| `sequencing-service` | In-house sequence eligibility and future SMTP/IMAP execution after separate approval. |
-| `meeting-handoff-service` | AE/SE prep packets and meeting-handoff workflows. |
+| `sequencing-service` | In-house sequence enrollment, SMTP/IMAP execution, reply/bounce/unsubscribe handling, and rate-limit enforcement after separate approval. |
+| `meeting-handoff-service` | Google Calendar booking, AE/SE prep packets, meeting outcomes, follow-up tasks, and CRM handoff sync. |
 
-The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, email-intelligence, scoring, and governance runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets; enrichment stores entity-resolution cases, eligible contact candidates, email candidates, verification payloads, and review-required records; governance stores score records, review decisions, suppressions, and non-exported CRM targets.
+The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, email-intelligence, scoring, governance, CRM export, sequencing, and meeting-handoff runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets; enrichment stores entity-resolution cases, eligible contact candidates, email candidates, verification payloads, and review-required records; governance stores score records, review decisions, suppressions, and CRM targets; CRM export stores provider batch/item state; sequencing stores templates, enrollments, outbound attempts, inbound reply/bounce/unsubscribe events, and suppression linkage; meeting handoff stores Google Calendar event state, prep packets, outcomes, follow-up tasks, and CRM sync status.
 
 ## Implemented Source Registry Foundation
 
@@ -87,7 +92,22 @@ Sprint 7 adds the scoring and decision workflow used by dashboard and CRM-export
 - `sprint7.v1` scoring across fit, relevance, recency, confidence, and evidence components with explainable routing to rejection, review, or CRM-target review.
 - Governance APIs for review approval/rejection, guarded bulk review, CRM-target reads, suppression creation/evaluation, incident corroboration, and incident false-positive rejection.
 - Fail-closed approval policy for missing lineage, unknown/prohibited participant reuse, uncorroborated incidents, active suppressions, stale evidence, missing retention, missing lawful basis, stale policy hashes, and optimistic-version conflicts.
-- Approved candidates create CRM targets with `export_status=not_exported`; Sprint 9 owns provider export and Sprint 10 owns sequencing/outreach.
+- Approved candidates create CRM targets with `export_status=not_exported`; Sprint 9 owns provider export, Sprint 10 owns sequencing/outreach, and Sprint 11 owns meeting handoff.
+
+## Implemented CRM Export and Sequencing Runtime
+
+Sprint 9, Sprint 10, and Sprint 11 add review-gated sales activation after governance approval:
+
+- `crm-service` persists `CrmExportBatch` and `CrmExportItem` records, exports only approved current CRM targets through `CrmClient`, maps Attio custom objects and standard People/Companies, and records provider IDs without enrolling outreach.
+- `sequencing-service` persists `Sequence`, `SequenceStep`, `SequenceEnrollment`, `OutboundEmail`, `InboundEmailEvent`, and `SequenceSuppressionEvent` records.
+- Sequence enrollment requires an exported CRM target plus separate outreach approval; CRM export approval is not reused as send approval.
+- SMTP and IMAP are adapter-backed using stdlib implementations by default and fakeable protocols in tests.
+- Due-step workers enforce per-domain, per-sender, and per-channel limits, then re-check verified email, lawful basis, do-not-contact, and suppression state immediately before each send.
+- Replies complete enrollments, bounces pause affected enrollments, and unsubscribe ingestion creates durable suppression evidence.
+- `meeting-handoff-service` persists Google Calendar meetings, AE/SE prep packets, outcomes, and follow-up tasks after CRM activation.
+- Meeting booking requires an exported/current CRM target and suppression checks before invites; a linked active sequence enrollment is completed with `meeting_booked`.
+- Google Calendar uses service-account credentials, optional delegated subject, and free-busy/event APIs behind a fakeable adapter for tests/local use.
+- Meeting outcomes and follow-up tasks sync through `CrmClient`, preserving provider-neutral Attio boundaries and retryable CRM sync state.
 
 ## Source Policy
 
@@ -104,6 +124,7 @@ Sprint 7 adds the scoring and decision workflow used by dashboard and CRM-export
 - Kubernetes deployment through Helm in `deploy/helm/ghostrecon`.
 - SOPS + Age secret management for Helm values.
 - Attio is implemented behind `CrmClient` so future CRMs can provide equivalent object, list, and reconciliation mappings.
+- Google Calendar service-account credentials enable the implemented meeting handoff runtime; local runs without Google credentials use the fake adapter.
 - Paid enrichment APIs are not required. Public enrichment remains allowlisted, bounded, and source-attributed.
 
 ## Local Development
@@ -165,7 +186,7 @@ Keep the Age private key outside the repository and encrypt `deploy/helm/ghostre
 
 ## Compliance and Safety
 
-GhostRecon stores source lineage, source-reuse policy, idempotency keys, evidence links, suppression state, review decisions, inert CRM targets, export audits, and retention metadata. Crawler behavior must remain allowlisted, bounded, robots-aware by default, and limited to publicly visible pages. Generated email candidates are not verified contacts. Review approval creates only a CRM target; CRM export and outreach approval remain separate downstream decisions.
+GhostRecon stores source lineage, source-reuse policy, idempotency keys, evidence links, suppression state, review decisions, inert CRM targets, export audits, meeting handoff state, and retention metadata. Crawler behavior must remain allowlisted, bounded, robots-aware by default, and limited to publicly visible pages. Generated email candidates are not verified contacts. Review approval creates only a CRM target; CRM export, outreach approval, and meeting handoff remain separate downstream decisions.
 
 ## Documentation
 

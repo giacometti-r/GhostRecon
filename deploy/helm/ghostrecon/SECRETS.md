@@ -59,6 +59,22 @@ secretEnv:
 External PostgreSQL and Redis instances must already exist. Helm does not create,
 discover, or adopt infrastructure addressed by an external URL.
 
+## Google Calendar
+
+Meeting handoff uses Google Calendar service-account credentials. Keep the
+private key encrypted in `secretEnv`:
+
+```yaml
+secretEnv:
+  GHOSTRECON_GOOGLE_CLIENT_EMAIL: calendar-bot@example.iam.gserviceaccount.com
+  GHOSTRECON_GOOGLE_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"
+  GHOSTRECON_GOOGLE_DELEGATED_SUBJECT: calendar-owner@example.com
+```
+
+`GHOSTRECON_GOOGLE_DELEGATED_SUBJECT` is optional when the service account has
+direct calendar access. For Workspace domain-wide delegation, set it to the user
+whose calendar should own the events.
+
 ## Encrypt And Deploy
 
 1. Edit the encrypted file safely:

@@ -9,6 +9,8 @@ from ghostrecon.events.contracts import EventName, new_event
 from ghostrecon.models.api import (
     BulkReviewDecisionRequest,
     BulkReviewDecisionResult,
+    CalendarAvailabilityRequest,
+    CalendarAvailabilityResult,
     CandidateScoreOut,
     CandidateScoreRequest,
     ContactEnrichmentCreate,
@@ -34,6 +36,11 @@ from ghostrecon.models.api import (
     EventParticipantOut,
     IncidentDecisionRequest,
     JobAccepted,
+    MeetingActionRequest,
+    MeetingCreateRequest,
+    MeetingHandoffList,
+    MeetingHandoffOut,
+    MeetingOutcomeRequest,
     PrepPacketRequest,
     ReportingCrmTargetList,
     ReportingEventDetail,
@@ -41,6 +48,8 @@ from ghostrecon.models.api import (
     ReportingIncidentDetail,
     ReportingIncidentList,
     ReportingKpiCatalog,
+    ReportingMeetingDetail,
+    ReportingMeetingList,
     ReportingOperatorContext,
     ReportingReviewQueue,
     ReportingSourceHealthList,
@@ -51,16 +60,24 @@ from ghostrecon.models.api import (
     ScoreRequest,
     SecurityIncidentList,
     SecurityIncidentOut,
+    SequenceCreateRequest,
     SequenceEligibilityRequest,
+    SequenceEnrollmentActionRequest,
+    SequenceEnrollmentCreateRequest,
+    SequenceEnrollmentList,
+    SequenceEnrollmentOut,
+    SequenceOut,
     SourceHealthList,
     SuppressionCheckRequest,
     SuppressionCreate,
     SuppressionOut,
+    UnsubscribeRequest,
     WatchTargetCreate,
     WatchTargetList,
     WatchTargetOut,
     WatchTargetPatch,
 )
+from ghostrecon.services.calendar_adapters import CalendarProviderError
 from ghostrecon.services.crm_exports import (
     get_crm_export_batch,
     retry_failed_crm_export_items,
@@ -111,7 +128,17 @@ from ghostrecon.services.incident_intelligence import (
     promote_incident_to_watchlist,
     watch_target_to_api,
 )
-from ghostrecon.services.meeting import build_prep_packet
+from ghostrecon.services.meeting import (
+    build_prep_packet,
+    cancel_meeting,
+    create_meeting,
+    generate_meeting_prep_packet,
+    get_calendar_availability,
+    get_meeting,
+    list_meetings,
+    record_meeting_outcome,
+    retry_meeting_crm_sync,
+)
 from ghostrecon.services.reporting import (
     get_reporting_crm_targets,
     get_reporting_event_detail,
@@ -119,6 +146,8 @@ from ghostrecon.services.reporting import (
     get_reporting_incident_detail,
     get_reporting_incidents,
     get_reporting_kpi_catalog,
+    get_reporting_meeting_detail,
+    get_reporting_meetings,
     get_reporting_review_queue,
     get_reporting_source_health,
     get_reporting_watch_targets,
@@ -128,7 +157,17 @@ from ghostrecon.services.scoring import (
     create_candidate_score,
     score_lead,
 )
-from ghostrecon.services.sequencing import evaluate_sequence_eligibility
+from ghostrecon.services.sequencing import (
+    cancel_sequence_enrollment,
+    create_sequence,
+    create_sequence_enrollment,
+    evaluate_sequence_eligibility,
+    get_sequence_enrollment,
+    list_sequence_enrollments,
+    pause_sequence_enrollment,
+    process_unsubscribe,
+    resume_sequence_enrollment,
+)
 from ghostrecon.services.source_registry import list_source_health
 
 gateway_router = APIRouter(tags=["gateway"])
@@ -343,6 +382,44 @@ async def reporting_crm_targets(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/reporting/meetings", response_model=ReportingMeetingList)
+@reporting_router.get("/v1/reporting/meetings", response_model=ReportingMeetingList)
+async def reporting_meetings(
+    status: str | None = None,
+    crm_sync_status: str | None = None,
+    cursor: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingMeetingList:
+    try:
+        return await get_reporting_meetings(
+            status=status,
+            crm_sync_status=crm_sync_status,
+            cursor=cursor,
+            limit=limit,
+            operator=operator,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/reporting/meetings/{meeting_id}", response_model=ReportingMeetingDetail)
+@reporting_router.get("/v1/reporting/meetings/{meeting_id}", response_model=ReportingMeetingDetail)
+async def reporting_meeting_detail(
+    meeting_id: str,
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingMeetingDetail:
+    detail = await get_reporting_meeting_detail(
+        meeting_id,
+        operator=operator,
+        settings=get_settings(),
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="meeting not found")
+    return detail
 
 
 @gateway_router.get("/v1/reporting/source-health", response_model=ReportingSourceHealthList)
@@ -754,11 +831,295 @@ async def candidate_score(
     return candidate_score_to_model(score)
 
 
+@gateway_router.post("/v1/sequences/evaluate")
 @sequencing_router.post("/v1/sequences/evaluate")
 async def sequence_eligibility(request: SequenceEligibilityRequest):
     return evaluate_sequence_eligibility(request)
 
 
+@gateway_router.post("/v1/sequences", response_model=SequenceOut)
+@sequencing_router.post("/v1/sequences", response_model=SequenceOut)
+async def sequence_create(
+    request: SequenceCreateRequest,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceOut:
+    try:
+        return await create_sequence(
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@gateway_router.post("/v1/sequences/enrollments", response_model=SequenceEnrollmentOut)
+@sequencing_router.post("/v1/sequences/enrollments", response_model=SequenceEnrollmentOut)
+async def sequence_enrollment_create(
+    request: SequenceEnrollmentCreateRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceEnrollmentOut:
+    try:
+        return await create_sequence_enrollment(
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/sequences/enrollments", response_model=SequenceEnrollmentList)
+@sequencing_router.get("/v1/sequences/enrollments", response_model=SequenceEnrollmentList)
+async def sequence_enrollment_list(
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> SequenceEnrollmentList:
+    return await list_sequence_enrollments(status=status, limit=limit, settings=get_settings())
+
+
+@gateway_router.get(
+    "/v1/sequences/enrollments/{enrollment_id}", response_model=SequenceEnrollmentOut
+)
+@sequencing_router.get(
+    "/v1/sequences/enrollments/{enrollment_id}", response_model=SequenceEnrollmentOut
+)
+async def sequence_enrollment_detail(enrollment_id: str) -> SequenceEnrollmentOut:
+    enrollment = await get_sequence_enrollment(enrollment_id, settings=get_settings())
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="sequence enrollment not found")
+    return enrollment
+
+
+@gateway_router.post(
+    "/v1/sequences/enrollments/{enrollment_id}/pause", response_model=SequenceEnrollmentOut
+)
+@sequencing_router.post(
+    "/v1/sequences/enrollments/{enrollment_id}/pause", response_model=SequenceEnrollmentOut
+)
+async def sequence_enrollment_pause(
+    enrollment_id: str,
+    request: SequenceEnrollmentActionRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceEnrollmentOut:
+    try:
+        enrollment = await pause_sequence_enrollment(
+            enrollment_id, request, actor=actor, settings=get_settings()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="sequence enrollment not found")
+    return enrollment
+
+
+@gateway_router.post(
+    "/v1/sequences/enrollments/{enrollment_id}/resume", response_model=SequenceEnrollmentOut
+)
+@sequencing_router.post(
+    "/v1/sequences/enrollments/{enrollment_id}/resume", response_model=SequenceEnrollmentOut
+)
+async def sequence_enrollment_resume(
+    enrollment_id: str,
+    request: SequenceEnrollmentActionRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceEnrollmentOut:
+    try:
+        enrollment = await resume_sequence_enrollment(
+            enrollment_id, request, actor=actor, settings=get_settings()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="sequence enrollment not found")
+    return enrollment
+
+
+@gateway_router.post(
+    "/v1/sequences/enrollments/{enrollment_id}/cancel", response_model=SequenceEnrollmentOut
+)
+@sequencing_router.post(
+    "/v1/sequences/enrollments/{enrollment_id}/cancel", response_model=SequenceEnrollmentOut
+)
+async def sequence_enrollment_cancel(
+    enrollment_id: str,
+    request: SequenceEnrollmentActionRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceEnrollmentOut:
+    try:
+        enrollment = await cancel_sequence_enrollment(
+            enrollment_id, request, actor=actor, settings=get_settings()
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if enrollment is None:
+        raise HTTPException(status_code=404, detail="sequence enrollment not found")
+    return enrollment
+
+
+@gateway_router.post("/v1/sequences/unsubscribe")
+@sequencing_router.post("/v1/sequences/unsubscribe")
+async def sequence_unsubscribe(
+    request: UnsubscribeRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+):
+    return await process_unsubscribe(
+        request,
+        idempotency_key=idempotency_key,
+        settings=get_settings(),
+    )
+
+
+@gateway_router.post("/v1/calendar/availability", response_model=CalendarAvailabilityResult)
+@meeting_router.post("/v1/calendar/availability", response_model=CalendarAvailabilityResult)
+async def calendar_availability(
+    request: CalendarAvailabilityRequest,
+) -> CalendarAvailabilityResult:
+    try:
+        return await get_calendar_availability(request, settings=get_settings())
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except CalendarProviderError as exc:
+        raise HTTPException(
+            status_code=503 if exc.retryable else 502,
+            detail=str(exc),
+        ) from exc
+
+
+@gateway_router.post("/v1/meetings", response_model=MeetingHandoffOut)
+@meeting_router.post("/v1/meetings", response_model=MeetingHandoffOut)
+async def meeting_create(
+    request: MeetingCreateRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> MeetingHandoffOut:
+    try:
+        return await create_meeting(
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except CalendarProviderError as exc:
+        raise HTTPException(
+            status_code=503 if exc.retryable else 502,
+            detail=str(exc),
+        ) from exc
+
+
+@gateway_router.get("/v1/meetings", response_model=MeetingHandoffList)
+@meeting_router.get("/v1/meetings", response_model=MeetingHandoffList)
+async def meeting_list(
+    status: str | None = None,
+    crm_target_id: str | None = None,
+    limit: int = Query(default=100, ge=1, le=500),
+) -> MeetingHandoffList:
+    return await list_meetings(
+        status=status,
+        crm_target_id=crm_target_id,
+        limit=limit,
+        settings=get_settings(),
+    )
+
+
+@gateway_router.get("/v1/meetings/{meeting_id}", response_model=MeetingHandoffOut)
+@meeting_router.get("/v1/meetings/{meeting_id}", response_model=MeetingHandoffOut)
+async def meeting_detail(meeting_id: str) -> MeetingHandoffOut:
+    meeting = await get_meeting(meeting_id, settings=get_settings())
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="meeting not found")
+    return meeting
+
+
+@gateway_router.post(
+    "/v1/meetings/{meeting_id}/prep-packet", response_model=MeetingHandoffOut
+)
+@meeting_router.post(
+    "/v1/meetings/{meeting_id}/prep-packet", response_model=MeetingHandoffOut
+)
+async def meeting_generate_prep_packet(
+    meeting_id: str,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> MeetingHandoffOut:
+    meeting = await generate_meeting_prep_packet(
+        meeting_id,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        settings=get_settings(),
+    )
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="meeting not found")
+    return meeting
+
+
+@gateway_router.post("/v1/meetings/{meeting_id}/outcome", response_model=MeetingHandoffOut)
+@meeting_router.post("/v1/meetings/{meeting_id}/outcome", response_model=MeetingHandoffOut)
+async def meeting_record_outcome(
+    meeting_id: str,
+    request: MeetingOutcomeRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> MeetingHandoffOut:
+    meeting = await record_meeting_outcome(
+        meeting_id,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        settings=get_settings(),
+    )
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="meeting not found")
+    return meeting
+
+
+@gateway_router.post("/v1/meetings/{meeting_id}/cancel", response_model=MeetingHandoffOut)
+@meeting_router.post("/v1/meetings/{meeting_id}/cancel", response_model=MeetingHandoffOut)
+async def meeting_cancel(
+    meeting_id: str,
+    request: MeetingActionRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> MeetingHandoffOut:
+    try:
+        meeting = await cancel_meeting(
+            meeting_id,
+            request,
+            actor=actor,
+            settings=get_settings(),
+        )
+    except CalendarProviderError as exc:
+        raise HTTPException(
+            status_code=503 if exc.retryable else 502,
+            detail=str(exc),
+        ) from exc
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="meeting not found")
+    return meeting
+
+
+@gateway_router.post("/v1/meetings/{meeting_id}/retry-sync", response_model=MeetingHandoffOut)
+@meeting_router.post("/v1/meetings/{meeting_id}/retry-sync", response_model=MeetingHandoffOut)
+async def meeting_retry_sync(
+    meeting_id: str,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> MeetingHandoffOut:
+    meeting = await retry_meeting_crm_sync(
+        meeting_id,
+        actor=actor,
+        settings=get_settings(),
+    )
+    if meeting is None:
+        raise HTTPException(status_code=404, detail="meeting not found")
+    return meeting
+
+
+@gateway_router.post("/v1/meetings/prep-packet")
 @meeting_router.post("/v1/meetings/prep-packet")
 async def prep_packet(request: PrepPacketRequest):
     return build_prep_packet(request)

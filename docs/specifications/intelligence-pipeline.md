@@ -2,7 +2,7 @@
 
 ## Status and Scope
 
-This specification defines the target contracts for Sprints 3–9. It is normative for intelligence source adapters, canonical records, review eligibility, and CRM export. Runtime implementation follows the sprint tracker. As of Sprint 7, the source registry, event intelligence runtime, incident intelligence/watchlist runtime, entity-resolution workflow, contact-enrichment workflow, persisted email candidates, verification payloads, versioned scoring, governance decisions, suppression persistence, incident analyst decisions, and inert CRM targets are implemented.
+This specification defines the target contracts for Sprints 3–11. It is normative for intelligence source adapters, canonical records, review eligibility, CRM export, separately approved sequencing, and meeting handoff. Runtime implementation follows the sprint tracker. As of Sprint 11, the source registry, event intelligence runtime, incident intelligence/watchlist runtime, entity-resolution workflow, contact-enrichment workflow, persisted email candidates, verification payloads, versioned scoring, governance decisions, suppression persistence, incident analyst decisions, CRM targets, CRM export, sequencing runtime, and Google Calendar meeting handoff runtime are implemented.
 
 The v1 scope is:
 
@@ -10,7 +10,9 @@ The v1 scope is:
 - global cyber-incident news, affected-company identification, and operator watchlists;
 - entity and public-business-contact enrichment;
 - explainable scoring, corroboration, governance, and analyst review;
-- idempotent, provider-neutral CRM export; and
+- idempotent, provider-neutral CRM export;
+- separately approved sequence enrollment and email outreach execution;
+- Google Calendar meeting handoff with AE/SE prep packets, outcomes, and follow-up tasks; and
 - reporting projections for the existing console.
 
 The v1 scope excludes unlicensed article archives, access-control bypass, breached personal data, automated incident attribution, and automatic outreach enrollment.
@@ -32,9 +34,15 @@ flowchart LR
   REVIEW --> TARGET[CrmTarget]
   TARGET --> EXPORT[CrmExportBatch / CrmExportItem]
   EXPORT --> RECONCILE[Provider reconciliation]
+  RECONCILE --> SEQUENCE[SequenceEnrollment / OutboundEmail]
+  SEQUENCE --> INBOUND[Reply / Bounce / Unsubscribe]
+  SEQUENCE --> MEETING[MeetingHandoff / PrepPacket / FollowUpTask]
+  MEETING --> CRM_SYNC[CrmClient meeting outcome sync]
   INTEL --> REPORT[Reporting projections]
   REVIEW --> REPORT
   RECONCILE --> REPORT
+  INBOUND --> REPORT
+  MEETING --> REPORT
 ```
 
 Every transition retains the originating `SourceDefinition` and `RawSourceItem` IDs. Derived records never replace source evidence.
@@ -96,9 +104,18 @@ All IDs are GhostRecon-generated UUIDs unless an external identifier is explicit
 | `CandidateScore` | `id`, target type/ID, origin type/ID, scoring config version, component scores, composite score, route, reasons, policy snapshot hash, source lineage, and idempotency key. Sprint 7 uses `sprint7.v1`. |
 | `ReviewCandidate` | `id`, candidate type, target type/ID, origin, source lineage, status, reason code, evidence summary, policy snapshot/hash, SLA due time, version, and idempotency key. |
 | `ReviewDecision` | `id`, optional review candidate ID, target type/ID, decision, actor, reason code/text, evidence snapshot, policy snapshot/hash, idempotency key, and timestamp. |
-| `CrmTarget` | `id`, review candidate/decision IDs, target type/ID, origin, source lineage, status, export status, policy snapshot, approval snapshot, version, and timestamps. It is inert until Sprint 9 export. |
+| `CrmTarget` | `id`, review candidate/decision IDs, target type/ID, origin, source lineage, status, export status, policy snapshot, approval snapshot, version, and timestamps. It is inert until CRM export. |
 | `CrmExportBatch` | `id`, provider/workspace, requested-by actor, review-selection snapshot, idempotency key, status, item counts, started/completed timestamps, and reconciliation summary. A batch contains only approved targets. |
 | `CrmExportItem` | `id`, batch ID, target type/ID, operation, dependency IDs, stable provider-match key, status, attempt count, provider record/list-entry IDs, last error, and reconciliation state. |
+| `Sequence` | `id`, name, owner, channel, status, rate-limit policy, idempotency key, and timestamps. A sequence contains ordered active steps. |
+| `SequenceStep` | `id`, sequence ID, order, channel, delay, subject/body templates, active flag, and timestamps. |
+| `SequenceEnrollment` | `id`, sequence ID, exported CRM target ID, contact/account IDs, status, separate outreach approval actor/reason, current step, next-step time, pause reason, policy snapshot, version, and timestamps. |
+| `OutboundEmail` | `id`, enrollment/step/contact IDs, channel, from/to email, subject/body, status, provider message ID, idempotency key, attempt count, retry metadata, scheduled/sent timestamps, and audit timestamps. |
+| `InboundEmailEvent` | `id`, optional enrollment/outbound email IDs, event type, from/to emails, message IDs, provider payload, idempotency key, occurrence time, and creation time. |
+| `SequenceSuppressionEvent` | `id`, optional enrollment/suppression/source event IDs, email/domain/channel, reason, and timestamp. |
+| `MeetingHandoff` | `id`, exported CRM target ID, optional sequence enrollment/contact/account IDs, status, subject, start/end/timezone, attendees, Google Calendar provider/event IDs, outcome, CRM sync status/error, policy snapshot, idempotency key, version, and timestamps. |
+| `MeetingPrepPacket` | `id`, meeting ID, account summary, stakeholder map, security priorities, suggested questions, risks, source snapshot, generator, idempotency key, and timestamps. |
+| `MeetingFollowUpTask` | `id`, meeting ID, title, description, owner, due time, status, CRM sync status/provider task ID/error, idempotency key, and timestamps. |
 
 Existing `Account`, `Contact`, `Lead`, `Signal`, `Suppression`, and `AuditEvent` records remain canonical workflow entities. Lead-source taxonomy adds `cyber_event` and `security_incident`.
 
@@ -172,6 +189,18 @@ All events use the common envelope:
 | `crm_export.item_succeeded` | CRM | batch/item/target IDs, provider record IDs, reconciliation state |
 | `crm_export.item_failed` | CRM | batch/item/target IDs, retryability, typed error, attempt count |
 | `crm_export.batch_completed` | CRM | batch ID, succeeded/failed/skipped counts, reconciliation summary |
+| `sequence.enrolled` | sequencing | enrollment ID, sequence ID, CRM target ID, contact ID, approval actor/reason |
+| `sequence.paused` | sequencing | enrollment ID, status, reason, current step, next step time |
+| `sequence.completed` | sequencing | enrollment ID, completion reason, final step, timestamps |
+| `email.sent` | sequencing | outbound email ID, enrollment ID, step ID, provider message ID, attempt count |
+| `reply.received` | sequencing | inbound event ID, enrollment/outbound IDs, message metadata |
+| `bounce.received` | sequencing | inbound event ID, enrollment/outbound IDs, bounce metadata |
+| `unsubscribe.received` | sequencing | inbound event ID, email/domain, suppression linkage |
+| `meeting.booked` | meeting handoff | meeting ID, CRM target ID, calendar provider/event ID, attendees, start/end/timezone |
+| `meeting.prep_packet_generated` | meeting handoff | prep packet ID, meeting ID, source snapshot, generated-by actor |
+| `meeting.outcome_recorded` | meeting handoff | meeting ID, outcome status, next steps, CRM sync status |
+| `meeting.follow_up_task_created` | meeting handoff | follow-up task ID, meeting ID, owner, due time, CRM sync status |
+| `crm.synced` | CRM / meeting handoff | synced aggregate type/ID, provider record/list IDs, sync result metadata |
 
 Event payload changes require a new `schema_version`. Consumers must ignore unknown additive fields and reject incompatible major versions.
 
@@ -223,6 +252,41 @@ Implemented Sprint 7 review mutations require `Idempotency-Key`, `X-Actor`, reas
 
 Sprint 9 export mutations require an `Idempotency-Key`, authenticated actor, approved CRM-target selection, and audit record. Bulk review decisions reject mixed candidate types or policy states that cannot be evaluated under one displayed evidence snapshot.
 
+### Sequencing
+
+- `POST /v1/sequences/evaluate`
+- `POST /v1/sequences`
+- `POST /v1/sequences/enrollments`
+- `GET /v1/sequences/enrollments`
+- `GET /v1/sequences/enrollments/{enrollment_id}`
+- `POST /v1/sequences/enrollments/{enrollment_id}/pause`
+- `POST /v1/sequences/enrollments/{enrollment_id}/resume`
+- `POST /v1/sequences/enrollments/{enrollment_id}/cancel`
+- `POST /v1/sequences/unsubscribe`
+
+Sprint 10 enrollment requires an exported/current CRM target plus explicit outreach approval. It never reuses CRM export approval. Every send re-checks verified email, lawful basis, do-not-contact, active suppression, and rate limits immediately before SMTP execution.
+
+### Meeting Handoff
+
+- `POST /v1/calendar/availability`
+- `POST /v1/meetings`
+- `GET /v1/meetings`
+- `GET /v1/meetings/{meeting_id}`
+- `POST /v1/meetings/{meeting_id}/prep-packet`
+- `POST /v1/meetings/{meeting_id}/outcome`
+- `POST /v1/meetings/{meeting_id}/cancel`
+- `POST /v1/meetings/{meeting_id}/retry-sync`
+- `POST /v1/meetings/prep-packet`
+
+Sprint 11 meeting creation requires an exported/current CRM target and at least one attendee. Google Calendar invites use service-account credentials and must pass current email suppression checks before the provider call. If a linked sequence enrollment is active, booking completes it with `meeting_booked`. The compatibility prep-packet route remains stateless; the persisted meeting prep-packet route is the canonical workflow.
+
+### Meeting Reporting
+
+- `GET /v1/reporting/meetings`
+- `GET /v1/reporting/meetings/{meeting_id}`
+
+Meeting reporting follows the Sprint 8 metadata wrapper with generated time, watermarks, stale/degraded state, cursor pagination, and role-aware policy redaction.
+
 ## Review Eligibility
 
 A review candidate contains:
@@ -240,7 +304,7 @@ An approved candidate becomes a CRM target only when current policy permits expo
 
 ## CRM Export Contract
 
-`CrmClient` provides provider-neutral operations for object/schema validation, stable-identifier upsert, relationship/list insertion, batch status, and reconciliation. Provider-specific names never appear in upstream review contracts. Sprint 9 export consumes approved Sprint 7 `CrmTarget` rows.
+`CrmClient` provides provider-neutral operations for object/schema validation, stable-identifier upsert, relationship/list insertion, batch status, reconciliation, and Sprint 11 meeting outcome/follow-up sync. Provider-specific names never appear in upstream review or meeting contracts. Sprint 9 export consumes approved Sprint 7 `CrmTarget` rows.
 
 ### Attio Mapping
 
@@ -265,9 +329,17 @@ An item may be `pending`, `running`, `succeeded`, `failed_retryable`, `failed_te
 
 CRM export requires analyst approval and never calls `sequencing-service`. Outreach requires a later, independent governance and sequence-eligibility decision.
 
+## Sequencing Contract
+
+`sequencing-service` owns sequence templates, enrollments, outbound email attempts, inbound reply/bounce/unsubscribe events, and send rate limits. SMTP and IMAP providers are behind adapter protocols so tests can use fakes and production can use stdlib-backed implementations.
+
+Sequence enrollment is allowed only when the selected CRM target is exported/current and a separate outreach approval reason is supplied. Enrollment does not send immediately unless the first step is due and the worker passes all current safety checks.
+
+Before every outbound email, the worker verifies the contact still has a verified business email, lawful basis, no do-not-contact flag, no active suppression, and available per-domain/per-sender/per-channel capacity. Policy failure suppresses or pauses only the affected enrollment. Replies complete the enrollment, bounces pause it, and unsubscribe ingestion creates durable suppression evidence.
+
 ## Security, Privacy, and Retention
 
-- Apply least privilege to source credentials, watch queries, review decisions, and CRM exports.
+- Apply least privilege to source credentials, watch queries, review decisions, CRM exports, and outbound provider credentials.
 - Encrypt provider tokens and sensitive configuration outside source control.
 - Treat source content and translated text as untrusted input; sanitize rendered excerpts and never execute embedded instructions.
 - Store no breached personal data and no personal contact data beyond approved public-business-contact scope.
@@ -286,4 +358,5 @@ CRM export requires analyst approval and never calls `sequencing-service`. Outre
 - Suppression, retention, and approval changes invalidate stale CRM eligibility.
 - Bulk review rejects incompatible selections and audits every candidate result.
 - CRM retries respect rate limits, isolate partial failures, avoid duplicates, and reconcile provider IDs.
+- Sequence enrollment requires separate outreach approval; every send re-checks suppression, lawful basis, verified email, and rate limits before SMTP execution.
 - Source and dashboard freshness states are testable under outage and recovery.

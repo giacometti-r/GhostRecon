@@ -18,6 +18,7 @@ from ghostrecon.services.crm_attio import (
     AttioCrmClient,
     CrmExportPlan,
     CrmProviderError,
+    CrmSyncPlan,
 )
 from ghostrecon.services.crm_exports import (
     _require_exportable_targets,
@@ -174,6 +175,43 @@ async def test_attio_crm_client_upserts_record_and_list_entry() -> None:
     assert calls[0][1] == "/v2/objects/security_incidents/records"
     assert calls[0][2]["matching_attribute"] == "ghostrecon_id"  # type: ignore[index]
     assert calls[1][1] == "/v2/lists/ghostrecon-security-incidents/entries"
+
+
+@pytest.mark.asyncio
+async def test_attio_crm_client_syncs_meeting_handoff_plan() -> None:
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    class FakeHttp:
+        async def request(self, method, path, *, json=None, params=None):
+            _ = params
+            calls.append((method, path, json))
+            if path.endswith("/records"):
+                return {"data": {"id": {"record_id": "attio-meeting-1"}}}
+            return {
+                "data": {
+                    "id": {"list_id": "attio-list-1", "entry_id": "attio-entry-1"}
+                }
+            }
+
+    client = AttioCrmClient.__new__(AttioCrmClient)
+    client.http = FakeHttp()
+    result = await client.sync(
+        CrmSyncPlan(
+            sync_type="meeting_handoff",
+            target_id="meeting-1",
+            provider_object="meeting_handoffs",
+            stable_match_key="ghostrecon_meeting:meeting-1",
+            matching_attribute="ghostrecon_id",
+            values={"ghostrecon_id": "meeting-1", "subject": "Security discovery"},
+            list_api_slug="ghostrecon-meetings",
+            list_entry_values={"meeting_status": "completed"},
+        )
+    )
+
+    assert result.provider_record_id == "attio-meeting-1"
+    assert result.provider_list_entry_id == "attio-entry-1"
+    assert calls[0][1] == "/v2/objects/meeting_handoffs/records"
+    assert calls[1][1] == "/v2/lists/ghostrecon-meetings/entries"
 
 
 @pytest.mark.asyncio

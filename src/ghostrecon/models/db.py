@@ -651,6 +651,286 @@ class CrmExportItem(Base):
     batch: Mapped[CrmExportBatch] = relationship(back_populates="items")
 
 
+class MeetingHandoff(Base):
+    __tablename__ = "meeting_handoffs"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_meeting_handoffs_idempotency_key"),
+        Index("ix_meeting_handoffs_status_start", "status", "start_at"),
+        Index("ix_meeting_handoffs_crm_target", "crm_target_id"),
+        Index("ix_meeting_handoffs_contact_status", "contact_id", "status"),
+        Index("ix_meeting_handoffs_provider_event", "calendar_provider", "provider_event_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    crm_target_id: Mapped[str | None] = mapped_column(
+        ForeignKey("crm_targets.id", ondelete="SET NULL")
+    )
+    sequence_enrollment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("sequence_enrollments.id", ondelete="SET NULL")
+    )
+    account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"))
+    contact_id: Mapped[str | None] = mapped_column(ForeignKey("contacts.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(String(64), default="scheduled")
+    subject: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str | None] = mapped_column(Text)
+    location: Mapped[str | None] = mapped_column(String(512))
+    start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    timezone: Mapped[str] = mapped_column(String(64), default="UTC")
+    attendees: Mapped[list[object]] = mapped_column(JSONB, default=list)
+    calendar_provider: Mapped[str] = mapped_column(String(64), default="google")
+    calendar_id: Mapped[str | None] = mapped_column(String(512))
+    provider_event_id: Mapped[str | None] = mapped_column(String(512))
+    provider_html_link: Mapped[str | None] = mapped_column(String(2048))
+    provider_payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    outcome_status: Mapped[str | None] = mapped_column(String(64))
+    outcome_notes: Mapped[str | None] = mapped_column(Text)
+    next_steps: Mapped[list[object]] = mapped_column(JSONB, default=list)
+    crm_sync_status: Mapped[str] = mapped_column(String(64), default="pending")
+    crm_sync_error: Mapped[str | None] = mapped_column(Text)
+    crm_retry_after_seconds: Mapped[int | None] = mapped_column(Integer)
+    policy_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    prep_packets: Mapped[list["MeetingPrepPacket"]] = relationship(back_populates="meeting")
+    follow_up_tasks: Mapped[list["MeetingFollowUpTask"]] = relationship(back_populates="meeting")
+
+
+class MeetingPrepPacket(Base):
+    __tablename__ = "meeting_prep_packets"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_meeting_prep_packets_idempotency_key"),
+        Index("ix_meeting_prep_packets_meeting", "meeting_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    meeting_id: Mapped[str] = mapped_column(ForeignKey("meeting_handoffs.id", ondelete="CASCADE"))
+    account_summary: Mapped[str] = mapped_column(Text)
+    stakeholder_map: Mapped[list[object]] = mapped_column(JSONB, default=list)
+    likely_security_priorities: Mapped[list[object]] = mapped_column(JSONB, default=list)
+    suggested_questions: Mapped[list[object]] = mapped_column(JSONB, default=list)
+    risks: Mapped[list[object]] = mapped_column(JSONB, default=list)
+    source_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    generated_by: Mapped[str] = mapped_column(String(128), default="system")
+    idempotency_key: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    meeting: Mapped[MeetingHandoff] = relationship(back_populates="prep_packets")
+
+
+class MeetingFollowUpTask(Base):
+    __tablename__ = "meeting_follow_up_tasks"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_meeting_follow_up_tasks_idempotency_key"),
+        Index("ix_meeting_follow_up_tasks_meeting", "meeting_id"),
+        Index("ix_meeting_follow_up_tasks_status_due", "status", "due_at"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    meeting_id: Mapped[str] = mapped_column(ForeignKey("meeting_handoffs.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(512))
+    description: Mapped[str | None] = mapped_column(Text)
+    owner: Mapped[str | None] = mapped_column(String(128))
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(64), default="open")
+    crm_sync_status: Mapped[str] = mapped_column(String(64), default="pending")
+    provider_task_id: Mapped[str | None] = mapped_column(String(512))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    meeting: Mapped[MeetingHandoff] = relationship(back_populates="follow_up_tasks")
+
+
+class Sequence(Base):
+    __tablename__ = "sequences"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_sequences_idempotency_key"),
+        Index("ix_sequences_status_owner", "status", "owner_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    name: Mapped[str] = mapped_column(String(255))
+    owner_id: Mapped[str | None] = mapped_column(String(128))
+    channel: Mapped[str] = mapped_column(String(64), default="email")
+    status: Mapped[str] = mapped_column(String(64), default="active")
+    rate_limit_policy: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    idempotency_key: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    steps: Mapped[list["SequenceStep"]] = relationship(back_populates="sequence")
+    enrollments: Mapped[list["SequenceEnrollment"]] = relationship(back_populates="sequence")
+
+
+class SequenceStep(Base):
+    __tablename__ = "sequence_steps"
+    __table_args__ = (
+        UniqueConstraint("sequence_id", "step_order", name="uq_sequence_steps_order"),
+        Index("ix_sequence_steps_sequence_order", "sequence_id", "step_order"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    sequence_id: Mapped[str] = mapped_column(ForeignKey("sequences.id", ondelete="CASCADE"))
+    step_order: Mapped[int] = mapped_column(Integer)
+    channel: Mapped[str] = mapped_column(String(64), default="email")
+    delay_seconds: Mapped[int] = mapped_column(Integer, default=0)
+    subject_template: Mapped[str] = mapped_column(String(512))
+    body_template: Mapped[str] = mapped_column(Text)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+    sequence: Mapped[Sequence] = relationship(back_populates="steps")
+
+
+class SequenceEnrollment(Base):
+    __tablename__ = "sequence_enrollments"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_sequence_enrollments_idempotency_key"),
+        Index("ix_sequence_enrollments_status_next", "status", "next_step_at"),
+        Index("ix_sequence_enrollments_contact_status", "contact_id", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    sequence_id: Mapped[str] = mapped_column(ForeignKey("sequences.id", ondelete="CASCADE"))
+    crm_target_id: Mapped[str] = mapped_column(ForeignKey("crm_targets.id", ondelete="CASCADE"))
+    contact_id: Mapped[str] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"))
+    account_id: Mapped[str | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"))
+    status: Mapped[str] = mapped_column(String(64), default="active")
+    approval_actor: Mapped[str] = mapped_column(String(128))
+    approval_reason: Mapped[str] = mapped_column(Text)
+    current_step_order: Mapped[int] = mapped_column(Integer, default=1)
+    next_step_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pause_reason: Mapped[str | None] = mapped_column(Text)
+    policy_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    sequence: Mapped[Sequence] = relationship(back_populates="enrollments")
+
+
+class OutboundEmail(Base):
+    __tablename__ = "outbound_emails"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_outbound_emails_idempotency_key"),
+        Index("ix_outbound_emails_enrollment_status", "enrollment_id", "status"),
+        Index("ix_outbound_emails_sent", "channel", "sent_at"),
+        Index("ix_outbound_emails_to_email", "to_email"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    enrollment_id: Mapped[str] = mapped_column(
+        ForeignKey("sequence_enrollments.id", ondelete="CASCADE")
+    )
+    sequence_step_id: Mapped[str] = mapped_column(ForeignKey("sequence_steps.id"))
+    contact_id: Mapped[str] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"))
+    channel: Mapped[str] = mapped_column(String(64), default="email")
+    to_email: Mapped[str] = mapped_column(String(320))
+    from_email: Mapped[str] = mapped_column(String(320))
+    subject: Mapped[str] = mapped_column(String(512))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(64), default="pending")
+    provider_message_id: Mapped[str | None] = mapped_column(String(255))
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    retry_after_seconds: Mapped[int | None] = mapped_column(Integer)
+    scheduled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
+class InboundEmailEvent(Base):
+    __tablename__ = "inbound_email_events"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_inbound_email_events_idempotency_key"),
+        Index("ix_inbound_email_events_type_occurred", "event_type", "occurred_at"),
+        Index("ix_inbound_email_events_from_email", "from_email"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    enrollment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("sequence_enrollments.id", ondelete="SET NULL")
+    )
+    outbound_email_id: Mapped[str | None] = mapped_column(
+        ForeignKey("outbound_emails.id", ondelete="SET NULL")
+    )
+    event_type: Mapped[str] = mapped_column(String(64))
+    from_email: Mapped[str | None] = mapped_column(String(320))
+    to_email: Mapped[str | None] = mapped_column(String(320))
+    message_id: Mapped[str | None] = mapped_column(String(255))
+    provider_payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class SequenceSuppressionEvent(Base):
+    __tablename__ = "sequence_suppression_events"
+    __table_args__ = (
+        Index("ix_sequence_suppression_events_email", "email"),
+        Index("ix_sequence_suppression_events_enrollment", "enrollment_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    enrollment_id: Mapped[str | None] = mapped_column(
+        ForeignKey("sequence_enrollments.id", ondelete="SET NULL")
+    )
+    suppression_id: Mapped[str | None] = mapped_column(
+        ForeignKey("suppressions.id", ondelete="SET NULL")
+    )
+    email: Mapped[str | None] = mapped_column(String(320))
+    domain: Mapped[str | None] = mapped_column(String(255))
+    channel: Mapped[str] = mapped_column(String(64), default="email")
+    reason: Mapped[str] = mapped_column(String(255))
+    source_event_id: Mapped[str | None] = mapped_column(
+        ForeignKey("inbound_email_events.id", ondelete="SET NULL")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
 class Account(Base):
     __tablename__ = "accounts"
 

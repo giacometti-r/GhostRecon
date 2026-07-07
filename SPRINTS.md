@@ -2,9 +2,9 @@
 
 ## Current Stage
 
-Stage: Sprint 8 backend reporting and dashboard readiness complete; Sprint 9 Attio production integration and provider-neutral CRM export is next. The Python Dash dashboard UI is deferred until backend CRM export, sequencing, meeting handoff, hardening, and pilot-readiness workflows are complete.
+Stage: Sprint 11 Google Calendar meeting handoff complete; Sprint 12 hardening and pilot readiness is next. The Python Dash dashboard UI is deferred until backend CRM export, sequencing, meeting handoff, hardening, and pilot-readiness workflows are complete.
 
-The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, inert CRM targets awaiting export, and reporting-service dashboard read APIs with freshness/degraded metadata.
+The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, and persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, and meeting reporting read APIs.
 
 ## Done
 
@@ -96,6 +96,37 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Kept dashboard UI implementation deferred; documented Python Dash as the future console UI direction without adding Dash dependencies.
 - Added focused reporting tests for route contracts, metadata/freshness, cursor behavior, role projection, KPI catalog, and scoring numeric-coercion regression.
 
+### Sprint 9 - Attio Production Integration and Provider-Neutral CRM Export
+
+- Added review-gated, idempotent `CrmExportBatch` and `CrmExportItem` workflows behind the provider-neutral `CrmClient` boundary.
+- Added Attio object/list mapping for custom cyber events/security incidents and standard People/Companies, preserving GhostRecon IDs and source lineage.
+- Added CRM export start/detail/retry APIs through the gateway and `crm-service`, plus lifecycle outbox events for batch and item state.
+- Added stable identifier upserts, list insertion, retryable rate-limit handling, partial-failure state, and export status updates without sequencing side effects.
+- Added mocked Attio and route tests for export contracts, target eligibility, idempotent selection hashing, and provider rate-limit behavior.
+
+### Sprint 10 - Sequencing and Outreach Runtime
+
+- Added persisted `Sequence`, `SequenceStep`, `SequenceEnrollment`, `OutboundEmail`, `InboundEmailEvent`, and `SequenceSuppressionEvent` tables plus migration coverage.
+- Added sequence template, enrollment, list/detail, pause/resume/cancel, unsubscribe, and existing eligibility APIs through the gateway and `sequencing-service`.
+- Implemented separate outreach approval for enrollment; exported CRM targets do not imply outreach approval and CRM export never invokes sequencing.
+- Added stdlib-backed SMTP/IMAP adapter boundaries, Celery tasks for due-step processing and inbound polling, retry/backoff state, and per-domain/sender/channel rate-limit checks.
+- Re-evaluated verified email, lawful basis, do-not-contact, suppression, and current contact evidence before each send; suppression failures pause/suppress enrollment and preserve audit/outbox evidence.
+- Added lifecycle events for `sequence.enrolled`, `sequence.paused`, `sequence.completed`, `email.sent`, `reply.received`, `bounce.received`, and `unsubscribe.received`.
+- Added focused tests for sequence route contracts, model registration, policy gates, rate-limit blocking, inbound polling with fakes, worker registration, and event contracts.
+
+### Sprint 11 - Google Calendar Meeting Handoff
+
+- Added persisted `MeetingHandoff`, `MeetingPrepPacket`, and `MeetingFollowUpTask` tables plus migration coverage.
+- Added Google Calendar event create/cancel and free-busy support behind a fakeable calendar adapter, with service-account configuration for production.
+- Added meeting create/list/detail, prep-packet generation, outcome recording, cancel, CRM retry, and calendar availability APIs through the gateway and `meeting-handoff-service`.
+- Required exported/current CRM targets before meeting handoff and checked email suppressions before sending calendar invites.
+- Completed linked active sequence enrollments with `meeting_booked` state when a meeting is scheduled.
+- Generated AE/SE prep packets from canonical account, contact, signal, event, and incident state while keeping the old stateless helper compatible.
+- Synced meeting outcomes and follow-up tasks through provider-neutral `CrmClient` plans and recorded retryable/terminal CRM sync state.
+- Added `meeting.booked`, `meeting.prep_packet_generated`, `meeting.outcome_recorded`, `meeting.follow_up_task_created`, and `crm.synced` event coverage.
+- Added reporting-service meeting list/detail read APIs and meeting KPI catalog entries.
+- Updated service, architecture, operations, dashboard, Helm, and source-policy documentation for Google Calendar meeting handoff.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -105,28 +136,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
 ## Future Sprints
-
-### Sprint 9 - Attio Production Integration and Provider-Neutral CRM Export
-
-- Implement review-gated, idempotent `CrmExportBatch` and `CrmExportItem` workflows behind `CrmClient`.
-- Map custom Attio `cyber_events` and `security_incidents` objects plus standard People and Companies.
-- Configure separate typed lists for events, event participants, incidents, companies, and incident contacts.
-- Upsert People and Companies by stable identifiers before list insertion; preserve GhostRecon IDs and source lineage.
-- Add rate-limit queues, partial-failure recovery, reconciliation jobs, and mocked contract tests.
-
-Acceptance: only approved targets export; retries do not duplicate records or list entries; partial failures reconcile; exports never auto-enroll outreach.
-
-### Sprint 10 - Sequencing
-
-- Implement SMTP sending, IMAP reply detection, bounce processing, and unsubscribe ingestion.
-- Add per-domain and per-owner rate limits, templates, step scheduling, pause/resume, and independent approval gates.
-- Re-evaluate suppression and lawful basis immediately before every outbound action.
-
-### Sprint 11 - Meeting Handoff
-
-- Add a calendar integration adapter.
-- Generate AE/SE prep packets from canonical event, incident, account, and contact state.
-- Sync approved meeting outcomes and follow-up tasks through `CrmClient`.
 
 ### Sprint 12 - Hardening and Pilot
 

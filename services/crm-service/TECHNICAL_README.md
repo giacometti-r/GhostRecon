@@ -2,7 +2,7 @@
 
 ## Responsibilities
 
-- Expose provider-neutral `CrmClient` operations for schema validation, record upsert, relationship/list insertion, retries, and reconciliation.
+- Expose provider-neutral `CrmClient` operations for schema validation, record upsert, relationship/list insertion, retries, reconciliation, and meeting outcome/follow-up sync.
 - Implement Attio mapping for custom events/incidents and standard People/Companies.
 - Create dependency-ordered, idempotent `CrmExportBatch` and `CrmExportItem` state.
 - Re-check approval, source reuse, suppression, retention, and optimistic version before executing each item.
@@ -40,6 +40,7 @@ All mutations require authenticated actor, `Idempotency-Key`, approved selection
 - `crm_export.item_succeeded`
 - `crm_export.item_failed`
 - `crm_export.batch_completed`
+- `crm.synced` for meeting handoff sync results
 
 ## Failure Modes
 

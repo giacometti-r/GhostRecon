@@ -30,9 +30,29 @@ class Settings(BaseSettings):
     attio_incidents_list_api_slug: str = "ghostrecon-security-incidents"
     attio_companies_list_api_slug: str = "ghostrecon-companies"
     attio_incident_contacts_list_api_slug: str = "ghostrecon-incident-contacts"
+    attio_meetings_list_api_slug: str = "ghostrecon-meetings"
 
     email_verifier_url: AnyHttpUrl = Field(default="http://email-verifier:8080")
+    google_calendar_id: str | None = None
+    google_client_email: str | None = None
+    google_private_key: str | None = None
+    google_delegated_subject: str | None = None
+    google_calendar_send_updates: bool = True
     smtp_from_address: str = "prospecting@example.com"
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True
+    imap_host: str | None = None
+    imap_port: int = 993
+    imap_username: str | None = None
+    imap_password: str | None = None
+    imap_mailbox: str = "INBOX"
+    sequence_domain_daily_limit: int = 50
+    sequence_sender_daily_limit: int = 200
+    sequence_channel_daily_limit: int = 500
+    sequence_retry_after_seconds: int = 300
     crawl_user_agent: str = "GhostReconBot/0.1 (+https://example.com/bot)"
     crawl_respect_robots: bool = True
     crawl_max_pages_per_domain: int = 40

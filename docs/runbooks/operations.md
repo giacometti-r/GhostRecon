@@ -1,6 +1,6 @@
 # Operations Runbook
 
-This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, and the remaining intelligence-first target state for later sprints.
+This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, and the remaining intelligence-first target state for later sprints.
 
 ## Health and Freshness
 
@@ -9,6 +9,7 @@ This runbook covers the implemented platform baseline, Sprint 3 source registry 
 - `/metrics`: Prometheus metrics.
 - `GET /v1/intelligence/sources/health`: source checkpoint, last-success, lag, error, freshness, enabled/degraded, and policy state for registered sources.
 - Dashboard responses must expose `generated_at`, data-window end, and stale/degraded markers.
+- Meeting reporting responses expose meeting watermarks and CRM sync failure state; process health does not prove Google Calendar or Attio meeting sync is current.
 
 Do not equate process health with data freshness. A service can be live while its sources or reporting projections are stale.
 
@@ -96,6 +97,65 @@ Attio webhook intake is a compatibility path, not primary acquisition.
 1. Check the `email-verifier` service and its Redis cache dependency.
 2. Retry batch jobs after DNS/network recovery with capped backoff.
 3. Leave candidates pending; do not promote ambiguous or unverifiable addresses.
+
+### Sequence SMTP Outage
+
+1. Check `sequencing-service` logs, `GHOSTRECON_SMTP_*` configuration, provider status, and network reachability.
+2. Pause only affected sender/channel queues when failures are provider-specific.
+3. Leave failed outbound emails in retryable state with retry metadata; do not create replacement enrollments.
+4. After recovery, process due sequence steps and confirm provider message IDs are recorded once per outbound email.
+
+### Sequence IMAP Outage
+
+1. Check `GHOSTRECON_IMAP_*` configuration, mailbox permissions, and provider status.
+2. Continue suppression-before-send checks; do not disable safety gates because reply processing is delayed.
+3. Poll missed messages after recovery and verify replies, bounces, and unsubscribes are idempotently recorded.
+4. Keep dashboard state degraded until inbound polling catches up.
+
+### Bounce Spike
+
+1. Pause affected sender, domain, or sequence enrollments based on the bounce pattern.
+2. Inspect recent `InboundEmailEvent` and `OutboundEmail` rows for provider message IDs, domains, and templates.
+3. Verify email verification evidence and source lineage before resuming.
+4. Audit any resumed enrollment with the reason for recovery.
+
+### Unsubscribe or Suppression-Before-Send Failure
+
+1. Confirm the unsubscribe created an active suppression row and `SequenceSuppressionEvent` linkage.
+2. Suppress or pause active enrollments for the address/domain; never retry sends for suppressed contacts.
+3. Re-run due-step processing only after suppression reconciliation is complete.
+4. Preserve inbound event payload metadata but do not store prohibited personal data beyond the suppression scope.
+
+### Google Calendar Auth Failure
+
+1. Check `meeting-handoff-service` logs for token errors from `oauth2.googleapis.com`.
+2. Confirm `GHOSTRECON_GOOGLE_CALENDAR_ID`, `GHOSTRECON_GOOGLE_CLIENT_EMAIL`, `GHOSTRECON_GOOGLE_PRIVATE_KEY`, and optional `GHOSTRECON_GOOGLE_DELEGATED_SUBJECT`.
+3. Verify the service account has calendar access or Workspace domain-wide delegation for the delegated subject.
+4. Do not retry by creating duplicate meetings manually; use the same meeting idempotency key once credentials are corrected.
+5. Keep meeting reporting degraded until booking and availability checks succeed again.
+
+### Google Calendar Rate Limit or Provider Outage
+
+1. Inspect the provider response and honor any `Retry-After` value.
+2. Pause only meeting creation/cancel operations that target the affected calendar.
+3. Do not bypass suppression checks or create replacement meetings in another calendar without an audit reason.
+4. Retry failed booking or cancellation with the original idempotency key after the provider window clears.
+5. Confirm `provider_event_id`, `provider_html_link`, and attendees are stored once per meeting.
+
+### Meeting CRM Sync Failure
+
+1. Inspect the `MeetingHandoff.crm_sync_status`, `crm_sync_error`, and affected `MeetingFollowUpTask` rows.
+2. Confirm Attio credentials and meeting object/list mappings behind `CrmClient`.
+3. Retry with `POST /v1/meetings/{meeting_id}/retry-sync` or the `ghostrecon.retry_meeting_crm_sync` task; do not recreate the meeting.
+4. Preserve outcome notes and follow-up task IDs; retries must upsert by `ghostrecon_meeting:{meeting_id}`.
+5. Surface unresolved failures in reporting until `crm_sync_status=succeeded`.
+
+### Stale or Missing Meeting Prep Packet
+
+1. Confirm the meeting exists and references the expected exported CRM target, account, contact, and optional sequence enrollment.
+2. Regenerate with `POST /v1/meetings/{meeting_id}/prep-packet` using an idempotency key.
+3. Check account/contact/signal freshness and any linked event or incident evidence before using the packet externally.
+4. If canonical state changed materially after packet generation, create a new packet rather than editing the old source snapshot.
 
 ### Suppression or Governance Errors
 

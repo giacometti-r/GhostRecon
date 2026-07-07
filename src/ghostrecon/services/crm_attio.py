@@ -33,6 +33,18 @@ class CrmExportPlan:
 
 
 @dataclass(frozen=True)
+class CrmSyncPlan:
+    sync_type: str
+    target_id: str
+    provider_object: str
+    stable_match_key: str
+    matching_attribute: str
+    values: Mapping[str, Any]
+    list_api_slug: str | None = None
+    list_entry_values: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class CrmExportResult:
     provider_record_id: str
     provider_list_id: str | None = None
@@ -42,6 +54,9 @@ class CrmExportResult:
 
 class CrmClient(Protocol):
     async def export(self, plan: CrmExportPlan) -> CrmExportResult:
+        ...
+
+    async def sync(self, plan: CrmSyncPlan) -> CrmExportResult:
         ...
 
 
@@ -98,6 +113,12 @@ class AttioCrmClient:
         self.http = AttioClient(settings)
 
     async def export(self, plan: CrmExportPlan) -> CrmExportResult:
+        return await self._upsert_plan(plan)
+
+    async def sync(self, plan: CrmSyncPlan) -> CrmExportResult:
+        return await self._upsert_plan(plan)
+
+    async def _upsert_plan(self, plan: CrmExportPlan | CrmSyncPlan) -> CrmExportResult:
         record = await self.http.request(
             "PUT",
             f"/v2/objects/{plan.provider_object}/records",
