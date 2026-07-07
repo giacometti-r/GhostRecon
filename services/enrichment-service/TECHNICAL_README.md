@@ -107,7 +107,7 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
   - Inputs: `payload` (EmailCandidatePersistRequest), `idempotency_key` (str)
   - Output: Returns `list[EmailCandidateRecord]`.
   - Why: `EnrichmentWorkflowRepository.persist_email_candidates` provides the src/ghostrecon/services/enrichment_workflows.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
-  - How: It calls `generate_email_candidates`, `self._resolve_email_contact_context`, `ValueError`, `self._email_patterns`, `EmailCandidateRecord`, `add`, `self._enqueue_event`, `records.append`; uses database session queries, database writes, idempotency lookup, outbox/event emission, policy validation.
+  - How: It calls `generate_email_candidates`, `self._resolve_email_contact_context`, `ValueError`, `self._email_patterns`, `EmailCandidateRecord`, `add`, `self._enqueue_event`, `records.append`; uses database session queries, database writes, idempotency lookup, outbox/event emission, policy validation. Persisted records retain pattern and verification workflow fields, not pre-verification confidence.
   - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
   - Failures: raises `ValueError`.
 - `async verify_email_candidates(payload: EmailVerifyBatchRequest, verifier: EmailVerifierClient) -> list[EmailCandidateRecord]`
@@ -163,7 +163,7 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
   - Inputs: `record` (EmailCandidateRecord)
   - Output: Returns `None`; all useful effects occur through persistence, provider calls, mutation, or raised errors.
   - Why: `EnrichmentWorkflowRepository._upsert_email_pattern` is a private helper that keeps the module-level workflow readable and isolates repeated implementation detail.
-  - How: It calls `lower`, `add`, `scalar`, `max`, `OrganizationEmailPattern`, `where`, `rsplit`, `select`; uses database session queries, database writes, idempotency lookup, parsing/normalization.
+  - How: It calls `lower`, `add`, `scalar`, `max`, `OrganizationEmailPattern`, `where`, `rsplit`, `select`; uses database session queries, database writes, idempotency lookup, parsing/normalization. Pattern confidence is derived from verified outcomes rather than copied from generated candidates.
   - Side effects: mutates database state; runs asynchronously and may await database or provider operations.
   - Failures: may return `None` for not-found or unavailable data.
 - `async _request_review(*, candidate_type: str, target_type: str, target_id: str, origin_type: str | None, origin_id: str | None, source_definition_id: str | None, source_item_ids: list[object], reason_code: str, reason: str, evidence_summary: dict[str, object], policy_snapshot: dict[str, object]) -> ReviewCandidate`

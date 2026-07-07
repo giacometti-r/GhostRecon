@@ -1061,7 +1061,6 @@ class EmailCandidateRecord(Base):
     contact_id: Mapped[str | None] = mapped_column(ForeignKey("contacts.id", ondelete="CASCADE"))
     email: Mapped[str] = mapped_column(String(320), index=True)
     pattern: Mapped[str] = mapped_column(String(64))
-    confidence: Mapped[int] = mapped_column(Integer)
     verification_status: Mapped[str] = mapped_column(String(64), default="pending")
     verification_payload: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     verification_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

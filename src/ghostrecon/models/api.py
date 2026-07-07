@@ -538,7 +538,6 @@ class EmailCandidateRecordOut(BaseModel):
     contact_id: str | None = None
     email: EmailStr
     pattern: str
-    confidence: int = Field(ge=0, le=100)
     verification_status: EmailVerificationStatus
     verification_payload: dict[str, object] = {}
     verification_checked_at: datetime | None = None
@@ -709,7 +708,6 @@ class EmailCandidateRequest(BaseModel):
 class EmailCandidate(BaseModel):
     email: EmailStr
     pattern: str
-    confidence: float = Field(ge=0, le=1)
 
 
 class ScoreRequest(BaseModel):

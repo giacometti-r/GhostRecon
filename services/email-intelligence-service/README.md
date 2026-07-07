@@ -34,6 +34,12 @@ Generates likely business email candidates, persists candidate records, and reco
 - contact enrichment candidates.
 - email verification provider payloads.
 
+## Contract Notes
+
+- `POST /v1/email/candidates` returns generated permutations with `email` and `pattern`.
+- Candidate quality is determined only after verification; generated and persisted email candidates do not expose pre-verification confidence.
+- `OrganizationEmailPattern` learning remains verifier-backed and is updated from verified candidate outcomes.
+
 ## Operations
 
 - Treat idempotency headers as required where route handlers declare `Idempotency-Key`.

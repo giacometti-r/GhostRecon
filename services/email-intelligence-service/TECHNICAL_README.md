@@ -25,6 +25,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/enri
 - Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
 - Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
 - Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
+- Generated email candidates carry `email` and `pattern` only; verifier status and payload are the supported quality signal after generation.
 
 ## Function Reference
 
@@ -37,7 +38,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/enri
 - Inputs: `full_name` (str), `domain` (str), `known_patterns` (list[str] | None)
 - Output: Returns `list[EmailCandidate]`.
 - Why: `generate_email_candidates` provides the src/ghostrecon/services/email_candidates.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
-- How: It calls `_name_parts`, `candidates.values`, `pattern.format`, `_pattern_confidence`, `EmailCandidate`, `re.sub`, `local.lower`, `domain.lower`; uses parsing/normalization.
+- How: It calls `_name_parts`, `candidates.values`, `pattern.format`, `EmailCandidate`, `re.sub`, `local.lower`, `domain.lower`; uses parsing/normalization and deterministic generation order.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 
@@ -47,15 +48,6 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/enri
 - Output: Returns `list[str]`.
 - Why: `_name_parts` is a private helper that keeps the module-level workflow readable and isolates repeated implementation detail.
 - How: It calls `unicodedata.normalize`, `decode`, `part.lower`, `normalized.encode`, `re.findall`; uses parsing/normalization.
-- Side effects: No durable side effects; work is limited to computation, validation, or projection.
-- Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
-
-##### `_pattern_confidence(pattern: str, sep: str) -> float`
-
-- Inputs: `pattern` (str), `sep` (str)
-- Output: Returns `float`.
-- Why: `_pattern_confidence` is a private helper that keeps the module-level workflow readable and isolates repeated implementation detail.
-- How: It performs direct field checks, simple transformations, or object construction in-process.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 

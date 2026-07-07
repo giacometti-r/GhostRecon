@@ -406,7 +406,6 @@ class EnrichmentWorkflowRepository:
                 contact_id=contact.id,
                 email=str(generated_candidate.email),
                 pattern=generated_candidate.pattern,
-                confidence=round(generated_candidate.confidence * 100),
                 verification_status="pending",
                 source_definition_id=lineage["source_definition_id"],
                 source_item_ids=lineage["source_item_ids"],
@@ -430,7 +429,6 @@ class EnrichmentWorkflowRepository:
                         "contact_id": contact.id,
                         "email": record.email,
                         "pattern": record.pattern,
-                        "confidence": record.confidence,
                     },
                     idempotency_key=f"email.candidate_generated:{record.id}",
                 )
@@ -634,14 +632,14 @@ class EnrichmentWorkflowRepository:
         )
         if existing is not None:
             existing.sample_size += 1
-            existing.confidence = max(existing.confidence, record.confidence)
+            existing.confidence = max(existing.confidence, 100)
             existing.verified_at = record.verification_checked_at
             return
         self.session.add(
             OrganizationEmailPattern(
                 domain=domain,
                 pattern=record.pattern,
-                confidence=record.confidence,
+                confidence=100,
                 verified_at=record.verification_checked_at,
                 idempotency_key=f"email-pattern:{domain}:{record.pattern}",
             )
@@ -776,7 +774,6 @@ def email_candidate_to_api(candidate: EmailCandidateRecord) -> dict[str, object]
         "contact_id": candidate.contact_id,
         "email": candidate.email,
         "pattern": candidate.pattern,
-        "confidence": candidate.confidence,
         "verification_status": candidate.verification_status,
         "verification_payload": candidate.verification_payload or {},
         "verification_checked_at": candidate.verification_checked_at,

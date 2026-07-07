@@ -3,7 +3,7 @@ import unicodedata
 
 from ghostrecon.models.api import EmailCandidate
 
-_SEPARATORS = ("", ".", "_", "-")
+_SEPARATORS = (".", "", "_", "-")
 
 
 def generate_email_candidates(
@@ -39,26 +39,13 @@ def generate_email_candidates(
             local = re.sub(r"[^a-z0-9._-]", "", local.lower()).strip("._-")
             if not local:
                 continue
-            confidence = _pattern_confidence(pattern, sep)
             email = f"{local}@{domain.lower().strip()}"
-            candidates[email] = EmailCandidate(email=email, pattern=pattern, confidence=confidence)
+            candidates[email] = EmailCandidate(email=email, pattern=pattern)
 
-    return sorted(candidates.values(), key=lambda item: item.confidence, reverse=True)
+    return list(candidates.values())
 
 
 def _name_parts(full_name: str) -> list[str]:
     normalized = unicodedata.normalize("NFKD", full_name)
     ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
     return [part.lower() for part in re.findall(r"[a-zA-Z]+", ascii_name)]
-
-
-def _pattern_confidence(pattern: str, sep: str) -> float:
-    if pattern == "{first}{sep}{last}" and sep == ".":
-        return 0.78
-    if pattern == "{first_initial}{last}":
-        return 0.68
-    if pattern == "{first}{last_initial}":
-        return 0.58
-    if pattern in {"{first}", "{last}{first_initial}"}:
-        return 0.4
-    return 0.5

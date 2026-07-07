@@ -70,7 +70,6 @@ def _email_candidate(status: str = "pending") -> SimpleNamespace:
         contact_id="contact-1",
         email="ada.lovelace@example.com",
         pattern="{first}{sep}{last}",
-        confidence=78,
         verification_status=status,
         verification_payload={},
         verification_checked_at=now if status != "pending" else None,
