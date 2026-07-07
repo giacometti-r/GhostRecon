@@ -14,6 +14,9 @@ from ghostrecon.models.api import (
     ContactEnrichmentCreate,
     ContactEnrichmentList,
     ContactEnrichmentOut,
+    CrmExportBatchOut,
+    CrmExportCreateRequest,
+    CrmExportRetryRequest,
     CrmTargetList,
     CyberEventList,
     CyberEventOut,
@@ -57,6 +60,11 @@ from ghostrecon.models.api import (
     WatchTargetList,
     WatchTargetOut,
     WatchTargetPatch,
+)
+from ghostrecon.services.crm_exports import (
+    get_crm_export_batch,
+    retry_failed_crm_export_items,
+    start_crm_export,
 )
 from ghostrecon.services.email_candidates import generate_email_candidates
 from ghostrecon.services.enrichment import enrich_domain
@@ -556,6 +564,60 @@ async def crm_sync_account(payload: dict[str, object]) -> dict[str, object]:
         payload=payload,
     )
     return {"status": "queued", "event": event.model_dump(mode="json")}
+
+
+@gateway_router.post("/v1/crm/exports", response_model=CrmExportBatchOut)
+@crm_router.post("/v1/crm/exports", response_model=CrmExportBatchOut)
+async def crm_export_start(
+    request: CrmExportCreateRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> CrmExportBatchOut:
+    try:
+        return await start_crm_export(
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/crm/exports/{batch_id}", response_model=CrmExportBatchOut)
+@crm_router.get("/v1/crm/exports/{batch_id}", response_model=CrmExportBatchOut)
+async def crm_export_detail(batch_id: str) -> CrmExportBatchOut:
+    batch = await get_crm_export_batch(batch_id, settings=get_settings())
+    if batch is None:
+        raise HTTPException(status_code=404, detail="crm export batch not found")
+    return batch
+
+
+@gateway_router.post(
+    "/v1/crm/exports/{batch_id}/retry-failed", response_model=CrmExportBatchOut
+)
+@crm_router.post(
+    "/v1/crm/exports/{batch_id}/retry-failed", response_model=CrmExportBatchOut
+)
+async def crm_export_retry_failed(
+    batch_id: str,
+    request: CrmExportRetryRequest | None = None,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> CrmExportBatchOut:
+    try:
+        batch = await retry_failed_crm_export_items(
+            batch_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if batch is None:
+        raise HTTPException(status_code=404, detail="crm export batch not found")
+    return batch
 
 
 @ingestion_router.post("/webhooks/attio", status_code=202)

@@ -16,7 +16,7 @@ Implemented baseline:
 - `POST /v1/crm/sync/account`
 - Shared `AttioClient` in `ghostrecon.services.crm_attio`
 
-Target export interfaces:
+Implemented Sprint 9 export interfaces:
 
 - `POST /v1/crm/exports`
 - `GET /v1/crm/exports/{batch_id}`

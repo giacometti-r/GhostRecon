@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 8 backend reporting and dashboard readiness complete; the Python Dash dashboard UI follow-up is next, with provider-neutral CRM export still sequenced after dashboard review readiness.
+Stage: Sprint 8 backend reporting and dashboard readiness complete; Sprint 9 Attio production integration and provider-neutral CRM export is next. The Python Dash dashboard UI is deferred until backend CRM export, sequencing, meeting handoff, hardening, and pilot-readiness workflows are complete.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, inert CRM targets awaiting export, and reporting-service dashboard read APIs with freshness/degraded metadata.
 
@@ -106,16 +106,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 
 ## Future Sprints
 
-### Sprint 8B - Python Dash Intelligence Dashboard UI
-
-- Build the dashboard in the existing `console-service` using Python Dash; do not create another dashboard service.
-- Back dashboard views with the Sprint 8 `reporting-service` read APIs and freshness metadata.
-- Implement event map/calendar/table, participant details, incident feed, watchlists, enrichment/review queues, export batches, reconciliation failures, and source health.
-- Add role-based view/action permissions and auditable bulk review.
-- Keep Dash callbacks read-only against reporting APIs; write actions must call owning feature services through the gateway.
-
-Acceptance: dashboard filters/actions meet `docs/specifications/dashboard.md`; stale and degraded services are visible; bulk decisions remain idempotent and auditable.
-
 ### Sprint 9 - Attio Production Integration and Provider-Neutral CRM Export
 
 - Implement review-gated, idempotent `CrmExportBatch` and `CrmExportItem` workflows behind `CrmClient`.
@@ -143,3 +133,13 @@ Acceptance: only approved targets export; retries do not duplicate records or li
 - Add load tests, backup/restore drills, SLO alerts, stale-source alerts, runbooks, PodDisruptionBudgets, and external-secret templates.
 - Exercise source outages, rate limits, partial CRM failures, reconciliation, replay, retention, and disaster recovery.
 - Run a pilot with one territory or segment and document production-readiness signoff.
+
+### Sprint 13 - Python Dash Intelligence Dashboard UI
+
+- Build the dashboard in the existing `console-service` using Python Dash; do not create another dashboard service.
+- Back dashboard views with the completed reporting, CRM export, sequencing, meeting handoff, source health, and hardening-state read APIs.
+- Implement event map/calendar/table, participant details, incident feed, watchlists, enrichment/review queues, CRM export batches, reconciliation failures, sequence state, meeting handoff, and source health.
+- Add role-based view/action permissions and auditable bulk review/export/retry controls.
+- Keep Dash callbacks read-only against reporting APIs; write actions must call owning feature services through the gateway.
+
+Acceptance: dashboard filters/actions meet `docs/specifications/dashboard.md`; stale and degraded services are visible; bulk decisions and export retries remain idempotent and auditable; dashboard actions do not bypass backend authorization.

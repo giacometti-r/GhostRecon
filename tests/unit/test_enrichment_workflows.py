@@ -71,12 +71,16 @@ def test_sprint_6_models_and_lineage_columns_are_registered() -> None:
     assert "candidate_scores" in tables
     assert "review_decisions" in tables
     assert "crm_targets" in tables
+    assert "crm_export_batches" in tables
+    assert "crm_export_items" in tables
     assert "source_definition_id" in tables["contacts"].columns
     assert "source_item_ids" in tables["email_candidates"].columns
     assert "idempotency_key" in tables["entity_resolution_cases"].columns
     assert "policy_snapshot_hash" in tables["review_candidates"].columns
     assert "version" in tables["security_incidents"].columns
     assert "idempotency_key" in tables["suppressions"].columns
+    assert "selection_hash" in tables["crm_export_batches"].columns
+    assert "provider_record_id" in tables["crm_export_items"].columns
 
 
 def test_review_candidate_shape_has_minimal_queue_fields() -> None:

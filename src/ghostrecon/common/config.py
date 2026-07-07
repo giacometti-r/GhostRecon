@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     attio_webhook_secret: str | None = None
     attio_read_rps: int = 80
     attio_write_rps: int = 20
+    attio_events_list_api_slug: str = "ghostrecon-cyber-events"
+    attio_event_participants_list_api_slug: str = "ghostrecon-event-participants"
+    attio_incidents_list_api_slug: str = "ghostrecon-security-incidents"
+    attio_companies_list_api_slug: str = "ghostrecon-companies"
+    attio_incident_contacts_list_api_slug: str = "ghostrecon-incident-contacts"
 
     email_verifier_url: AnyHttpUrl = Field(default="http://email-verifier:8080")
     smtp_from_address: str = "prospecting@example.com"

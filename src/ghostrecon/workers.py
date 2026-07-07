@@ -10,6 +10,7 @@ from ghostrecon.models.api import (
     EntityResolutionCreate,
     SuppressionCheckRequest,
 )
+from ghostrecon.services.crm_exports import process_crm_export_batch
 from ghostrecon.services.email_candidates import generate_email_candidates
 from ghostrecon.services.enrichment_workflows import (
     contact_candidate_to_model,
@@ -133,3 +134,9 @@ def fetch_incident_source_task(source_definition_id: str) -> dict[str, object]:
 @celery_app.task(name="ghostrecon.parse_pending_incident_items")
 def parse_pending_incident_items_task(source_definition_id: str | None = None) -> dict[str, object]:
     return asyncio.run(parse_pending_incident_items(source_definition_id, settings))
+
+
+@celery_app.task(name="ghostrecon.process_crm_export_batch")
+def process_crm_export_batch_task(batch_id: str) -> dict[str, object]:
+    result = asyncio.run(process_crm_export_batch(batch_id, settings=settings))
+    return result.model_dump(mode="json")

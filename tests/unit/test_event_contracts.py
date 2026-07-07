@@ -27,3 +27,10 @@ def test_sprint_7_events_are_contract_values() -> None:
     assert EventName.REVIEW_REJECTED.value == "review.rejected"
     assert EventName.CRM_TARGET_CREATED.value == "crm_target.created"
     assert EventName.SUPPRESSION_CREATED.value == "suppression.created"
+
+
+def test_sprint_9_crm_export_events_are_contract_values() -> None:
+    assert EventName.CRM_EXPORT_BATCH_STARTED.value == "crm_export.batch_started"
+    assert EventName.CRM_EXPORT_ITEM_SUCCEEDED.value == "crm_export.item_succeeded"
+    assert EventName.CRM_EXPORT_ITEM_FAILED.value == "crm_export.item_failed"
+    assert EventName.CRM_EXPORT_BATCH_COMPLETED.value == "crm_export.batch_completed"
