@@ -1,48 +1,106 @@
+
 # email-intelligence-service Technical README
 
-## Responsibilities
+## Architecture
 
-- Validate that the originating public contact is eligible for email candidate generation.
-- Generate candidates from configured and organization-learned business patterns.
-- Call `umuterturk/email-verifier` for syntax, domain, MX, disposable, role-based, alias, and supported ambiguity checks.
-- Persist confidence, verification status/payload, source policy/version, and event/incident lineage.
-- Publish `email.candidate_generated` and `email.verified` events without implying CRM or outreach approval.
+Email Intelligence Service is implemented by `src/ghostrecon/services/email_candidates.py`, `src/ghostrecon/services/email_verifier.py`. It is exposed through `email_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
-## Interfaces
+Related/shared modules referenced by this service: `src/ghostrecon/services/enrichment_workflows.py`.
 
-- `POST /v1/email/candidates`
-- `POST /v1/email/candidates/persist`
-- `POST /v1/email/verify`
-- `POST /v1/email/verify-batch`
-- Worker task: `ghostrecon.generate_email_candidates`
-- Worker task: `ghostrecon.persist_email_candidates`
-- Worker task: `ghostrecon.verify_email_candidates_batch`
+## Route Surface
 
-Target requests require `contact_id`, origin type/ID, source-item IDs, reuse eligibility, role scope, and policy version. The service re-reads current policy rather than trusting a caller-supplied boolean alone.
+| Exposure | Method | Path | Handler |
+| --- | --- | --- | --- |
+| service | `POST` | `/v1/email/candidates` | `email_candidates` |
+| service | `POST` | `/v1/email/candidates/persist` | `email_persist_candidates` |
+| service | `POST` | `/v1/email/verify-batch` | `email_verify_batch` |
+| service | `POST` | `/v1/email/verify` | `email_verify` |
+| gateway | `POST` | `/v1/email/candidates/persist` | `email_persist_candidates` |
+| gateway | `POST` | `/v1/email/verify-batch` | `email_verify_batch` |
 
-## Data Rules
+## Data Flow And Contracts
 
-- Lead origins include `cyber_event` and `security_incident`.
-- Event participant candidates require explicit reusable-source scope.
-- Incident contacts must be public business roles in security, IT, risk, or communications.
-- Breached-data provenance, private addresses, and personal/non-business addresses are rejected.
-- Candidate dedupe keys include normalized email and canonical contact/account.
-- Organization email patterns are learned only from verified candidates and remain evidence for future candidate ordering.
-- Verification is evidence, not consent, lawful basis, CRM approval, or outreach approval.
+- Inputs enter through the route handlers, workers, or helper functions documented below and are validated by Pydantic request models or explicit helper checks.
+- Persistence uses the shared database/session utilities in the implementation modules; serializers convert ORM rows into API models or JSON-safe dictionaries.
+- Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
+- Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
+- Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
 
-## Failure Modes
+## Function Reference
 
-- Verifier unavailable/DNS timeout: keep candidate in `pending_verification` and retry within budget.
-- Source policy changed: mark eligibility invalid and stop downstream promotion.
-- Catch-all/ambiguous response: require review; do not label verified.
-- Missing lineage: reject request with typed policy error.
-- Conflicting contact identity: route to entity-resolution review.
+### `src/ghostrecon/services/email_candidates.py`
 
-## Testing
+#### Module Functions
 
-- Pattern generation and organization-pattern version tests.
-- Verifier adapter and batch tests.
-- Candidate dedupe and stale-verification tests.
-- Participant permission and incident-role-scope tests.
-- Breached/private-address rejection tests.
-- Policy invalidation and no-CRM/no-sequence-side-effect tests.
+##### `generate_email_candidates(full_name: str, domain: str, known_patterns: list[str] | None = None) -> list[EmailCandidate]`
+
+- Inputs: `full_name` (str), `domain` (str), `known_patterns` (list[str] | None)
+- Output: Returns `list[EmailCandidate]`.
+- Why: `generate_email_candidates` provides the src/ghostrecon/services/email_candidates.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- How: It calls `_name_parts`, `candidates.values`, `pattern.format`, `_pattern_confidence`, `EmailCandidate`, `re.sub`, `local.lower`, `domain.lower`; uses parsing/normalization.
+- Side effects: No durable side effects; work is limited to computation, validation, or projection.
+- Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
+
+##### `_name_parts(full_name: str) -> list[str]`
+
+- Inputs: `full_name` (str)
+- Output: Returns `list[str]`.
+- Why: `_name_parts` is a private helper that keeps the module-level workflow readable and isolates repeated implementation detail.
+- How: It calls `unicodedata.normalize`, `decode`, `part.lower`, `normalized.encode`, `re.findall`; uses parsing/normalization.
+- Side effects: No durable side effects; work is limited to computation, validation, or projection.
+- Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
+
+##### `_pattern_confidence(pattern: str, sep: str) -> float`
+
+- Inputs: `pattern` (str), `sep` (str)
+- Output: Returns `float`.
+- Why: `_pattern_confidence` is a private helper that keeps the module-level workflow readable and isolates repeated implementation detail.
+- How: It performs direct field checks, simple transformations, or object construction in-process.
+- Side effects: No durable side effects; work is limited to computation, validation, or projection.
+- Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
+
+### `src/ghostrecon/services/email_verifier.py`
+
+#### Classes
+
+##### `EmailVerifierClient`
+
+`EmailVerifierClient` is a data container or runtime class based on `object`. Fields: none declared at class level.
+
+- `__init__(settings: Settings) -> None`
+  - Inputs: `settings` (Settings)
+  - Output: Returns `None`; all useful effects occur through persistence, provider calls, mutation, or raised errors.
+  - Why: Initializes EmailVerifierClient with the provider, settings, or client state needed by later calls.
+  - How: It calls `rstrip`.
+  - Side effects: No durable side effects; work is limited to computation, validation, or projection.
+  - Failures: may return `None` for not-found or unavailable data.
+- `async validate(email: EmailStr) -> dict[str, Any]`
+  - Inputs: `email` (EmailStr)
+  - Output: Returns `dict[str, Any]`.
+  - Why: `EmailVerifierClient.validate` provides the src/ghostrecon/services/email_verifier.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - How: It calls `httpx.AsyncClient`, `response.raise_for_status`, `response.json`, `client.post`; uses HTTP/provider IO.
+  - Side effects: calls external HTTP, SMTP, IMAP, DNS, or provider APIs; runs asynchronously and may await database or provider operations.
+  - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
+- `async validate_batch(emails: Sequence[EmailStr]) -> dict[str, Any]`
+  - Inputs: `emails` (Sequence[EmailStr])
+  - Output: Returns `dict[str, Any]`.
+  - Why: `EmailVerifierClient.validate_batch` provides the src/ghostrecon/services/email_verifier.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - How: It calls `httpx.AsyncClient`, `response.raise_for_status`, `response.json`, `client.post`; uses HTTP/provider IO.
+  - Side effects: calls external HTTP, SMTP, IMAP, DNS, or provider APIs; runs asynchronously and may await database or provider operations.
+  - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
+
+## Shared Module Notes
+
+- `src/ghostrecon/services/enrichment_workflows.py` is shared or mounted behavior used by this service; its exhaustive function reference lives in the service that owns that module in the mapping, or in `gateway-service` for route/factory code.
+
+## Failure Handling
+
+- Validation helpers raise `ValueError` or provider-specific runtime errors before database changes where possible.
+- Route handlers translate expected service exceptions to HTTP status codes such as `400`, `401`, `404`, `409`, `502`, or `503`.
+- Provider adapters keep provider-specific payload parsing isolated from workflow state changes.
+- Retry-oriented functions preserve existing records and append status/failure metadata instead of deleting historical evidence.
+
+## Tests
+
+- `tests/unit/test_email_candidates.py`
+- `tests/unit/test_enrichment_workflows.py`

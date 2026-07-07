@@ -1,35 +1,67 @@
+
 # enrichment-service
 
 ## Purpose
 
-`enrichment-service` resolves companies/domains and collects permitted public business context for event and incident intelligence. It uses bounded company-page crawling, DNS/MX metadata, and public cybersecurity feeds such as CISA KEV and NVD without requiring paid enrichment APIs.
-
-For incident work, contact discovery is limited to public security, IT, risk, and communications roles. Event participant contact enrichment is allowed only when the originating source explicitly permits reuse. Breached personal data is prohibited.
+Resolves organizations and contact candidates, enriches domains, verifies candidate email records, and performs bounded company-page crawling. It owns entity resolution, contact enrichment, domain enrichment, and crawler policy and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
 - Entrypoint: `uvicorn ghostrecon.service_apps.runtime:app --host 0.0.0.0 --port 8080`
 - Required env: `GHOSTRECON_SERVICE_NAME=enrichment-service`
-- Crawler env: `GHOSTRECON_CRAWL_USER_AGENT`, `GHOSTRECON_CRAWL_RESPECT_ROBOTS`
+- App construction: `ghostrecon.service_apps.factory.build_app` selects the router by service name.
+- Health, middleware, and common settings come from the shared base app.
+
+## Implementation Modules
+
+- `src/ghostrecon/services/enrichment.py`
+- `src/ghostrecon/services/enrichment_workflows.py`
+- `src/ghostrecon/services/company_crawler.py`
+
+## APIs And Jobs
+
+- `POST /v1/enrichment/domain` via `domain_enrichment` (service router).
+- `POST /v1/enrichment/entity-resolutions` via `enrichment_create_entity_resolution` (service router).
+- `GET /v1/enrichment/entity-resolutions` via `enrichment_entity_resolutions` (service router).
+- `POST /v1/enrichment/contact-candidates` via `enrichment_create_contact_candidate` (service router).
+- `GET /v1/enrichment/contact-candidates` via `enrichment_contact_candidates` (service router).
+- `POST /v1/enrichment/entity-resolutions` via `enrichment_create_entity_resolution` (gateway).
+- `GET /v1/enrichment/entity-resolutions` via `enrichment_entity_resolutions` (gateway).
+- `POST /v1/enrichment/contact-candidates` via `enrichment_create_contact_candidate` (gateway).
+- `GET /v1/enrichment/contact-candidates` via `enrichment_contact_candidates` (gateway).
+- Worker/helper entrypoint: `ghostrecon.crawl_company_domain`.
+- Worker/helper entrypoint: `ghostrecon.resolve_entity`.
+- Worker/helper entrypoint: `ghostrecon.enrich_contact_candidate`.
 
 ## Dependencies
 
-- Canonical event/participant/incident/company candidates and source-policy state.
-- Public allowlisted company websites and DNS.
-- CISA KEV feed and NVD CVE API.
-- Governance service for reuse, retention, and eligibility policy.
-- PostgreSQL/Redis for job, lineage, resolution, and retry state.
+- DNS resolver.
+- public HTTP titles.
+- database sessions.
+- review queue records.
 
 ## Operations
 
-- Keep crawling allowlisted, robots-aware, depth/page/rate limited, and source-attributed.
-- Do not bypass authentication, CAPTCHAs, paywalls, or platform restrictions.
-- Fail closed on participant permission ambiguity and reject breached-data input.
-- Preserve entity-resolution alternatives and require review for ambiguous company/domain matches.
-- Monitor crawl failure, resolution yield/corrections, pages fetched, contact eligibility, and policy-block rate.
+- Treat idempotency headers as required where route handlers declare `Idempotency-Key`.
+- Preserve policy, lineage, and audit fields when backfilling or replaying data.
+- Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
+- Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+
+## Failure Modes
+
+- Invalid or conflicting workflow requests are surfaced as `409` or validation errors by route handlers.
+- Missing records are surfaced as `404` on detail/action endpoints.
+- Provider outages should degrade or retry according to the service implementation rather than bypassing policy gates.
+- Database or outbox failures leave the operation incomplete and should be retried with the same idempotency key when available.
 
 ## Local Run
 
 ```bash
-GHOSTRECON_SERVICE_NAME=enrichment-service uvicorn ghostrecon.service_apps.runtime:app --reload
+GHOSTRECON_SERVICE_NAME=enrichment-service uvicorn ghostrecon.service_apps.runtime:app --reload --port 8080
+```
+
+## Verification
+
+```bash
+pytest tests/unit/test_enrichment_routes.py tests/unit/test_enrichment_workflows.py
 ```

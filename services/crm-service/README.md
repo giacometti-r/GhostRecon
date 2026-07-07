@@ -1,44 +1,62 @@
+
 # crm-service
 
 ## Purpose
 
-`crm-service` exports analyst-approved GhostRecon intelligence targets to Attio first while preserving a provider-neutral `CrmClient` boundary. Attio is authoritative for approved sales records; GhostRecon remains authoritative for intelligence lineage, evidence, scoring, governance, review, and export audit state.
-
-CRM ingestion/webhooks remain supported compatibility flows. They are not the primary acquisition path.
+Plans and executes CRM exports, maps GhostRecon targets to Attio objects, tracks batch/item status, and retries failed export items. It owns CRM export batches, Attio adapter behavior, and CRM sync events and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
 - Entrypoint: `uvicorn ghostrecon.service_apps.runtime:app --host 0.0.0.0 --port 8080`
 - Required env: `GHOSTRECON_SERVICE_NAME=crm-service`
-- Attio env: `GHOSTRECON_ATTIO_BASE_URL`, `GHOSTRECON_ATTIO_ACCESS_TOKEN`
+- App construction: `ghostrecon.service_apps.factory.build_app` selects the router by service name.
+- Health, middleware, and common settings come from the shared base app.
 
-## Attio Target Mapping
+## Implementation Modules
 
-- Custom `cyber_events` and `security_incidents` objects.
-- Standard People and Companies records.
-- Separate typed lists for events, event participants, incidents, affected companies, and incident contacts.
-- Stable-identifier record upsert before list-entry creation.
-- GhostRecon IDs and source-lineage summaries retained for reconciliation.
+- `src/ghostrecon/services/crm_exports.py`
+- `src/ghostrecon/services/crm_attio.py`
 
-Exact mapping and lifecycle rules are in `docs/specifications/intelligence-pipeline.md`.
+## APIs And Jobs
+
+- `POST /v1/crm/sync/account` via `crm_sync_account` (service router).
+- `POST /v1/crm/exports` via `crm_export_start` (service router).
+- `GET /v1/crm/exports/{batch_id}` via `crm_export_detail` (service router).
+- `POST /v1/crm/exports/{batch_id}/retry-failed` via `crm_export_retry_failed` (service router).
+- `POST /v1/crm/exports` via `crm_export_start` (gateway).
+- `GET /v1/crm/exports/{batch_id}` via `crm_export_detail` (gateway).
+- `POST /v1/crm/exports/{batch_id}/retry-failed` via `crm_export_retry_failed` (gateway).
+- Worker/helper entrypoint: `process_crm_export_batch`.
 
 ## Dependencies
 
-- Governance/review state for current export eligibility.
-- Attio REST API.
-- PostgreSQL for `CrmExportBatch`, `CrmExportItem`, provider IDs, sync state, and audit events.
-- Redis/Celery for dependency-ordered writes, retries, rate limits, and reconciliation.
+- CRM targets.
+- Attio API token/workspace.
+- outbox events.
+- idempotency keys.
 
 ## Operations
 
-- Export only current analyst-approved typed targets.
-- Treat every object/list write as idempotent and audit every attempt/outcome.
-- Honor provider rate limits and isolate partial failures per item.
-- Reconcile GhostRecon IDs, stable match keys, provider record IDs, and list-entry IDs.
-- Never invoke sequence enrollment from an export.
+- Treat idempotency headers as required where route handlers declare `Idempotency-Key`.
+- Preserve policy, lineage, and audit fields when backfilling or replaying data.
+- Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
+- Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+
+## Failure Modes
+
+- Invalid or conflicting workflow requests are surfaced as `409` or validation errors by route handlers.
+- Missing records are surfaced as `404` on detail/action endpoints.
+- Provider outages should degrade or retry according to the service implementation rather than bypassing policy gates.
+- Database or outbox failures leave the operation incomplete and should be retried with the same idempotency key when available.
 
 ## Local Run
 
 ```bash
-GHOSTRECON_SERVICE_NAME=crm-service uvicorn ghostrecon.service_apps.runtime:app --reload
+GHOSTRECON_SERVICE_NAME=crm-service uvicorn ghostrecon.service_apps.runtime:app --reload --port 8080
+```
+
+## Verification
+
+```bash
+pytest tests/unit/test_crm_exports.py
 ```

@@ -1,55 +1,70 @@
+
 # console-service
 
 ## Purpose
 
-`console-service` is the single internal UI boundary for intelligence dashboards, analyst review, approvals, watchlists, suppressions, replay, CRM export status, reconciliation, and health. The intelligence roadmap extends this service; it does not introduce another dashboard service.
-
-The console renders reporting read models and invokes owning feature-service APIs for mutations. It does not own canonical intelligence, policy, scoring, CRM export, sequencing, or meeting logic.
-
-Sprint 12 implements the dashboard with Python Dash hosted from this service boundary. Dash callbacks consume reporting APIs for reads and gateway/owning service APIs for mutations.
+Serves the Dash operator console, queries reporting/gateway APIs, renders pages, and dispatches governed operator actions. It owns Dash app shell, layouts, reusable components, API client, and action callbacks and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
 - Entrypoint: `uvicorn ghostrecon.service_apps.runtime:app --host 0.0.0.0 --port 8080`
 - Required env: `GHOSTRECON_SERVICE_NAME=console-service`
-- Current UI: Python Dash mounted at `/` plus existing FastAPI review APIs under `/v1/*`.
-- Required gateway URL: `GHOSTRECON_GATEWAY_BASE_URL`, default `http://gateway-service:8080`.
-- Optional timeout: `GHOSTRECON_CONSOLE_REQUEST_TIMEOUT_SECONDS`, default `10`.
+- App construction: `ghostrecon.service_apps.factory.build_app` selects the router by service name.
+- Health, middleware, and common settings come from the shared base app.
+- Console-specific behavior: the Dash app is mounted at `/` only when this service name is selected.
 
-## Dashboard Sections
+## Implementation Modules
 
-- Global event map, calendar, table, detail, and published participant roles.
-- Global incident feed, evidence timeline, affected-company resolution, and watchlist state.
-- Company/domain/incident/event-series/topic watchlists and follow-on coverage.
-- Contact-enrichment and analyst-review queues with implemented approve/reject and bounded bulk-decision APIs.
-- Typed inert CRM targets, future export batches, partial failures, and reconciliation.
-- Sequence state, meeting handoff, prep packets, outcomes, and CRM sync state.
-- Source freshness and degraded-service indicators; source operations remain read-only until owning APIs exist.
+- `src/ghostrecon/console/app.py`
+- `src/ghostrecon/console/api.py`
+- `src/ghostrecon/console/components.py`
+- `src/ghostrecon/console/layouts.py`
+- `src/ghostrecon/console/callbacks.py`
+- Related/shared: `src/ghostrecon/service_apps/factory.py`
 
-Detailed filters, actions, permissions, and acceptance criteria are in `docs/specifications/dashboard.md`.
+## APIs And Jobs
+
+- `GET /v1/review/candidates` via `review_candidates` (service router).
+- `POST /v1/review/candidates/{candidate_id}/approve` via `review_candidate_approve` (service router).
+- `POST /v1/review/candidates/{candidate_id}/reject` via `review_candidate_reject` (service router).
+- `POST /v1/review/candidates/bulk-decision` via `review_candidates_bulk_decision` (service router).
+- `GET /v1/review/crm-targets` via `review_crm_targets` (service router).
+- `GET /v1/review/candidates` via `review_candidates` (gateway).
+- `POST /v1/review/candidates/{candidate_id}/approve` via `review_candidate_approve` (gateway).
+- `POST /v1/review/candidates/{candidate_id}/reject` via `review_candidate_reject` (gateway).
+- `POST /v1/review/candidates/bulk-decision` via `review_candidates_bulk_decision` (gateway).
+- `GET /v1/review/crm-targets` via `review_crm_targets` (gateway).
 
 ## Dependencies
 
-- Reporting service for dashboard projections, KPIs, and freshness metadata.
-- Event/incident intelligence services for detail and watchlist mutations.
-- Governance service for approvals, rejection, suppressions, retention, incident decisions, CRM targets, and policy decisions.
-- CRM service for approved export batch actions and reconciliation.
-- Sequencing and meeting-handoff services for owner-scoped workflow controls.
-- Gateway authentication/authorization and Redis/Celery operation state.
+- Dash.
+- DashIconify.
+- httpx.
+- gateway/reporting APIs.
+- dashboard role headers.
 
 ## Operations
 
-- Restrict the console to authenticated internal operators.
-- Enforce permissions server-side and audit every decision, policy change, replay, and export action.
-- Display projection/source freshness independently from process health.
-- Block unsafe mutations when policy/evidence is stale or a feature service is degraded.
-- Sanitize all source-derived text and never render unlicensed full articles or prohibited personal data.
-- Keep `/healthz`, `/readyz`, `/metrics`, `/docs`, and `/v1/*` routes available before the Dash catch-all route.
+- Treat idempotency headers as required where route handlers declare `Idempotency-Key`.
+- Preserve policy, lineage, and audit fields when backfilling or replaying data.
+- Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
+- Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+
+## Failure Modes
+
+- Invalid or conflicting workflow requests are surfaced as `409` or validation errors by route handlers.
+- Missing records are surfaced as `404` on detail/action endpoints.
+- Provider outages should degrade or retry according to the service implementation rather than bypassing policy gates.
+- Database or outbox failures leave the operation incomplete and should be retried with the same idempotency key when available.
 
 ## Local Run
 
 ```bash
-GHOSTRECON_SERVICE_NAME=console-service \
-GHOSTRECON_GATEWAY_BASE_URL=http://localhost:8080 \
-uvicorn ghostrecon.service_apps.runtime:app --reload --port 8082
+GHOSTRECON_SERVICE_NAME=console-service uvicorn ghostrecon.service_apps.runtime:app --reload --port 8080
+```
+
+## Verification
+
+```bash
+pytest tests/unit/test_console_dashboard.py
 ```

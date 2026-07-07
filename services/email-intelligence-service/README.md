@@ -1,34 +1,61 @@
+
 # email-intelligence-service
 
 ## Purpose
 
-`email-intelligence-service` generates likely business-email candidates for already eligible public business contacts and validates them through the open-source `umuterturk/email-verifier` service. It supports event/incident intelligence without using paid contact databases.
-
-Source permission and role scope are prerequisites. The service cannot make an unknown/prohibited participant reusable, turn breached data into a candidate, approve CRM export, or authorize outreach.
+Generates likely business email candidates, persists candidate records, and records verification outcomes for review and scoring. It owns email pattern generation, verifier client behavior, and email candidate workflows and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
 - Entrypoint: `uvicorn ghostrecon.service_apps.runtime:app --host 0.0.0.0 --port 8080`
 - Required env: `GHOSTRECON_SERVICE_NAME=email-intelligence-service`
-- Verifier env: `GHOSTRECON_EMAIL_VERIFIER_URL`
+- App construction: `ghostrecon.service_apps.factory.build_app` selects the router by service name.
+- Health, middleware, and common settings come from the shared base app.
+
+## Implementation Modules
+
+- `src/ghostrecon/services/email_candidates.py`
+- `src/ghostrecon/services/email_verifier.py`
+- Related/shared: `src/ghostrecon/services/enrichment_workflows.py`
+
+## APIs And Jobs
+
+- `POST /v1/email/candidates` via `email_candidates` (service router).
+- `POST /v1/email/candidates/persist` via `email_persist_candidates` (service router).
+- `POST /v1/email/verify-batch` via `email_verify_batch` (service router).
+- `POST /v1/email/verify` via `email_verify` (service router).
+- `POST /v1/email/candidates/persist` via `email_persist_candidates` (gateway).
+- `POST /v1/email/verify-batch` via `email_verify_batch` (gateway).
+- Worker/helper entrypoint: `verify_email_candidates`.
 
 ## Dependencies
 
-- Eligible canonical contacts with source/event/incident lineage and policy version.
-- `email-verifier` sidecar/service and its Redis domain cache.
-- PostgreSQL for candidates, verification payloads, confidence, and lineage.
-- Governance service for current reuse, suppression, retention, and review state.
+- known domain patterns.
+- contact enrichment candidates.
+- email verification provider payloads.
 
 ## Operations
 
-- Generated addresses remain candidates until verified and reviewed as policy requires.
-- Reject requests without eligible source lineage or permitted public-business role scope.
-- Treat role-based, disposable, catch-all, ambiguous, and stale results according to versioned policy.
-- Re-check policy before promotion; a later source-policy change invalidates eligibility.
-- Monitor verifier health, DNS failure, candidate yield, verification outcomes, policy blocks, and stale candidates.
+- Treat idempotency headers as required where route handlers declare `Idempotency-Key`.
+- Preserve policy, lineage, and audit fields when backfilling or replaying data.
+- Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
+- Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+
+## Failure Modes
+
+- Invalid or conflicting workflow requests are surfaced as `409` or validation errors by route handlers.
+- Missing records are surfaced as `404` on detail/action endpoints.
+- Provider outages should degrade or retry according to the service implementation rather than bypassing policy gates.
+- Database or outbox failures leave the operation incomplete and should be retried with the same idempotency key when available.
 
 ## Local Run
 
 ```bash
-GHOSTRECON_SERVICE_NAME=email-intelligence-service uvicorn ghostrecon.service_apps.runtime:app --reload
+GHOSTRECON_SERVICE_NAME=email-intelligence-service uvicorn ghostrecon.service_apps.runtime:app --reload --port 8080
+```
+
+## Verification
+
+```bash
+pytest tests/unit/test_email_candidates.py tests/unit/test_enrichment_workflows.py
 ```

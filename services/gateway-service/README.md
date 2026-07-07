@@ -1,51 +1,117 @@
+
 # gateway-service
 
 ## Purpose
 
-`gateway-service` is the authenticated API entrypoint for GhostRecon. It exposes a stable route map for intelligence search, watchlists, scoring, governance, review, reporting, CRM exports, and existing workflow services while keeping business logic in feature services.
+Mounts the aggregate API surface and forwards gateway routes to the same implementation functions used by service-specific routers. It owns route aggregation, service map, HTTP error translation, and FastAPI app construction and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
 - Entrypoint: `uvicorn ghostrecon.service_apps.runtime:app --host 0.0.0.0 --port 8080`
 - Required env: `GHOSTRECON_SERVICE_NAME=gateway-service`
-- Health: `/healthz`
-- Readiness: `/readyz`
-- Metrics: `/metrics`
+- App construction: `ghostrecon.service_apps.factory.build_app` selects the router by service name.
+- Health, middleware, and common settings come from the shared base app.
 
-## Route Families
+## Implementation Modules
 
-- `/v1/intelligence/events`, `/participants`, `/incidents`, `/watch-targets`, and `/sources/health`.
-- `/v1/scoring/candidates`.
-- `/v1/suppressions`, `/v1/suppressions/evaluate`, and `/v1/governance/incidents/*`.
-- `/v1/review/candidates`, review approve/reject/bulk-decision routes, and `/v1/review/crm-targets`.
-- `/v1/crm/exports`.
-- `/v1/reporting/*` and `/v1/kpis/catalog`.
-- Existing enrichment, email, scoring, governance, sequencing, and handoff APIs.
+- `src/ghostrecon/service_apps/routers.py`
+- `src/ghostrecon/service_apps/factory.py`
+- `src/ghostrecon/service_apps/entrypoint.py`
+- `src/ghostrecon/service_apps/runtime.py`
+
+## APIs And Jobs
+
+- `GET /v1/service-map` via `service_map` (gateway).
+- `GET /v1/intelligence/sources/health` via `source_health` (gateway).
+- `GET /v1/reporting/events` via `reporting_events` (gateway).
+- `GET /v1/reporting/events/{event_id}` via `reporting_event_detail` (gateway).
+- `GET /v1/reporting/incidents` via `reporting_incidents` (gateway).
+- `GET /v1/reporting/incidents/{incident_id}` via `reporting_incident_detail` (gateway).
+- `GET /v1/reporting/watch-targets` via `reporting_watch_targets` (gateway).
+- `GET /v1/reporting/review-queue` via `reporting_review_queue` (gateway).
+- `GET /v1/reporting/crm-targets` via `reporting_crm_targets` (gateway).
+- `GET /v1/reporting/meetings` via `reporting_meetings` (gateway).
+- `GET /v1/reporting/meetings/{meeting_id}` via `reporting_meeting_detail` (gateway).
+- `GET /v1/reporting/source-health` via `reporting_source_health` (gateway).
+- `GET /v1/reporting/kpis/catalog` via `reporting_kpi_catalog` (gateway).
+- `GET /v1/intelligence/events` via `intelligence_events` (gateway).
+- `GET /v1/intelligence/events/{event_id}` via `intelligence_event_detail` (gateway).
+- `GET /v1/intelligence/events/{event_id}/participants` via `intelligence_event_participants` (gateway).
+- `GET /v1/intelligence/participants` via `intelligence_participants` (gateway).
+- `GET /v1/intelligence/incidents` via `intelligence_incidents` (gateway).
+- `GET /v1/intelligence/incidents/{incident_id}` via `intelligence_incident_detail` (gateway).
+- `GET /v1/intelligence/watch-targets` via `intelligence_watch_targets` (gateway).
+- `POST /v1/intelligence/watch-targets` via `intelligence_create_watch_target` (gateway).
+- `PATCH /v1/intelligence/watch-targets/{watch_target_id}` via `intelligence_patch_watch_target` (gateway).
+- `POST /v1/intelligence/incidents/{incident_id}/promote-to-watchlist` via `intelligence_promote_incident_to_watchlist` (gateway).
+- `POST /v1/crm/exports` via `crm_export_start` (gateway).
+- `GET /v1/crm/exports/{batch_id}` via `crm_export_detail` (gateway).
+- `POST /v1/crm/exports/{batch_id}/retry-failed` via `crm_export_retry_failed` (gateway).
+- `POST /v1/enrichment/entity-resolutions` via `enrichment_create_entity_resolution` (gateway).
+- `GET /v1/enrichment/entity-resolutions` via `enrichment_entity_resolutions` (gateway).
+- `POST /v1/enrichment/contact-candidates` via `enrichment_create_contact_candidate` (gateway).
+- `GET /v1/enrichment/contact-candidates` via `enrichment_contact_candidates` (gateway).
+- `POST /v1/email/candidates/persist` via `email_persist_candidates` (gateway).
+- `POST /v1/email/verify-batch` via `email_verify_batch` (gateway).
+- `POST /v1/scoring/candidates` via `candidate_score` (gateway).
+- `POST /v1/sequences/evaluate` via `sequence_eligibility` (gateway).
+- `POST /v1/sequences` via `sequence_create` (gateway).
+- `POST /v1/sequences/enrollments` via `sequence_enrollment_create` (gateway).
+- `GET /v1/sequences/enrollments` via `sequence_enrollment_list` (gateway).
+- `GET /v1/sequences/enrollments/{enrollment_id}` via `sequence_enrollment_detail` (gateway).
+- `POST /v1/sequences/enrollments/{enrollment_id}/pause` via `sequence_enrollment_pause` (gateway).
+- `POST /v1/sequences/enrollments/{enrollment_id}/resume` via `sequence_enrollment_resume` (gateway).
+- `POST /v1/sequences/enrollments/{enrollment_id}/cancel` via `sequence_enrollment_cancel` (gateway).
+- `POST /v1/sequences/unsubscribe` via `sequence_unsubscribe` (gateway).
+- `POST /v1/calendar/availability` via `calendar_availability` (gateway).
+- `POST /v1/meetings` via `meeting_create` (gateway).
+- `GET /v1/meetings` via `meeting_list` (gateway).
+- `GET /v1/meetings/{meeting_id}` via `meeting_detail` (gateway).
+- `POST /v1/meetings/{meeting_id}/prep-packet` via `meeting_generate_prep_packet` (gateway).
+- `POST /v1/meetings/{meeting_id}/outcome` via `meeting_record_outcome` (gateway).
+- `POST /v1/meetings/{meeting_id}/cancel` via `meeting_cancel` (gateway).
+- `POST /v1/meetings/{meeting_id}/retry-sync` via `meeting_retry_sync` (gateway).
+- `POST /v1/meetings/prep-packet` via `prep_packet` (gateway).
+- `POST /v1/suppressions` via `suppression_create` (gateway).
+- `POST /v1/suppressions/evaluate` via `suppression_check` (gateway).
+- `GET /v1/review/candidates` via `review_candidates` (gateway).
+- `POST /v1/review/candidates/{candidate_id}/approve` via `review_candidate_approve` (gateway).
+- `POST /v1/review/candidates/{candidate_id}/reject` via `review_candidate_reject` (gateway).
+- `POST /v1/review/candidates/bulk-decision` via `review_candidates_bulk_decision` (gateway).
+- `GET /v1/review/crm-targets` via `review_crm_targets` (gateway).
+- `POST /v1/governance/incidents/{incident_id}/corroborate` via `governance_corroborate_incident` (gateway).
+- `POST /v1/governance/incidents/{incident_id}/reject` via `governance_reject_incident` (gateway).
+- `GET /v1/kpis/catalog` via `kpi_catalog` (gateway).
 
 ## Dependencies
 
-- Identity/role provider and trusted ingress/session boundary.
-- Internal service discovery for feature and reporting services.
-- Redis for distributed rate limits and short-lived request/operation state.
-- PostgreSQL only where gateway-owned audit/auth state is explicitly required.
+- all service modules.
+- FastAPI.
+- common Settings.
+- service_name routing.
 
 ## Operations
 
-- Terminate TLS at ingress/service mesh and enforce authentication before non-health routes.
-- Authorize route/action scopes server-side; feature services re-authorize mutations.
-- Preserve correlation and idempotency headers across downstream calls.
-- Apply source/provider-aware request limits without hiding downstream `Retry-After`.
-- Monitor 5xx, p95 latency, auth failures, policy denials, request size, and downstream timeouts.
+- Treat idempotency headers as required where route handlers declare `Idempotency-Key`.
+- Preserve policy, lineage, and audit fields when backfilling or replaying data.
+- Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
+- Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+
+## Failure Modes
+
+- Invalid or conflicting workflow requests are surfaced as `409` or validation errors by route handlers.
+- Missing records are surfaced as `404` on detail/action endpoints.
+- Provider outages should degrade or retry according to the service implementation rather than bypassing policy gates.
+- Database or outbox failures leave the operation incomplete and should be retried with the same idempotency key when available.
 
 ## Local Run
 
 ```bash
-GHOSTRECON_SERVICE_NAME=gateway-service uvicorn ghostrecon.service_apps.runtime:app --reload
+GHOSTRECON_SERVICE_NAME=gateway-service uvicorn ghostrecon.service_apps.runtime:app --reload --port 8080
 ```
 
 ## Verification
 
 ```bash
-pytest tests/unit/test_enrichment_routes.py
-python scripts/smoke_import.py
+pytest tests/unit/test_event_routes.py tests/unit/test_incident_routes.py tests/unit/test_reporting_routes.py tests/unit/test_enrichment_routes.py
 ```

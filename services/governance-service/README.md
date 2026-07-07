@@ -1,51 +1,72 @@
+
 # governance-service
 
 ## Purpose
 
-`governance-service` owns source-reuse policy, incident corroboration decisions, suppression, lawful-basis metadata, retention, approval/rejection auditability, and inert CRM-target creation. It is the fail-closed policy boundary for contact enrichment, CRM export, and every outbound action.
-
-Sprint 7 review approval creates a `CrmTarget` with `export_status=not_exported`. CRM export and outreach approval are separate decisions. Neither is implied by event/incident discovery.
+Enforces suppression and review decisions, creates CRM targets from approved candidates, and records incident corroboration or rejection decisions. It owns policy gates, suppressions, review decisions, CRM target creation, and incident governance and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
 - Entrypoint: `uvicorn ghostrecon.service_apps.runtime:app --host 0.0.0.0 --port 8080`
 - Required env: `GHOSTRECON_SERVICE_NAME=governance-service`
+- App construction: `ghostrecon.service_apps.factory.build_app` selects the router by service name.
+- Health, middleware, and common settings come from the shared base app.
+
+## Implementation Modules
+
+- `src/ghostrecon/services/governance.py`
+
+## APIs And Jobs
+
+- `POST /v1/suppressions` via `suppression_create` (service router).
+- `POST /v1/suppressions/evaluate` via `suppression_check` (service router).
+- `GET /v1/review/candidates` via `review_candidates` (service router).
+- `POST /v1/review/candidates/{candidate_id}/approve` via `review_candidate_approve` (service router).
+- `POST /v1/review/candidates/{candidate_id}/reject` via `review_candidate_reject` (service router).
+- `POST /v1/review/candidates/bulk-decision` via `review_candidates_bulk_decision` (service router).
+- `GET /v1/review/crm-targets` via `review_crm_targets` (service router).
+- `POST /v1/governance/incidents/{incident_id}/corroborate` via `governance_corroborate_incident` (service router).
+- `POST /v1/governance/incidents/{incident_id}/reject` via `governance_reject_incident` (service router).
+- `POST /v1/suppressions` via `suppression_create` (gateway).
+- `POST /v1/suppressions/evaluate` via `suppression_check` (gateway).
+- `GET /v1/review/candidates` via `review_candidates` (gateway).
+- `POST /v1/review/candidates/{candidate_id}/approve` via `review_candidate_approve` (gateway).
+- `POST /v1/review/candidates/{candidate_id}/reject` via `review_candidate_reject` (gateway).
+- `POST /v1/review/candidates/bulk-decision` via `review_candidates_bulk_decision` (gateway).
+- `GET /v1/review/crm-targets` via `review_crm_targets` (gateway).
+- `POST /v1/governance/incidents/{incident_id}/corroborate` via `governance_corroborate_incident` (gateway).
+- `POST /v1/governance/incidents/{incident_id}/reject` via `governance_reject_incident` (gateway).
 
 ## Dependencies
 
-- PostgreSQL source-policy, evidence, suppression, retention, review-decision, CRM-target, and audit tables.
-- Event/incident intelligence services for source lineage and current canonical state.
-- Console service for authenticated review workflows.
-- CRM and sequencing services for enforcement at side-effect time.
+- review candidates.
+- suppressions.
+- CRM targets.
+- security incidents.
+- outbox events.
 
 ## Operations
 
-- Fail closed if reuse, corroboration, suppression, retention, lawful-basis, or approval state cannot be read.
-- Require evidence and scope before setting participant reuse to `allowed`.
-- Audit every approval, rejection, analyst corroboration, false-positive incident rejection, policy change, replay, suppression, and retention action.
-- Invalidate eligibility when source policy, canonical identity, evidence, suppression, or material target data changes.
-- Monitor blocked actions, policy-review expiry, approval age, suppression misses, replay count, and audit failures.
+- Treat idempotency headers as required where route handlers declare `Idempotency-Key`.
+- Preserve policy, lineage, and audit fields when backfilling or replaying data.
+- Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
+- Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
 
-## APIs
+## Failure Modes
 
-- `POST /v1/suppressions`
-- `POST /v1/suppressions/evaluate`
-- `GET /v1/review/candidates`
-- `GET /v1/review/crm-targets`
-- `POST /v1/review/candidates/{candidate_id}/approve`
-- `POST /v1/review/candidates/{candidate_id}/reject`
-- `POST /v1/review/candidates/bulk-decision`
-- `POST /v1/governance/incidents/{incident_id}/corroborate`
-- `POST /v1/governance/incidents/{incident_id}/reject`
+- Invalid or conflicting workflow requests are surfaced as `409` or validation errors by route handlers.
+- Missing records are surfaced as `404` on detail/action endpoints.
+- Provider outages should degrade or retry according to the service implementation rather than bypassing policy gates.
+- Database or outbox failures leave the operation incomplete and should be retried with the same idempotency key when available.
 
 ## Local Run
 
 ```bash
-GHOSTRECON_SERVICE_NAME=governance-service uvicorn ghostrecon.service_apps.runtime:app --reload
+GHOSTRECON_SERVICE_NAME=governance-service uvicorn ghostrecon.service_apps.runtime:app --reload --port 8080
 ```
 
 ## Verification
 
 ```bash
-pytest tests/unit/test_governance.py tests/unit/test_enrichment_routes.py
+pytest tests/unit/test_governance.py
 ```

@@ -1,44 +1,74 @@
+
 # meeting-handoff-service
 
 ## Purpose
 
-`meeting-handoff-service` creates Google Calendar meetings, AE/SE prep packets, meeting outcomes, and follow-up handoff artifacts from canonical account, contact, signal, CRM target, sequence, event, and incident state.
+Schedules qualified meetings, generates prep packets, records outcomes, creates follow-up tasks, and synchronizes meeting state to CRM. It owns meeting lifecycle, calendar adapters, prep packets, CRM sync, and follow-up tasks and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
 - Entrypoint: `uvicorn ghostrecon.service_apps.runtime:app --host 0.0.0.0 --port 8080`
 - Required env: `GHOSTRECON_SERVICE_NAME=meeting-handoff-service`
-- Google env: `GHOSTRECON_GOOGLE_CALENDAR_ID`, `GHOSTRECON_GOOGLE_CLIENT_EMAIL`, `GHOSTRECON_GOOGLE_PRIVATE_KEY`, optional `GHOSTRECON_GOOGLE_DELEGATED_SUBJECT`, and `GHOSTRECON_GOOGLE_CALENDAR_SEND_UPDATES`.
-- Local runs without Google credentials use the fake calendar adapter. Staging/prod should provide service-account credentials and calendar access.
+- App construction: `ghostrecon.service_apps.factory.build_app` selects the router by service name.
+- Health, middleware, and common settings come from the shared base app.
+
+## Implementation Modules
+
+- `src/ghostrecon/services/meeting.py`
+- `src/ghostrecon/services/calendar_adapters.py`
+
+## APIs And Jobs
+
+- `POST /v1/calendar/availability` via `calendar_availability` (service router).
+- `POST /v1/meetings` via `meeting_create` (service router).
+- `GET /v1/meetings` via `meeting_list` (service router).
+- `GET /v1/meetings/{meeting_id}` via `meeting_detail` (service router).
+- `POST /v1/meetings/{meeting_id}/prep-packet` via `meeting_generate_prep_packet` (service router).
+- `POST /v1/meetings/{meeting_id}/outcome` via `meeting_record_outcome` (service router).
+- `POST /v1/meetings/{meeting_id}/cancel` via `meeting_cancel` (service router).
+- `POST /v1/meetings/{meeting_id}/retry-sync` via `meeting_retry_sync` (service router).
+- `POST /v1/meetings/prep-packet` via `prep_packet` (service router).
+- `POST /v1/calendar/availability` via `calendar_availability` (gateway).
+- `POST /v1/meetings` via `meeting_create` (gateway).
+- `GET /v1/meetings` via `meeting_list` (gateway).
+- `GET /v1/meetings/{meeting_id}` via `meeting_detail` (gateway).
+- `POST /v1/meetings/{meeting_id}/prep-packet` via `meeting_generate_prep_packet` (gateway).
+- `POST /v1/meetings/{meeting_id}/outcome` via `meeting_record_outcome` (gateway).
+- `POST /v1/meetings/{meeting_id}/cancel` via `meeting_cancel` (gateway).
+- `POST /v1/meetings/{meeting_id}/retry-sync` via `meeting_retry_sync` (gateway).
+- `POST /v1/meetings/prep-packet` via `prep_packet` (gateway).
+- Worker/helper entrypoint: `retry_meeting_crm_sync`.
 
 ## Dependencies
 
-- CRM service for account/opportunity data.
-- Google Calendar API for availability, event creation, and cancellation.
-- Reporting service for meeting KPIs.
-- Attio/`CrmClient` for meeting outcome and follow-up task sync.
+- CRM targets.
+- sequence enrollments.
+- calendar provider.
+- CRM provider.
+- outbox events.
 
 ## Operations
 
-- Generate packets quickly after meeting booked events.
-- Keep source lineage so AE/SE users can validate claims.
-- Monitor Google auth failures, Calendar API rate limits, meeting-to-packet latency, packet generation failures, and CRM sync failures.
-- Retry failed CRM handoff sync through `POST /v1/meetings/{meeting_id}/retry-sync` or the `ghostrecon.retry_meeting_crm_sync` task.
+- Treat idempotency headers as required where route handlers declare `Idempotency-Key`.
+- Preserve policy, lineage, and audit fields when backfilling or replaying data.
+- Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
+- Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
 
-## Interfaces
+## Failure Modes
 
-- `POST /v1/calendar/availability`
-- `POST /v1/meetings`
-- `GET /v1/meetings`
-- `GET /v1/meetings/{meeting_id}`
-- `POST /v1/meetings/{meeting_id}/prep-packet`
-- `POST /v1/meetings/{meeting_id}/outcome`
-- `POST /v1/meetings/{meeting_id}/cancel`
-- `POST /v1/meetings/{meeting_id}/retry-sync`
-- `POST /v1/meetings/prep-packet` for stateless compatibility only.
+- Invalid or conflicting workflow requests are surfaced as `409` or validation errors by route handlers.
+- Missing records are surfaced as `404` on detail/action endpoints.
+- Provider outages should degrade or retry according to the service implementation rather than bypassing policy gates.
+- Database or outbox failures leave the operation incomplete and should be retried with the same idempotency key when available.
 
 ## Local Run
 
 ```bash
-GHOSTRECON_SERVICE_NAME=meeting-handoff-service uvicorn ghostrecon.service_apps.runtime:app --reload
+GHOSTRECON_SERVICE_NAME=meeting-handoff-service uvicorn ghostrecon.service_apps.runtime:app --reload --port 8080
+```
+
+## Verification
+
+```bash
+pytest tests/unit/test_meeting.py tests/unit/test_calendar_adapters.py
 ```
