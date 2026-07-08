@@ -29,7 +29,11 @@ from ghostrecon.services.incident_intelligence import (
     parse_pending_incident_items,
 )
 from ghostrecon.services.meeting import retry_meeting_crm_sync
-from ghostrecon.services.sequencing import poll_inbound_email_events, process_due_sequence_steps
+from ghostrecon.services.sequencing import (
+    poll_inbound_email_events,
+    process_due_sequence_email_alerts,
+    process_due_sequence_steps,
+)
 from ghostrecon.services.source_registry import fetch_source_by_id
 
 settings = get_settings()
@@ -154,6 +158,11 @@ def process_due_sequence_steps_task(limit: int = 50) -> dict[str, object]:
 @celery_app.task(name="ghostrecon.poll_sequence_inbound_email")
 def poll_sequence_inbound_email_task(limit: int = 50) -> dict[str, object]:
     return asyncio.run(poll_inbound_email_events(limit=limit, settings=settings))
+
+
+@celery_app.task(name="ghostrecon.process_due_sequence_email_alerts")
+def process_due_sequence_email_alerts_task(limit: int = 50) -> dict[str, object]:
+    return asyncio.run(process_due_sequence_email_alerts(limit=limit, settings=settings))
 
 
 @celery_app.task(name="ghostrecon.retry_meeting_crm_sync")

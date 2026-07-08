@@ -262,6 +262,31 @@ def test_email_routes_persist_and_verify_candidates(monkeypatch) -> None:
     assert verified["candidates"][0]["verification_status"] == "verified"
 
 
+def test_event_participant_enrich_target_route(monkeypatch) -> None:
+    async def fake_enrich(participant_id, request, **kwargs):
+        assert participant_id == "participant-1"
+        assert request.domain == "example.com"
+        assert kwargs["actor"] == "analyst@example.com"
+        return {
+            "contact_candidate": _contact_candidate().__dict__,
+            "email_candidates": [_email_candidate("verified").__dict__],
+            "verified_email": "ada.lovelace@example.com",
+            "review_reason": None,
+        }
+
+    monkeypatch.setattr(routers, "enrich_event_participant_target", fake_enrich)
+
+    client = TestClient(build_app(Settings(service_name="enrichment-service")))
+    response = client.post(
+        "/v1/enrichment/event-participants/participant-1/enrich-target",
+        headers={"Idempotency-Key": "enrich-1", "X-Actor": "analyst@example.com"},
+        json={"domain": "example.com", "role_scope": "security"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["verified_email"] == "ada.lovelace@example.com"
+
+
 def test_review_candidates_route_is_read_only_queue(monkeypatch) -> None:
     async def fake_list_review_candidates(**kwargs):
         return [_review_candidate()]

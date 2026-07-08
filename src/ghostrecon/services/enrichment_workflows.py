@@ -17,6 +17,8 @@ from ghostrecon.models.api import (
     EmailVerifyBatchRequest,
     EntityResolutionCreate,
     EntityResolutionOut,
+    EventParticipantEnrichRequest,
+    EventParticipantEnrichResult,
     ReviewCandidateOut,
 )
 from ghostrecon.models.db import (
@@ -25,6 +27,7 @@ from ghostrecon.models.db import (
     ContactEnrichmentCandidate,
     EmailCandidateRecord,
     EntityResolutionCase,
+    EventParticipant,
     OrganizationEmailPattern,
     OutboxEvent,
     ReviewCandidate,
@@ -52,6 +55,11 @@ def normalize_domain(domain: str | None) -> str | None:
 def evaluate_contact_policy(payload: ContactEnrichmentCreate) -> tuple[str, str | None]:
     if payload.breached_data_source:
         return "blocked", "breached_data_rejected"
+    if (
+        payload.origin_type == "manual"
+        and payload.candidate_payload.get("created_by")
+    ):
+        return "eligible", None
     if not payload.source_definition_id or not payload.source_item_ids:
         return "blocked", "missing_source_lineage"
     if payload.origin_type == "event_participant" and payload.reuse_state != "allowed":
@@ -131,6 +139,94 @@ async def list_contact_enrichment_candidates(
     async with session_scope(settings) as session:
         return await EnrichmentWorkflowRepository(session).list_contact_candidates(
             status=status, origin_type=origin_type, limit=limit
+        )
+
+
+async def enrich_event_participant_target(
+    participant_id: str,
+    payload: EventParticipantEnrichRequest,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+    verifier: EmailVerifierClient | None = None,
+) -> EventParticipantEnrichResult:
+    resolved = settings or Settings()
+    async with session_scope(resolved) as session:
+        participant = await session.get(EventParticipant, participant_id)
+        if participant is None:
+            raise ValueError("event participant not found")
+        repository = EnrichmentWorkflowRepository(session)
+        source_item_ids = [participant.source_item_id] if participant.source_item_id else []
+        contact_candidate = await repository.create_contact_candidate(
+            ContactEnrichmentCreate(
+                origin_type="event_participant",
+                origin_id=participant.id,
+                published_name=participant.published_name,
+                organization=participant.organization,
+                title=participant.published_role,
+                role_scope=payload.role_scope,
+                domain=payload.domain,
+                profile_url=participant.profile_url,
+                source_url=participant.profile_url,
+                reuse_state=participant.reuse_state,
+                source_definition_id=participant.source_definition_id,
+                source_item_ids=source_item_ids,
+                policy_snapshot={
+                    "participant_reuse_state": participant.reuse_state,
+                    "contact_extraction_allowed": participant.contact_extraction_allowed,
+                    "crm_export_allowed": participant.crm_export_allowed,
+                },
+                candidate_payload={
+                    "source": "global_events",
+                    "created_by": actor,
+                    "cyber_event_id": participant.cyber_event_id,
+                },
+            ),
+            f"{idempotency_key}:contact",
+        )
+        email_records: list[EmailCandidateRecord] = []
+        if contact_candidate.status == "eligible":
+            email_records = await repository.persist_email_candidates(
+                EmailCandidatePersistRequest(
+                    contact_candidate_id=contact_candidate.id,
+                    full_name=participant.published_name,
+                    domain=payload.domain,
+                ),
+                f"{idempotency_key}:email",
+            )
+            if email_records:
+                email_records = await repository.verify_email_candidates(
+                    EmailVerifyBatchRequest(
+                        candidate_ids=[record.id for record in email_records]
+                    ),
+                    verifier or EmailVerifierClient(resolved),
+                )
+        verified = next(
+            (record.email for record in email_records if record.verification_status == "verified"),
+            None,
+        )
+        if verified:
+            contact_candidate.candidate_payload = {
+                **dict(contact_candidate.candidate_payload or {}),
+                "verified_email": verified,
+                "verified_email_status": "verified",
+            }
+        review_reason = contact_candidate.review_reason or contact_candidate.eligibility_reason
+        if verified is None:
+            review_reason = review_reason or next(
+                (
+                    record.review_reason
+                    for record in email_records
+                    if record.review_reason
+                ),
+                None,
+            )
+        return EventParticipantEnrichResult(
+            contact_candidate=contact_candidate_to_model(contact_candidate),
+            email_candidates=[email_candidate_to_model(record) for record in email_records],
+            verified_email=verified,
+            review_reason=review_reason,
         )
 
 
@@ -463,6 +559,12 @@ class EnrichmentWorkflowRepository:
             if status == "verified":
                 record.review_status = "not_required"
                 record.review_reason = None
+                if record.contact_id:
+                    contact = await self.session.get(Contact, record.contact_id)
+                    if contact is not None:
+                        contact.email = record.email
+                        contact.email_status = "verified"
+                        contact.updated_at = utcnow()
                 await self._upsert_email_pattern(record)
                 self._enqueue_event(
                     new_event(

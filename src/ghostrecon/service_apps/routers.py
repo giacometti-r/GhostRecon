@@ -30,9 +30,13 @@ from ghostrecon.models.api import (
     EntityResolutionCreate,
     EntityResolutionList,
     EntityResolutionOut,
+    EventParticipantEnrichRequest,
+    EventParticipantEnrichResult,
     EventParticipantList,
     EventParticipantOut,
     IncidentDecisionRequest,
+    ManualEventCreate,
+    ManualIncidentCreate,
     MeetingActionRequest,
     MeetingCreateRequest,
     MeetingHandoffList,
@@ -59,11 +63,15 @@ from ghostrecon.models.api import (
     SecurityIncidentOut,
     SequenceCreateRequest,
     SequenceEligibilityRequest,
+    SequenceEmailAlertCreate,
+    SequenceEmailAlertOut,
     SequenceEnrollmentActionRequest,
     SequenceEnrollmentCreateRequest,
     SequenceEnrollmentList,
     SequenceEnrollmentOut,
+    SequenceList,
     SequenceOut,
+    SequenceUpdateRequest,
     SourceHealthList,
     SuppressionCheckRequest,
     SuppressionCreate,
@@ -87,6 +95,7 @@ from ghostrecon.services.enrichment_workflows import (
     create_contact_enrichment_candidate,
     create_entity_resolution,
     email_candidate_to_model,
+    enrich_event_participant_target,
     entity_resolution_to_model,
     list_contact_enrichment_candidates,
     list_entity_resolutions,
@@ -96,6 +105,7 @@ from ghostrecon.services.enrichment_workflows import (
     verify_email_candidates,
 )
 from ghostrecon.services.event_intelligence import (
+    create_manual_event,
     event_to_api,
     get_event,
     list_events,
@@ -116,6 +126,7 @@ from ghostrecon.services.governance import (
     suppression_to_model,
 )
 from ghostrecon.services.incident_intelligence import (
+    create_manual_incident,
     create_watch_target,
     get_incident,
     incident_to_api,
@@ -157,13 +168,17 @@ from ghostrecon.services.scoring import (
 from ghostrecon.services.sequencing import (
     cancel_sequence_enrollment,
     create_sequence,
+    create_sequence_email_alert,
     create_sequence_enrollment,
     evaluate_sequence_eligibility,
+    get_sequence,
     get_sequence_enrollment,
     list_sequence_enrollments,
+    list_sequences,
     pause_sequence_enrollment,
     process_unsubscribe,
     resume_sequence_enrollment,
+    update_sequence,
 )
 from ghostrecon.services.source_registry import list_source_health
 
@@ -471,6 +486,22 @@ async def intelligence_events(
     )
 
 
+@gateway_router.post("/v1/intelligence/events/manual", response_model=CyberEventOut)
+@event_intelligence_router.post("/v1/intelligence/events/manual", response_model=CyberEventOut)
+async def intelligence_create_manual_event(
+    request: ManualEventCreate,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> CyberEventOut:
+    event = await create_manual_event(
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        settings=get_settings(),
+    )
+    return CyberEventOut.model_validate(event_to_api(event))
+
+
 @gateway_router.get("/v1/intelligence/events/{event_id}", response_model=CyberEventOut)
 @event_intelligence_router.get("/v1/intelligence/events/{event_id}", response_model=CyberEventOut)
 async def intelligence_event_detail(event_id: str) -> CyberEventOut:
@@ -539,6 +570,24 @@ async def intelligence_incidents(
             SecurityIncidentOut.model_validate(incident_to_api(incident)) for incident in incidents
         ]
     )
+
+
+@gateway_router.post("/v1/intelligence/incidents/manual", response_model=SecurityIncidentOut)
+@incident_intelligence_router.post(
+    "/v1/intelligence/incidents/manual", response_model=SecurityIncidentOut
+)
+async def intelligence_create_manual_incident(
+    request: ManualIncidentCreate,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SecurityIncidentOut:
+    incident = await create_manual_incident(
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        settings=get_settings(),
+    )
+    return SecurityIncidentOut.model_validate(incident_to_api(incident))
 
 
 @gateway_router.get("/v1/intelligence/incidents/{incident_id}", response_model=SecurityIncidentOut)
@@ -751,6 +800,32 @@ async def enrichment_contact_candidates(
     )
 
 
+@gateway_router.post(
+    "/v1/enrichment/event-participants/{participant_id}/enrich-target",
+    response_model=EventParticipantEnrichResult,
+)
+@enrichment_router.post(
+    "/v1/enrichment/event-participants/{participant_id}/enrich-target",
+    response_model=EventParticipantEnrichResult,
+)
+async def enrichment_event_participant_enrich_target(
+    participant_id: str,
+    request: EventParticipantEnrichRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> EventParticipantEnrichResult:
+    try:
+        return await enrich_event_participant_target(
+            participant_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @email_router.post("/v1/email/candidates")
 async def email_candidates(request: EmailCandidateRequest):
     return {
@@ -833,6 +908,15 @@ async def sequence_create(
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@gateway_router.get("/v1/sequences", response_model=SequenceList)
+@sequencing_router.get("/v1/sequences", response_model=SequenceList)
+async def sequence_list(
+    status: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> SequenceList:
+    return await list_sequences(status=status, limit=limit, settings=get_settings())
 
 
 @gateway_router.post("/v1/sequences/enrollments", response_model=SequenceEnrollmentOut)
@@ -941,6 +1025,32 @@ async def sequence_enrollment_cancel(
     return enrollment
 
 
+@gateway_router.post(
+    "/v1/sequences/enrollments/{enrollment_id}/alerts",
+    response_model=SequenceEmailAlertOut,
+)
+@sequencing_router.post(
+    "/v1/sequences/enrollments/{enrollment_id}/alerts",
+    response_model=SequenceEmailAlertOut,
+)
+async def sequence_enrollment_alert_create(
+    enrollment_id: str,
+    request: SequenceEmailAlertCreate,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceEmailAlertOut:
+    alert = await create_sequence_email_alert(
+        enrollment_id,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        settings=get_settings(),
+    )
+    if alert is None:
+        raise HTTPException(status_code=404, detail="sequence enrollment not found")
+    return alert
+
+
 @gateway_router.post("/v1/sequences/unsubscribe")
 @sequencing_router.post("/v1/sequences/unsubscribe")
 async def sequence_unsubscribe(
@@ -952,6 +1062,33 @@ async def sequence_unsubscribe(
         idempotency_key=idempotency_key,
         settings=get_settings(),
     )
+
+
+@gateway_router.get("/v1/sequences/{sequence_id}", response_model=SequenceOut)
+@sequencing_router.get("/v1/sequences/{sequence_id}", response_model=SequenceOut)
+async def sequence_detail(sequence_id: str) -> SequenceOut:
+    sequence = await get_sequence(sequence_id, settings=get_settings())
+    if sequence is None:
+        raise HTTPException(status_code=404, detail="sequence not found")
+    return sequence
+
+
+@gateway_router.patch("/v1/sequences/{sequence_id}", response_model=SequenceOut)
+@sequencing_router.patch("/v1/sequences/{sequence_id}", response_model=SequenceOut)
+async def sequence_update(
+    sequence_id: str,
+    request: SequenceUpdateRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceOut:
+    sequence = await update_sequence(
+        sequence_id,
+        request,
+        actor=actor,
+        settings=get_settings(),
+    )
+    if sequence is None:
+        raise HTTPException(status_code=404, detail="sequence not found")
+    return sequence
 
 
 @gateway_router.post("/v1/calendar/availability", response_model=CalendarAvailabilityResult)

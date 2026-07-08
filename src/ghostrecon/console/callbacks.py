@@ -64,7 +64,10 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
     @dash_app.callback(
         Output("mutation-status", "children"),
         Output("mutation-refresh-token", "data"),
+        Output("mutation-status-clear", "disabled"),
         Input(ACTION_PATTERN, "n_clicks"),
+        Input("mutation-status-clear", "n_intervals"),
+        State({"type": "event-enrich-domain", "event_id": ALL}, "value"),
         State("operator-actor", "value"),
         State("operator-role", "value"),
         State("mutation-refresh-token", "data"),
@@ -72,25 +75,327 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
     )
     def run_action(
         _clicks: list[int] | None,
+        _clear_ticks: int | None,
+        event_domains: list[str] | None,
         actor: str | None,
         role: str | None,
         token: int | None,
-    ) -> tuple[Any, Any]:
+    ) -> tuple[Any, Any, Any]:
+        if ctx.triggered_id == "mutation-status-clear":
+            return "", no_update, True
         action_id = ctx.triggered_id
         if not isinstance(action_id, dict):
-            return no_update, no_update
+            return no_update, no_update, no_update
         if _triggered_click_count() < 1:
-            return no_update, no_update
+            return no_update, no_update, no_update
+        if action_id.get("kind") == "sequence" and action_id.get("action") == "pause":
+            return no_update, no_update, no_update
         try:
             message = perform_dashboard_action(
                 action_id,
                 actor=actor or "dashboard",
                 role=role,
                 settings=settings,
+                extra_payload={"domain": _first_value(event_domains)},
             )
         except ConsoleApiError as exc:
-            return error_notice("Action failed", str(exc)), no_update
-        return _success_notice(message), (token or 0) + 1
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice(message), (token or 0) + 1, False
+
+    @dash_app.callback(
+        Output("sequence-pause-target", "data"),
+        Output("sequence-pause-modal", "className"),
+        Output("sequence-pause-reason", "value"),
+        Input(ACTION_PATTERN, "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def open_sequence_pause_modal(_clicks: list[int] | None) -> tuple[Any, str, str]:
+        action_id = ctx.triggered_id
+        if not isinstance(action_id, dict):
+            return no_update, no_update, no_update
+        if _triggered_click_count() < 1:
+            return no_update, no_update, no_update
+        if action_id.get("kind") != "sequence" or action_id.get("action") != "pause":
+            return no_update, no_update, no_update
+        return action_id, "modal-backdrop", ""
+
+    @dash_app.callback(
+        Output("sequence-pause-modal", "className", allow_duplicate=True),
+        Output("sequence-pause-target", "data", allow_duplicate=True),
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input("sequence-pause-confirm", "n_clicks"),
+        Input("sequence-pause-cancel", "n_clicks"),
+        State("sequence-pause-target", "data"),
+        State("sequence-pause-reason", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def confirm_sequence_pause(
+        confirm_clicks: int | None,
+        cancel_clicks: int | None,
+        action_id: dict[str, Any] | None,
+        reason: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any, Any, Any]:
+        triggered = ctx.triggered_id
+        if triggered == "sequence-pause-cancel" and (cancel_clicks or 0) > 0:
+            return "modal-backdrop hidden", {}, no_update, no_update, no_update
+        if triggered != "sequence-pause-confirm" or (confirm_clicks or 0) < 1:
+            return no_update, no_update, no_update, no_update, no_update
+        if not action_id:
+            return (
+                "modal-backdrop hidden",
+                {},
+                error_notice("Action failed", "Missing sequence."),
+                no_update,
+                False,
+            )
+        if not (reason or "").strip():
+            return (
+                no_update,
+                no_update,
+                error_notice("Pause reason required", "Type a reason before confirming."),
+                no_update,
+                False,
+            )
+        try:
+            message = perform_dashboard_action(
+                action_id,
+                actor=actor or "dashboard",
+                role=role,
+                settings=settings,
+                extra_payload={"reason": reason.strip()},
+            )
+        except ConsoleApiError as exc:
+            return no_update, no_update, error_notice("Action failed", str(exc)), no_update, False
+        return "modal-backdrop hidden", {}, _success_notice(message), (token or 0) + 1, False
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input("manual-event-submit", "n_clicks"),
+        State("manual-event-name", "value"),
+        State("manual-event-country", "value"),
+        State("manual-event-start", "value"),
+        State("manual-event-topics", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def create_manual_event(
+        clicks: int | None,
+        name: str | None,
+        country: str | None,
+        starts_at: str | None,
+        topics: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        if (clicks or 0) < 1:
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot create events"),
+                no_update,
+                False,
+            )
+        if not (name or "").strip():
+            return error_notice("Event name required"), no_update, False
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        payload = {
+            "name": name.strip(),
+            "country": (country or "").strip() or None,
+            "starts_at_utc": (starts_at or "").strip() or None,
+            "topics": [item.strip() for item in (topics or "").split(",") if item.strip()],
+        }
+        try:
+            api.post(
+                "/v1/intelligence/events/manual",
+                payload=payload,
+                idempotency_key=idempotency_key("manual-event", name.strip()),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return (
+            _success_notice(f"Manual event {name.strip()} created."),
+            (token or 0) + 1,
+            False,
+        )
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input("manual-incident-submit", "n_clicks"),
+        State("manual-incident-title", "value"),
+        State("manual-incident-company", "value"),
+        State("manual-incident-vector", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def create_manual_incident(
+        clicks: int | None,
+        title: str | None,
+        company: str | None,
+        vector: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        if (clicks or 0) < 1:
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot create incidents"),
+                no_update,
+                False,
+            )
+        if not (title or "").strip():
+            return error_notice("Incident title required"), no_update, False
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        payload = {
+            "title": title.strip(),
+            "affected_companies": [company.strip()] if (company or "").strip() else [],
+            "attack_vector": (vector or "").strip() or None,
+        }
+        try:
+            api.post(
+                "/v1/intelligence/incidents/manual",
+                payload=payload,
+                idempotency_key=idempotency_key("manual-incident", title.strip()),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return (
+            _success_notice(f"Manual incident {title.strip()} created."),
+            (token or 0) + 1,
+            False,
+        )
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input({"type": "sequence-alert-submit", "enrollment_id": ALL}, "n_clicks"),
+        State({"type": "sequence-alert-recipient", "enrollment_id": ALL}, "value"),
+        State({"type": "sequence-alert-subject", "enrollment_id": ALL}, "value"),
+        State({"type": "sequence-alert-body", "enrollment_id": ALL}, "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def create_sequence_alert(
+        clicks: list[int] | None,
+        recipients: list[str] | None,
+        subjects: list[str] | None,
+        bodies: list[str] | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        action_id = ctx.triggered_id
+        if not isinstance(action_id, dict) or not any(clicks or []):
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot create alerts"),
+                no_update,
+                False,
+            )
+        recipient = _first_value(recipients)
+        subject = _first_value(subjects)
+        body = _first_value(bodies)
+        if not recipient or not subject or not body:
+            return error_notice("Alert fields required"), no_update, False
+        enrollment_id = str(action_id.get("enrollment_id") or "")
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        try:
+            api.post(
+                f"/v1/sequences/enrollments/{enrollment_id}/alerts",
+                payload={"recipient_email": recipient, "subject": subject, "body": body},
+                idempotency_key=idempotency_key("sequence-alert", enrollment_id),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice("Reminder alert created."), (token or 0) + 1, False
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input({"type": "sequence-edit-submit", "sequence_id": ALL}, "n_clicks"),
+        State("sequence-edit-name", "value"),
+        State("sequence-edit-owner", "value"),
+        State("sequence-edit-status", "value"),
+        State("sequence-edit-steps", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def save_sequence_definition(
+        clicks: list[int] | None,
+        name: str | None,
+        owner: str | None,
+        status: str | None,
+        steps_json: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        action_id = ctx.triggered_id
+        if not isinstance(action_id, dict) or not any(clicks or []):
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot edit sequences"),
+                no_update,
+                False,
+            )
+        try:
+            parsed_steps = json.loads(steps_json or "[]")
+        except json.JSONDecodeError as exc:
+            return error_notice("Invalid steps JSON", str(exc)), no_update, False
+        steps = [
+            _sequence_step_payload(step)
+            for step in parsed_steps
+            if isinstance(step, dict)
+        ]
+        sequence_id = str(action_id.get("sequence_id") or "")
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        try:
+            api.patch(
+                f"/v1/sequences/{sequence_id}",
+                payload={
+                    "name": (name or "").strip() or None,
+                    "owner_id": (owner or "").strip() or None,
+                    "status": status,
+                    "steps": steps,
+                },
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice("Sequence definition updated."), (token or 0) + 1, False
 
 
 def perform_dashboard_action(
@@ -101,6 +406,7 @@ def perform_dashboard_action(
     settings: Settings,
     client: ConsoleApiClient | None = None,
     client_factory: type[httpx.Client] = httpx.Client,
+    extra_payload: dict[str, Any] | None = None,
 ) -> str:
     normalized_role = normalize_role(role)
     if normalized_role not in MUTATING_ROLES:
@@ -195,9 +501,25 @@ def perform_dashboard_action(
             raise ConsoleApiError(f"unsupported sequence action {action}", status_code=400)
         api.post(
             f"/v1/sequences/enrollments/{target_id}/{action}",
-            payload={"reason": f"Sprint 12 dashboard {action} action."},
+            payload={"reason": _action_reason(action, extra_payload)},
         )
         return f"Sequence enrollment {target_id} {action} requested."
+
+    if kind == "event-participant":
+        domain = str((extra_payload or {}).get("domain") or "").strip()
+        if not domain:
+            raise ConsoleApiError("domain is required to enrich a participant", status_code=400)
+        result = api.post(
+            f"/v1/enrichment/event-participants/{target_id}/enrich-target",
+            payload={"domain": domain},
+            idempotency_key=idempotency_key("participant-enrich", target_id),
+        )
+        verified = result.get("verified_email")
+        return (
+            f"Participant {target_id} enriched with {verified}."
+            if verified
+            else f"Participant {target_id} sent to enrichment review."
+        )
 
     if kind == "meeting":
         return _perform_meeting_action(api, action, target_id)
@@ -273,6 +595,28 @@ def _perform_meeting_action(api: ConsoleApiClient, action: str, target_id: str) 
 
 def _success_notice(message: str) -> html.Div:
     return html.Div([icon("check-circle"), html.Span(message)], className="success-notice")
+
+
+def _first_value(values: list[Any] | None) -> Any:
+    for value in values or []:
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _action_reason(action: str, extra_payload: dict[str, Any] | None) -> str:
+    reason = str((extra_payload or {}).get("reason") or "").strip()
+    return reason or f"Sprint 12 dashboard {action} action."
+
+
+def _sequence_step_payload(step: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "step_order": step.get("step_order"),
+        "delay_seconds": step.get("delay_seconds") or 0,
+        "subject_template": step.get("subject_template") or "Follow up",
+        "body_template": step.get("body_template") or "Checking in.",
+        "channel": step.get("channel") or "email",
+    }
 
 
 def _int(value: Any) -> int:

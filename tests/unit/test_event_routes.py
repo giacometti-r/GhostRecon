@@ -76,6 +76,7 @@ def test_event_intelligence_routes_return_events_and_policy_gated_participants(m
     monkeypatch.setattr(routers, "list_events", fake_list_events)
     monkeypatch.setattr(routers, "get_event", fake_get_event)
     monkeypatch.setattr(routers, "list_participants", fake_list_participants)
+    monkeypatch.setattr(routers, "create_manual_event", fake_get_event)
 
     app = build_app(Settings(service_name="event-intelligence-service"))
     client = TestClient(app)
@@ -88,3 +89,22 @@ def test_event_intelligence_routes_return_events_and_policy_gated_participants(m
     assert participants[0]["reuse_state"] == "unknown"
     assert participants[0]["contact_extraction_allowed"] is False
     assert participants[0]["crm_export_allowed"] is False
+
+
+def test_manual_event_route_uses_additive_create_contract(monkeypatch) -> None:
+    async def fake_create_manual_event(request, **kwargs):
+        assert request.name == "Manual Event"
+        assert kwargs["actor"] == "analyst@example.com"
+        return _event()
+
+    monkeypatch.setattr(routers, "create_manual_event", fake_create_manual_event)
+
+    client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
+    response = client.post(
+        "/v1/intelligence/events/manual",
+        headers={"Idempotency-Key": "manual-event-1", "X-Actor": "analyst@example.com"},
+        json={"name": "Manual Event", "country": "US"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "event-1"

@@ -68,6 +68,7 @@ def _incident() -> SecurityIncidentOut:
         id="incident-1",
         title="Example Corp ransomware incident",
         confidence=75,
+        version=1,
         created_at=NOW,
         updated_at=NOW,
     )

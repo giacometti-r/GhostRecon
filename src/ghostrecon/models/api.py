@@ -311,6 +311,29 @@ class EventParticipantList(BaseModel):
     participants: list[EventParticipantOut]
 
 
+class ManualEventCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255)
+    event_series_key: str = Field(default="manual", min_length=1, max_length=128)
+    canonical_url: str | None = None
+    original_start: str | None = None
+    original_end: str | None = None
+    source_timezone: str | None = None
+    iana_timezone: str | None = None
+    starts_at_utc: datetime | None = None
+    ends_at_utc: datetime | None = None
+    event_format: EventFormat = EventFormat.UNKNOWN
+    venue_name: str | None = None
+    city: str | None = None
+    region: str | None = None
+    country: str | None = None
+    virtual_url: str | None = None
+    topics: list[str] = []
+    organizers: list[dict[str, object]] = []
+    confidence: int = Field(default=70, ge=0, le=100)
+
+
 class SecurityIncidentStatus(StrEnum):
     CANDIDATE = "candidate"
     CORROBORATED = "corroborated"
@@ -378,12 +401,28 @@ class SecurityIncidentOut(BaseModel):
     canonical_state: IncidentCanonicalState = IncidentCanonicalState.CANONICAL
     source_definition_id: str | None = None
     source_item_ids: list[object] = []
+    version: int
     created_at: datetime
     updated_at: datetime
 
 
 class SecurityIncidentList(BaseModel):
     incidents: list[SecurityIncidentOut]
+
+
+class ManualIncidentCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    title: str = Field(min_length=1, max_length=512)
+    affected_companies: list[str] = []
+    affected_domains: list[str] = []
+    incident_type: str | None = None
+    attack_vector: str | None = None
+    first_observed_at: datetime | None = None
+    last_observed_at: datetime | None = None
+    geography: list[str] = []
+    languages: list[str] = []
+    confidence: int = Field(default=70, ge=0, le=100)
 
 
 class WatchTargetOut(BaseModel):
@@ -565,6 +604,20 @@ class EmailVerifyBatchRequest(BaseModel):
 
 class EmailVerifyBatchResult(BaseModel):
     candidates: list[EmailCandidateRecordOut]
+
+
+class EventParticipantEnrichRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    domain: str = Field(min_length=1, max_length=255)
+    role_scope: ContactRoleScope = ContactRoleScope.UNKNOWN
+
+
+class EventParticipantEnrichResult(BaseModel):
+    contact_candidate: ContactEnrichmentOut
+    email_candidates: list[EmailCandidateRecordOut] = []
+    verified_email: EmailStr | None = None
+    review_reason: str | None = None
 
 
 class ReviewCandidateOut(BaseModel):
@@ -1203,6 +1256,17 @@ class SequenceCreateRequest(BaseModel):
     steps: list[SequenceStepCreate] = Field(min_length=1, max_length=20)
 
 
+class SequenceUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    owner_id: str | None = None
+    channel: str | None = None
+    status: SequenceStatus | None = None
+    rate_limit_policy: dict[str, object] | None = None
+    steps: list[SequenceStepCreate] | None = Field(default=None, max_length=20)
+
+
 class SequenceStepOut(BaseModel):
     id: str
     sequence_id: str
@@ -1226,6 +1290,10 @@ class SequenceOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     steps: list[SequenceStepOut] = []
+
+
+class SequenceList(BaseModel):
+    sequences: list[SequenceOut]
 
 
 class SequenceEnrollmentCreateRequest(BaseModel):
@@ -1273,6 +1341,12 @@ class SequenceEnrollmentOut(BaseModel):
     crm_target_id: str
     contact_id: str
     account_id: str | None = None
+    sequence_name: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    account_name: str | None = None
+    account_domain: str | None = None
+    crm_target_summary: str | None = None
     status: SequenceEnrollmentStatus
     approval_actor: str
     approval_reason: str
@@ -1289,6 +1363,31 @@ class SequenceEnrollmentOut(BaseModel):
 
 class SequenceEnrollmentList(BaseModel):
     enrollments: list[SequenceEnrollmentOut]
+
+
+class SequenceEmailAlertCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    recipient_email: EmailStr
+    subject: str = Field(min_length=1, max_length=512)
+    body: str = Field(min_length=1)
+    send_at: datetime | None = None
+
+
+class SequenceEmailAlertOut(BaseModel):
+    id: str
+    enrollment_id: str
+    recipient_email: EmailStr
+    subject: str
+    body: str
+    send_at: datetime
+    status: str
+    actor: str
+    provider_message_id: str | None = None
+    last_error: str | None = None
+    sent_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
 
 
 class InboundEmailEventCreate(BaseModel):

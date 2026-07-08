@@ -931,6 +931,36 @@ class SequenceSuppressionEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
+class SequenceEmailAlert(Base):
+    __tablename__ = "sequence_email_alerts"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_sequence_email_alerts_idempotency_key"),
+        Index("ix_sequence_email_alerts_enrollment_status", "enrollment_id", "status"),
+        Index("ix_sequence_email_alerts_due", "status", "send_at"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    enrollment_id: Mapped[str] = mapped_column(
+        ForeignKey("sequence_enrollments.id", ondelete="CASCADE")
+    )
+    recipient_email: Mapped[str] = mapped_column(String(320))
+    subject: Mapped[str] = mapped_column(String(512))
+    body: Mapped[str] = mapped_column(Text)
+    send_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    status: Mapped[str] = mapped_column(String(64), default="pending")
+    actor: Mapped[str] = mapped_column(String(128), default="system")
+    provider_message_id: Mapped[str | None] = mapped_column(String(255))
+    last_error: Mapped[str | None] = mapped_column(Text)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+
+
 class Account(Base):
     __tablename__ = "accounts"
 

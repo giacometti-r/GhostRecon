@@ -31,6 +31,7 @@ def _incident():
         canonical_state="canonical",
         source_definition_id="source-1",
         source_item_ids=["raw-1"],
+        version=1,
         created_at=now,
         updated_at=now,
     )
@@ -81,5 +82,25 @@ def test_incident_routes_return_incidents_and_promoted_watch_targets(monkeypatch
 
     assert incidents[0]["status"] == "candidate"
     assert incidents[0]["affected_companies"] == ["Example Corp"]
+    assert incidents[0]["version"] == 1
     assert watch["origin_incident_id"] == "incident-1"
     assert watch["target_type"] == "incident"
+
+
+def test_manual_incident_route_exposes_version(monkeypatch) -> None:
+    async def fake_create_manual_incident(request, **kwargs):
+        assert request.title == "Manual incident"
+        assert kwargs["actor"] == "analyst@example.com"
+        return _incident()
+
+    monkeypatch.setattr(routers, "create_manual_incident", fake_create_manual_incident)
+
+    client = TestClient(build_app(Settings(service_name="incident-intelligence-service")))
+    response = client.post(
+        "/v1/intelligence/incidents/manual",
+        headers={"Idempotency-Key": "manual-incident-1", "X-Actor": "analyst@example.com"},
+        json={"title": "Manual incident", "affected_companies": ["Example Corp"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["version"] == 1

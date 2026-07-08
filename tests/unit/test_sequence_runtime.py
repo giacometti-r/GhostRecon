@@ -9,8 +9,10 @@ from ghostrecon.models.api import (
     InboundEmailEventCreate,
     InboundEmailEventOut,
     InboundEmailEventType,
+    SequenceEmailAlertOut,
     SequenceEnrollmentList,
     SequenceEnrollmentOut,
+    SequenceList,
     SequenceOut,
     SequenceStepOut,
 )
@@ -56,6 +58,12 @@ def _enrollment(status: str = "active") -> SequenceEnrollmentOut:
         crm_target_id="crm-target-1",
         contact_id="contact-1",
         account_id="account-1",
+        sequence_name="Incident follow-up",
+        contact_name="Ada Lovelace",
+        contact_email="ada@example.test",
+        account_name="Example Corp",
+        account_domain="example.com",
+        crm_target_summary="contact · contact-1",
         status=status,
         approval_actor="analyst@example.com",
         approval_reason="approved outreach",
@@ -68,6 +76,24 @@ def _enrollment(status: str = "active") -> SequenceEnrollmentOut:
         updated_at=NOW,
         completed_at=None,
         outbound_emails=[],
+    )
+
+
+def _alert(status: str = "pending") -> SequenceEmailAlertOut:
+    return SequenceEmailAlertOut(
+        id="alert-1",
+        enrollment_id="enrollment-1",
+        recipient_email="analyst@example.com",
+        subject="Reminder",
+        body="Follow up with Ada.",
+        send_at=NOW,
+        status=status,
+        actor="analyst@example.com",
+        provider_message_id=None,
+        last_error=None,
+        sent_at=None,
+        created_at=NOW,
+        updated_at=NOW,
     )
 
 
@@ -95,8 +121,10 @@ def test_sprint_10_models_are_registered() -> None:
     assert "outbound_emails" in tables
     assert "inbound_email_events" in tables
     assert "sequence_suppression_events" in tables
+    assert "sequence_email_alerts" in tables
     assert "approval_reason" in tables["sequence_enrollments"].columns
     assert "provider_message_id" in tables["outbound_emails"].columns
+    assert "recipient_email" in tables["sequence_email_alerts"].columns
 
 
 def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> None:
@@ -116,8 +144,20 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         seen["list_status"] = kwargs["status"]
         return SequenceEnrollmentList(enrollments=[_enrollment()])
 
+    async def fake_list_sequences(**kwargs):
+        seen["sequence_list_status"] = kwargs["status"]
+        return SequenceList(sequences=[_sequence()])
+
     async def fake_get(*args, **kwargs):
         return _enrollment()
+
+    async def fake_get_sequence(*args, **kwargs):
+        return _sequence()
+
+    async def fake_update_sequence(sequence_id, request, **kwargs):
+        seen["updated_sequence"] = sequence_id
+        seen["updated_steps"] = len(request.steps or [])
+        return _sequence()
 
     async def fake_pause(*args, **kwargs):
         return _enrollment("paused")
@@ -133,14 +173,23 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         seen["unsubscribe_key"] = kwargs["idempotency_key"]
         return _inbound_event()
 
+    async def fake_create_alert(enrollment_id, request, **kwargs):
+        seen["alert_enrollment"] = enrollment_id
+        seen["alert_actor"] = kwargs["actor"]
+        return _alert()
+
     monkeypatch.setattr(routers, "create_sequence", fake_create_sequence)
     monkeypatch.setattr(routers, "create_sequence_enrollment", fake_create_enrollment)
     monkeypatch.setattr(routers, "list_sequence_enrollments", fake_list)
     monkeypatch.setattr(routers, "get_sequence_enrollment", fake_get)
+    monkeypatch.setattr(routers, "list_sequences", fake_list_sequences)
+    monkeypatch.setattr(routers, "get_sequence", fake_get_sequence)
+    monkeypatch.setattr(routers, "update_sequence", fake_update_sequence)
     monkeypatch.setattr(routers, "pause_sequence_enrollment", fake_pause)
     monkeypatch.setattr(routers, "resume_sequence_enrollment", fake_resume)
     monkeypatch.setattr(routers, "cancel_sequence_enrollment", fake_cancel)
     monkeypatch.setattr(routers, "process_unsubscribe", fake_unsubscribe)
+    monkeypatch.setattr(routers, "create_sequence_email_alert", fake_create_alert)
 
     client = TestClient(build_app(Settings(service_name="sequencing-service")))
     headers = {"Idempotency-Key": "idem-sequence", "X-Actor": "analyst@example.com"}
@@ -163,6 +212,15 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         },
     ).json()
     listed = client.get("/v1/sequences/enrollments?status=active").json()
+    sequences = client.get("/v1/sequences?status=active").json()
+    sequence_detail = client.get("/v1/sequences/sequence-1").json()
+    sequence_update = client.patch(
+        "/v1/sequences/sequence-1",
+        json={
+            "name": "Incident follow-up",
+            "steps": [{"subject_template": "Hi again", "body_template": "Body"}],
+        },
+    ).json()
     detail = client.get("/v1/sequences/enrollments/enrollment-1").json()
     paused = client.post(
         "/v1/sequences/enrollments/enrollment-1/pause",
@@ -181,23 +239,43 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         headers={"Idempotency-Key": "idem-unsub"},
         json={"email": "ada@example.com"},
     ).json()
+    alert = client.post(
+        "/v1/sequences/enrollments/enrollment-1/alerts",
+        headers=headers,
+        json={
+            "recipient_email": "analyst@example.com",
+            "subject": "Reminder",
+            "body": "Follow up.",
+        },
+    ).json()
 
     assert sequence["steps"][0]["id"] == "step-1"
+    assert sequences["sequences"][0]["id"] == "sequence-1"
+    assert sequence_detail["name"] == "Incident follow-up"
+    assert sequence_update["id"] == "sequence-1"
     assert enrollment["crm_target_id"] == "crm-target-1"
     assert listed["enrollments"][0]["id"] == "enrollment-1"
+    assert listed["enrollments"][0]["contact_name"] == "Ada Lovelace"
+    assert listed["enrollments"][0]["contact_email"] == "ada@example.test"
     assert detail["id"] == "enrollment-1"
     assert paused["status"] == "paused"
     assert resumed["status"] == "active"
     assert canceled["status"] == "canceled"
     assert unsubscribe["event_type"] == "unsubscribe"
+    assert alert["status"] == "pending"
     assert seen == {
         "sequence_name": "Incident follow-up",
         "sequence_key": "idem-sequence",
         "crm_target_id": "crm-target-1",
         "actor": "analyst@example.com",
         "list_status": "active",
+        "sequence_list_status": "active",
+        "updated_sequence": "sequence-1",
+        "updated_steps": 1,
         "unsubscribe_email": "ada@example.com",
         "unsubscribe_key": "idem-unsub",
+        "alert_enrollment": "enrollment-1",
+        "alert_actor": "analyst@example.com",
     }
 
 
@@ -295,4 +373,5 @@ def test_sequence_worker_tasks_are_registered() -> None:
 
     assert "ghostrecon.process_due_sequence_steps" in celery_app.tasks
     assert "ghostrecon.poll_sequence_inbound_email" in celery_app.tasks
+    assert "ghostrecon.process_due_sequence_email_alerts" in celery_app.tasks
     assert "ghostrecon.retry_meeting_crm_sync" in celery_app.tasks

@@ -170,6 +170,75 @@ def test_render_page_handles_empty_and_degraded_reporting_payload() -> None:
     assert "No records match" in rendered
 
 
+def test_render_page_humanizes_todo_views() -> None:
+    client = _client()
+    FakeHttpClient.responses = {
+        ("GET", "/v1/reporting/kpis/catalog"): (
+            200,
+            {"metadata": _metadata(), "kpis": {"source_freshness": ["parse_yield"]}},
+        ),
+        ("GET", "/v1/reporting/source-health"): (200, {"metadata": _metadata(), "sources": []}),
+        ("GET", "/v1/reporting/review-queue"): (200, {"metadata": _metadata(), "candidates": []}),
+        ("GET", "/v1/reporting/crm-targets"): (200, {"metadata": _metadata(), "crm_targets": []}),
+        ("GET", "/v1/reporting/meetings"): (200, {"metadata": _metadata(), "meetings": []}),
+        ("GET", "/v1/reporting/events"): (
+            200,
+            {
+                "metadata": _metadata(),
+                "events": [
+                    {
+                        "id": "event-1",
+                        "name": "Demo Event",
+                        "country": "USA",
+                        "confidence": 90,
+                    }
+                ],
+            },
+        ),
+        ("GET", "/v1/reporting/events/event-1"): (
+            200,
+            {"metadata": _metadata(), "event": {"id": "event-1", "topics": ["security"]}},
+        ),
+        ("GET", "/v1/intelligence/events/event-1/participants"): (
+            200,
+            {"participants": [{"id": "participant-1", "published_name": "Ada Analyst"}]},
+        ),
+        ("GET", "/v1/reporting/incidents"): (
+            200,
+            {"metadata": _metadata(), "incidents": [{"id": "incident-1", "version": 1}]},
+        ),
+    }
+
+    overview = str(
+        render_page("/", "", "analyst@example.com", "analyst", Settings(), client=client)
+    )
+    events = str(
+        render_page("/events", "", "analyst@example.com", "analyst", Settings(), client=client)
+    )
+    event_detail = str(
+        render_page(
+            "/events/event-1",
+            "",
+            "analyst@example.com",
+            "analyst",
+            Settings(),
+            client=client,
+        )
+    )
+    incidents = str(
+        render_page("/incidents", "", "analyst@example.com", "analyst", Settings(), client=client)
+    )
+
+    assert "Source Freshness" in overview
+    assert "Parse Yield" in overview
+    assert "World map" in events
+    assert "Confidence" not in events
+    assert "Enrich Target" in event_detail
+    assert "security" in event_detail
+    assert "Incident Status" not in incidents
+    assert "Add incident" in incidents
+
+
 def test_render_navigation_marks_active_parent_route() -> None:
     links = render_navigation("/meetings/meeting-1")
     rendered_links = [str(link) for link in links]
@@ -217,6 +286,10 @@ def test_dashboard_actions_send_expected_gateway_mutations() -> None:
         ),
         ("PATCH", "/v1/intelligence/watch-targets/watch-1"): (200, {"id": "watch-1"}),
         ("POST", "/v1/sequences/enrollments/enroll-1/pause"): (200, {"id": "enroll-1"}),
+        ("POST", "/v1/enrichment/event-participants/participant-1/enrich-target"): (
+            200,
+            {"verified_email": "ada@example.com"},
+        ),
         ("POST", "/v1/meetings/meeting-1/prep-packet"): (200, {"id": "meeting-1"}),
         ("POST", "/v1/meetings/meeting-1/outcome"): (200, {"id": "meeting-1"}),
         ("POST", "/v1/meetings/meeting-1/cancel"): (200, {"id": "meeting-1"}),
@@ -324,10 +397,48 @@ def test_dashboard_actions_send_expected_gateway_mutations() -> None:
             client=client,
         )
 
+    perform_dashboard_action(
+        {
+            "kind": "event-participant",
+            "action": "enrich",
+            "target_id": "participant-1",
+            "version": None,
+            "policy_hash": None,
+            "enabled": None,
+        },
+        actor="analyst@example.com",
+        role="analyst",
+        settings=settings,
+        client=client,
+        extra_payload={"domain": "example.com"},
+    )
+    perform_dashboard_action(
+        {
+            "kind": "sequence",
+            "action": "pause",
+            "target_id": "enroll-1",
+            "version": None,
+            "policy_hash": None,
+            "enabled": None,
+        },
+        actor="analyst@example.com",
+        role="analyst",
+        settings=settings,
+        client=client,
+        extra_payload={"reason": "Need legal review."},
+    )
+
     paths = [request.url.removeprefix("http://gateway.test") for request in FakeHttpClient.requests]
     assert "/v1/crm/exports" in paths
     assert "/v1/review/candidates/bulk-decision" in paths
     assert "/v1/sequences/enrollments/enroll-1/pause" in paths
+    assert "/v1/enrichment/event-participants/participant-1/enrich-target" in paths
+    pause_payloads = [
+        request.json
+        for request in FakeHttpClient.requests
+        if request.url.endswith("/v1/sequences/enrollments/enroll-1/pause")
+    ]
+    assert pause_payloads[-1] == {"reason": "Need legal review."}
     assert FakeHttpClient.requests[0].headers["Idempotency-Key"].startswith("dashboard:")
 
 

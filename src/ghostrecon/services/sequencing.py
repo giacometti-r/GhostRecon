@@ -18,12 +18,16 @@ from ghostrecon.models.api import (
     SequenceCreateRequest,
     SequenceEligibilityRequest,
     SequenceEligibilityResult,
+    SequenceEmailAlertCreate,
+    SequenceEmailAlertOut,
     SequenceEnrollmentActionRequest,
     SequenceEnrollmentCreateRequest,
     SequenceEnrollmentList,
     SequenceEnrollmentOut,
+    SequenceList,
     SequenceOut,
     SequenceStepOut,
+    SequenceUpdateRequest,
     SuppressionCheckRequest,
     UnsubscribeRequest,
 )
@@ -36,6 +40,7 @@ from ghostrecon.models.db import (
     OutboundEmail,
     OutboxEvent,
     Sequence,
+    SequenceEmailAlert,
     SequenceEnrollment,
     SequenceStep,
     SequenceSuppressionEvent,
@@ -133,6 +138,100 @@ async def create_sequence(
             steps.append(step)
         await session.flush()
         return sequence_to_model(sequence, sorted(steps, key=lambda item: item.step_order))
+
+
+async def list_sequences(
+    *,
+    status: str | None = None,
+    limit: int = 100,
+    settings: Settings | None = None,
+) -> SequenceList:
+    async with session_scope(settings) as session:
+        query = select(Sequence).order_by(Sequence.created_at.desc()).limit(limit)
+        if status:
+            query = query.where(Sequence.status == status)
+        result = await session.execute(query)
+        sequences = [
+            sequence_to_model(sequence, await _sequence_steps(session, sequence.id))
+            for sequence in result.scalars()
+        ]
+        return SequenceList(sequences=sequences)
+
+
+async def get_sequence(
+    sequence_id: str,
+    *,
+    settings: Settings | None = None,
+) -> SequenceOut | None:
+    async with session_scope(settings) as session:
+        sequence = await session.get(Sequence, sequence_id)
+        if sequence is None:
+            return None
+        return sequence_to_model(sequence, await _sequence_steps(session, sequence.id))
+
+
+async def update_sequence(
+    sequence_id: str,
+    request: SequenceUpdateRequest,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+) -> SequenceOut | None:
+    _ = actor
+    async with session_scope(settings) as session:
+        sequence = await session.get(Sequence, sequence_id)
+        if sequence is None:
+            return None
+        now = utcnow()
+        if request.name is not None:
+            sequence.name = request.name
+        if request.owner_id is not None:
+            sequence.owner_id = request.owner_id
+        if request.channel is not None:
+            sequence.channel = request.channel.lower()
+        if request.status is not None:
+            sequence.status = request.status.value
+        if request.rate_limit_policy is not None:
+            sequence.rate_limit_policy = dict(request.rate_limit_policy)
+        if request.steps is not None:
+            existing_result = await session.execute(
+                select(SequenceStep).where(SequenceStep.sequence_id == sequence.id)
+            )
+            existing_by_order = {
+                step.step_order: step for step in existing_result.scalars()
+            }
+            requested_orders: set[int] = set()
+            for index, step_request in enumerate(request.steps, start=1):
+                order = step_request.step_order or index
+                requested_orders.add(order)
+                step = existing_by_order.get(order)
+                if step is None:
+                    step = SequenceStep(
+                        sequence_id=sequence.id,
+                        step_order=order,
+                        channel=step_request.channel.lower(),
+                        delay_seconds=step_request.delay_seconds,
+                        subject_template=step_request.subject_template,
+                        body_template=step_request.body_template,
+                        active=True,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(step)
+                    continue
+                step.channel = step_request.channel.lower()
+                step.delay_seconds = step_request.delay_seconds
+                step.subject_template = step_request.subject_template
+                step.body_template = step_request.body_template
+                step.active = True
+                step.updated_at = now
+            for order, step in existing_by_order.items():
+                if order not in requested_orders:
+                    step.active = False
+                    step.updated_at = now
+        sequence.updated_at = now
+        await session.flush()
+        return sequence_to_model(sequence, await _sequence_steps(session, sequence.id))
 
 
 async def create_sequence_enrollment(
@@ -302,6 +401,89 @@ async def cancel_sequence_enrollment(
         event_name=None,
         settings=settings,
     )
+
+
+async def create_sequence_email_alert(
+    enrollment_id: str,
+    request: SequenceEmailAlertCreate,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+) -> SequenceEmailAlertOut | None:
+    async with session_scope(settings) as session:
+        enrollment = await session.get(SequenceEnrollment, enrollment_id)
+        if enrollment is None:
+            return None
+        existing = await session.scalar(
+            select(SequenceEmailAlert).where(
+                SequenceEmailAlert.idempotency_key == idempotency_key
+            )
+        )
+        if existing is not None:
+            return sequence_email_alert_to_model(existing)
+        alert = SequenceEmailAlert(
+            enrollment_id=enrollment.id,
+            recipient_email=str(request.recipient_email).lower(),
+            subject=request.subject,
+            body=request.body,
+            send_at=request.send_at or utcnow(),
+            status="pending",
+            actor=actor,
+            idempotency_key=idempotency_key,
+            created_at=utcnow(),
+            updated_at=utcnow(),
+        )
+        session.add(alert)
+        await session.flush()
+        return sequence_email_alert_to_model(alert)
+
+
+async def process_due_sequence_email_alerts(
+    *,
+    limit: int = 50,
+    settings: Settings | None = None,
+    sender: SmtpSender | None = None,
+) -> dict[str, object]:
+    resolved = settings or get_settings()
+    smtp_sender = sender or StdlibSmtpSender(resolved)
+    now = utcnow()
+    async with session_scope(resolved) as session:
+        result = await session.execute(
+            select(SequenceEmailAlert)
+            .where(SequenceEmailAlert.status == "pending")
+            .where(SequenceEmailAlert.send_at <= now)
+            .order_by(SequenceEmailAlert.send_at.asc(), SequenceEmailAlert.id.asc())
+            .limit(limit)
+        )
+        alerts = list(result.scalars())
+        outcomes: list[dict[str, object]] = []
+        for alert in alerts:
+            message_id = f"<ghostrecon-alert-{alert.id}@local>"
+            try:
+                sent = smtp_sender.send(
+                    SmtpSendRequest(
+                        from_email=resolved.smtp_from_address.lower(),
+                        to_email=alert.recipient_email,
+                        subject=alert.subject,
+                        body=alert.body,
+                        message_id=message_id,
+                    )
+                )
+            except Exception as exc:
+                alert.status = "failed_retryable"
+                alert.last_error = str(exc)
+                alert.updated_at = utcnow()
+                outcomes.append(
+                    {"alert_id": alert.id, "status": alert.status, "reason": str(exc)}
+                )
+                continue
+            alert.status = "sent"
+            alert.provider_message_id = sent.provider_message_id
+            alert.sent_at = utcnow()
+            alert.updated_at = utcnow()
+            outcomes.append({"alert_id": alert.id, "status": alert.status})
+        return {"processed": len(outcomes), "outcomes": outcomes}
 
 
 async def process_due_sequence_steps(
@@ -675,12 +857,36 @@ def sequence_enrollment_to_api(enrollment: SequenceEnrollment) -> dict[str, obje
 def sequence_enrollment_to_model(
     enrollment: SequenceEnrollment,
     outbound_emails: list[OutboundEmail] | None = None,
+    display: dict[str, object] | None = None,
 ) -> SequenceEnrollmentOut:
     payload = sequence_enrollment_to_api(enrollment)
+    payload.update(display or {})
     payload["outbound_emails"] = [
         outbound_email_to_api(outbound) for outbound in outbound_emails or []
     ]
     return SequenceEnrollmentOut.model_validate(payload)
+
+
+def sequence_email_alert_to_api(alert: SequenceEmailAlert) -> dict[str, object]:
+    return {
+        "id": alert.id,
+        "enrollment_id": alert.enrollment_id,
+        "recipient_email": alert.recipient_email,
+        "subject": alert.subject,
+        "body": alert.body,
+        "send_at": alert.send_at,
+        "status": alert.status,
+        "actor": alert.actor,
+        "provider_message_id": alert.provider_message_id,
+        "last_error": alert.last_error,
+        "sent_at": alert.sent_at,
+        "created_at": alert.created_at,
+        "updated_at": alert.updated_at,
+    }
+
+
+def sequence_email_alert_to_model(alert: SequenceEmailAlert) -> SequenceEmailAlertOut:
+    return SequenceEmailAlertOut.model_validate(sequence_email_alert_to_api(alert))
 
 
 def inbound_event_to_api(event: InboundEmailEvent) -> dict[str, object]:
@@ -716,12 +922,24 @@ async def _enrollment_to_model_with_emails(
     session: Any,
     enrollment: SequenceEnrollment,
 ) -> SequenceEnrollmentOut:
-    result = await session.execute(
+    email_result = await session.execute(
         select(OutboundEmail)
         .where(OutboundEmail.enrollment_id == enrollment.id)
         .order_by(OutboundEmail.created_at)
     )
-    return sequence_enrollment_to_model(enrollment, list(result.scalars()))
+    sequence = await session.get(Sequence, enrollment.sequence_id)
+    contact = await session.get(Contact, enrollment.contact_id)
+    account = await session.get(Account, enrollment.account_id) if enrollment.account_id else None
+    target = await session.get(CrmTarget, enrollment.crm_target_id)
+    display = {
+        "sequence_name": sequence.name if sequence else None,
+        "contact_name": contact.full_name if contact else None,
+        "contact_email": contact.email if contact else None,
+        "account_name": account.company_name if account else None,
+        "account_domain": account.domain if account else None,
+        "crm_target_summary": _crm_target_summary(target),
+    }
+    return sequence_enrollment_to_model(enrollment, list(email_result.scalars()), display)
 
 
 async def _set_enrollment_status(
@@ -1126,6 +1344,15 @@ def _domain_from_email(email: str | None) -> str | None:
     if not email or "@" not in email:
         return None
     return email.rsplit("@", 1)[1].lower()
+
+
+def _crm_target_summary(target: CrmTarget | None) -> str | None:
+    if target is None:
+        return None
+    parts = [target.target_type.replace("_", " "), target.target_id]
+    if target.origin_type:
+        parts.append(f"from {target.origin_type.replace('_', ' ')}")
+    return " · ".join(str(part) for part in parts if part)
 
 
 def _render_template(template: str, contact: Contact, account: Account | None) -> str:

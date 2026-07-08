@@ -135,7 +135,7 @@ def records_table(
 
     rows = []
     for record in records:
-        cells = [html.Td(format_value(record.get(key))) for _, key in columns]
+        cells = [html.Td(render_value(record.get(key))) for _, key in columns]
         if actions:
             cells.append(html.Td(actions(record), className="table-actions"))
         rows.append(html.Tr(cells))
@@ -175,7 +175,7 @@ def detail_panel(title: str, rows: list[tuple[str, Any]]) -> html.Section:
             html.H2(title),
             html.Dl(
                 [
-                    html.Div([html.Dt(label), html.Dd(format_value(value))], className="detail-row")
+                    html.Div([html.Dt(label), html.Dd(render_value(value))], className="detail-row")
                     for label, value in rows
                 ],
                 className="detail-list",
@@ -187,6 +187,78 @@ def detail_panel(title: str, rows: list[tuple[str, Any]]) -> html.Section:
 
 def json_block(value: Any) -> html.Pre:
     return html.Pre(format_json(value), className="json-block")
+
+
+def render_value(value: Any) -> Any:
+    if value is None:
+        return "-"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, list):
+        if not value:
+            return "-"
+        return html.Ul(
+            [html.Li(render_inline_value(item)) for item in value],
+            className="value-list",
+        )
+    if isinstance(value, dict):
+        if not value:
+            return "-"
+        return html.Dl(
+            [
+                html.Div(
+                    [html.Dt(human_label(key)), html.Dd(render_inline_value(item))],
+                    className="compact-row",
+                )
+                for key, item in value.items()
+            ],
+            className="compact-list",
+        )
+    return str(value)
+
+
+def render_inline_value(value: Any) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    if isinstance(value, dict):
+        return ", ".join(
+            f"{human_label(key)}: {render_inline_value(item)}"
+            for key, item in value.items()
+        )
+    if isinstance(value, list):
+        return ", ".join(render_inline_value(item) for item in value) or "-"
+    return str(value)
+
+
+def human_label(value: Any) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "-"
+    return text.replace("_", " ").replace("-", " ").title()
+
+
+def format_duration(seconds: Any) -> str:
+    try:
+        value = int(seconds or 0)
+    except (TypeError, ValueError):
+        return "-"
+    if value <= 0:
+        return "Immediately"
+    days, remainder = divmod(value, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, secs = divmod(remainder, 60)
+    parts = []
+    if days:
+        parts.append(f"{days} day{'s' if days != 1 else ''}")
+    if hours:
+        parts.append(f"{hours} hour{'s' if hours != 1 else ''}")
+    if minutes:
+        parts.append(f"{minutes} minute{'s' if minutes != 1 else ''}")
+    if secs and not parts:
+        parts.append(f"{secs} second{'s' if secs != 1 else ''}")
+    return ", ".join(parts)
 
 
 def format_value(value: Any) -> str:

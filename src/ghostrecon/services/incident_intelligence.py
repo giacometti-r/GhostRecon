@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ghostrecon.common.config import Settings
 from ghostrecon.common.database import session_scope
 from ghostrecon.events.contracts import EventName, new_event
-from ghostrecon.models.api import WatchTargetCreate, WatchTargetPatch
+from ghostrecon.models.api import ManualIncidentCreate, WatchTargetCreate, WatchTargetPatch
 from ghostrecon.models.db import (
     AuditEvent,
     NewsArticle,
@@ -217,6 +217,79 @@ async def get_incident(
 ) -> SecurityIncident | None:
     async with session_scope(settings) as session:
         return await session.get(SecurityIncident, incident_id)
+
+
+async def create_manual_incident(
+    payload: ManualIncidentCreate,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+) -> SecurityIncident:
+    async with session_scope(settings) as session:
+        existing = await session.scalar(
+            select(SecurityIncident).where(
+                SecurityIncident.dedupe_key == f"manual-incident:{idempotency_key}"
+            )
+        )
+        if existing is not None:
+            return existing
+        incident = SecurityIncident(
+            status="candidate",
+            title=payload.title,
+            affected_companies=list(payload.affected_companies),
+            affected_domains=[domain.lower() for domain in payload.affected_domains],
+            incident_type=payload.incident_type,
+            attack_vector=payload.attack_vector,
+            first_observed_at=payload.first_observed_at,
+            last_observed_at=payload.last_observed_at or payload.first_observed_at,
+            geography=list(payload.geography),
+            languages=list(payload.languages),
+            confidence=payload.confidence,
+            evidence_article_ids=[],
+            evidence_source_item_ids=[],
+            evidence_families=["manual"],
+            corroboration_method="none",
+            canonical_state="canonical",
+            dedupe_key=f"manual-incident:{idempotency_key}",
+            source_definition_id=None,
+            source_item_ids=[],
+            version=1,
+        )
+        session.add(incident)
+        await session.flush()
+        session.add(
+            AuditEvent(
+                actor=actor,
+                action="security_incident.manual_created",
+                entity_type="security_incident",
+                entity_id=incident.id,
+                idempotency_key=idempotency_key,
+                payload={"source": "manual"},
+            )
+        )
+        self_event = new_event(
+            event_name=EventName.SECURITY_INCIDENT_DETECTED,
+            aggregate_type="security_incident",
+            aggregate_id=incident.id,
+            source_service=INCIDENT_SERVICE_NAME,
+            payload={
+                "security_incident_id": incident.id,
+                "manual": True,
+                "created_by": actor,
+            },
+            idempotency_key=f"security_incident.manual:{incident.id}",
+        ).model_dump(mode="json")
+        session.add(
+            OutboxEvent(
+                event_name=self_event["event_name"],
+                aggregate_type=self_event["aggregate_type"],
+                aggregate_id=self_event["aggregate_id"],
+                idempotency_key=self_event["idempotency_key"],
+                payload=self_event,
+            )
+        )
+        return incident
 
 
 async def list_watch_targets(
@@ -666,6 +739,7 @@ def incident_to_api(incident: SecurityIncident) -> dict[str, object]:
         "canonical_state": incident.canonical_state,
         "source_definition_id": incident.source_definition_id,
         "source_item_ids": incident.source_item_ids or [],
+        "version": getattr(incident, "version", 1),
         "created_at": incident.created_at,
         "updated_at": incident.updated_at,
     }

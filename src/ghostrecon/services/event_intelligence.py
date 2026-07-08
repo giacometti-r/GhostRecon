@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ghostrecon.common.config import Settings
 from ghostrecon.common.database import session_scope
 from ghostrecon.events.contracts import EventName, new_event
+from ghostrecon.models.api import ManualEventCreate
 from ghostrecon.models.db import (
+    AuditEvent,
     CyberEvent,
     EventParticipant,
     OutboxEvent,
@@ -232,6 +234,84 @@ async def list_events(
 async def get_event(event_id: str, settings: Settings | None = None) -> CyberEvent | None:
     async with session_scope(settings) as session:
         return await session.get(CyberEvent, event_id)
+
+
+async def create_manual_event(
+    payload: ManualEventCreate,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+) -> CyberEvent:
+    async with session_scope(settings) as session:
+        existing = await session.scalar(
+            select(CyberEvent).where(CyberEvent.dedupe_key == f"manual-event:{idempotency_key}")
+        )
+        if existing is not None:
+            return existing
+        now = datetime.now(UTC)
+        event = CyberEvent(
+            name=payload.name,
+            event_series_key=payload.event_series_key,
+            external_id=None,
+            canonical_url=payload.canonical_url,
+            original_start=payload.original_start,
+            original_end=payload.original_end,
+            source_timezone=payload.source_timezone,
+            iana_timezone=payload.iana_timezone,
+            timezone_status="resolved" if payload.starts_at_utc else "missing",
+            starts_at_utc=payload.starts_at_utc,
+            ends_at_utc=payload.ends_at_utc,
+            event_format=payload.event_format.value,
+            venue_name=payload.venue_name,
+            city=payload.city,
+            region=payload.region,
+            country=payload.country.upper() if payload.country else None,
+            virtual_url=payload.virtual_url,
+            topics=list(payload.topics),
+            organizers=list(payload.organizers),
+            confidence=payload.confidence,
+            canonical_state="canonical",
+            dedupe_key=f"manual-event:{idempotency_key}",
+            source_definition_id=None,
+            source_item_ids=[],
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(event)
+        await session.flush()
+        session.add(
+            AuditEvent(
+                actor=actor,
+                action="cyber_event.manual_created",
+                entity_type="cyber_event",
+                entity_id=event.id,
+                idempotency_key=idempotency_key,
+                payload={"source": "manual"},
+            )
+        )
+        session.add(
+            OutboxEvent(
+                event_name=EventName.CYBER_EVENT_DISCOVERED.value,
+                aggregate_type="cyber_event",
+                aggregate_id=event.id,
+                idempotency_key=f"cyber_event.manual:{event.id}",
+                payload=new_event(
+                    event_name=EventName.CYBER_EVENT_DISCOVERED,
+                    aggregate_type="cyber_event",
+                    aggregate_id=event.id,
+                    source_service=EVENT_SERVICE_NAME,
+                    payload={
+                        "cyber_event_id": event.id,
+                        "event_series_key": event.event_series_key,
+                        "manual": True,
+                        "created_by": actor,
+                    },
+                    idempotency_key=f"cyber_event.manual:{event.id}",
+                ).model_dump(mode="json"),
+            )
+        )
+        return event
 
 
 async def list_participants(
