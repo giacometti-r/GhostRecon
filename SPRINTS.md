@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 12 Python Dash intelligence dashboard UI complete; Sprint 13 hardening and pilot readiness is next, using the completed operator console as part of pilot operations.
+Stage: Sprint 12 Python Dash intelligence dashboard UI complete; Sprint 13 local demo bootstrap is next. The immediate local-demo blocker is that Compose can be running while Postgres has no public tables, which causes gateway reporting APIs to return `500` because migrations have not run and leaves the Dash console dependent on failing callbacks.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
@@ -149,8 +149,69 @@ The repository contains the production-oriented microservice scaffold, shared Py
 
 ## Future Sprints
 
-### Sprint 13 - Hardening and Pilot
+### Sprint 13 - Compose Migration Bootstrap
 
-- Add load tests, backup/restore drills, SLO alerts, stale-source alerts, runbooks, PodDisruptionBudgets, and external-secret templates.
-- Exercise source outages, rate limits, partial CRM failures, reconciliation, replay, retention, and disaster recovery.
-- Run a pilot with one territory or segment through the implemented Dash console and document production-readiness signoff.
+Goal: make a fresh local Compose stack create the database schema before demo traffic hits the gateway.
+
+- Add a local migration path that runs `alembic upgrade head` against the Compose Postgres database.
+- Support both a one-shot Compose migration service and an explicit demo reset path, so fresh startup and manual reset are covered.
+- Ensure gateway, reporting, and dashboard services do not present as demo-ready until migrations have completed.
+- Add checks that fail clearly when public tables are missing.
+- Acceptance: from empty Compose volumes, reporting endpoints no longer fail with `UndefinedTableError`, and `/v1/reporting/events?limit=3` returns a valid response instead of `500`.
+
+### Sprint 14 - Local Demo Reset and Health Scripts
+
+Goal: make the local demo repeatable with clear operator commands.
+
+- Define `scripts/demo_reset.sh` to reset local demo state, apply migrations, and reseed deterministic fake data.
+- Define `scripts/demo_check.sh` to verify containers, database schema, Redis, gateway routes, reporting APIs, console root, and Dash callback endpoints.
+- Add Makefile targets for the demo workflow, such as `make demo-reset`, `make demo-check`, and `make demo`.
+- Acceptance: a developer can run the documented demo command sequence on a clean checkout and get a ready local demo without manual DB commands.
+
+### Sprint 15 - Deterministic Fake Demo Data
+
+Goal: seed enough fake data to demonstrate the full GhostRecon story locally.
+
+- Add local-only deterministic fixture data for events, incidents, watch targets, review candidates, CRM targets, CRM export batches, sequence enrollments, meetings, prep packets, follow-up tasks, source health, and stale/degraded metadata.
+- Ensure fixture records are linked so list pages, detail pages, and action buttons all have realistic targets.
+- Include at least one actionable record per workflow: approve/reject review, promote incident to watchlist, toggle watch target, start/retry CRM export, pause/resume/cancel sequence, generate meeting prep, and record meeting outcome.
+- Acceptance: after demo reset, all dashboard pages render non-empty and linked records open correctly.
+
+### Sprint 16 - Dashboard Navigation and Interactivity Fixes
+
+Goal: make the dashboard behave like a real interactive local demo console.
+
+- Fix the bug where clicking dashboard tabs or links does not reliably change the visible page.
+- Verify Dash routing through `dcc.Location` for every sidebar route and detail route.
+- Add active navigation state so the current page is visually obvious.
+- Improve dashboard error states so failed API calls show actionable messages instead of appearing frozen.
+- Add browser-level acceptance coverage for tab clicks, URL changes, page content changes, refresh, filters, pagination, role switching, and action buttons.
+- Acceptance: clicking every sidebar tab changes both URL and page content without manual refresh.
+
+### Sprint 17 - End-to-End Live Demo Runbook
+
+Goal: make the local demo presentable and repeatable for a live walkthrough.
+
+- Add a concise runbook for starting, resetting, validating, and presenting the demo.
+- Define the walkthrough: open overview, inspect events/incidents, promote or review an item, export to CRM, show sequence state, book or update meeting handoff, and verify source health.
+- Require `demo_check.sh` to prove migrations, fake data, reporting APIs, console loading, Dash navigation, and at least one mutation path work.
+- Acceptance: a new developer can complete the local live demo without manual database edits or ad hoc API calls.
+
+## Local Demo Acceptance Scenarios
+
+- Fresh Compose stack from empty volumes.
+- Migration bootstrap creates public tables.
+- Gateway reporting endpoints return `200`, not `500`.
+- Reset and reseed fake data.
+- All dashboard tabs navigate correctly.
+- Detail links resolve for seeded records.
+- Dashboard actions mutate demo records and refresh visible state.
+- Viewer role cannot mutate; analyst/admin role can mutate.
+- Demo check fails clearly when migrations, seed data, or dashboard callbacks are broken.
+
+## Local Demo Assumptions
+
+- Use `SPRINTS.md`, not a new `SPRINT.md`.
+- Fake data is acceptable and must be deterministic.
+- The demo target is local Docker Compose, not Kubernetes or production.
+- The first implementation priority is fixing the missing migration/schema problem because it blocks all reporting-backed dashboard pages.
