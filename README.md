@@ -155,14 +155,29 @@ If a default host port is already in use, override it with `GHOSTRECON_POSTGRES_
 `GHOSTRECON_EMAIL_VERIFIER_PORT`. The gateway defaults to `http://localhost:8080`;
 the Dash console defaults to `http://localhost:8082`.
 
-Reset local Compose volumes and reapply only the schema bootstrap:
+Reset local Compose volumes, reapply migrations, and seed the deterministic Sprint 14
+demo smoke dataset:
 
 ```bash
-make demo-reset-schema
+make demo-reset
 ```
 
-This reset path does not seed fake demo records; deterministic demo data and the full
-demo health script are later local-demo work.
+Validate the running local demo stack:
+
+```bash
+make demo-check
+```
+
+Run the full local demo bootstrap in one command:
+
+```bash
+make demo
+```
+
+The demo check verifies Compose containers, PostgreSQL schema and seed rows, Redis,
+gateway readiness/reporting routes, the console root, and Dash callback metadata.
+The Sprint 14 seed is intentionally small; the richer story-linked dashboard dataset
+is Sprint 15 work.
 
 Run one implemented service directly:
 

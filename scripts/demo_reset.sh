@@ -14,12 +14,18 @@ echo "Applying database migrations..."
 docker compose build migrate
 docker compose run --rm migrate
 
+echo "Seeding deterministic local demo data..."
+docker compose run --rm migrate python -m ghostrecon.demo_seed
+
 cat <<EOF
 
-Schema reset complete.
+Local demo reset complete.
 
 Start the local demo stack with:
   make dev
+
+Or validate the full local demo workflow with:
+  make demo-check
 
 Gateway:
   http://localhost:${GHOSTRECON_HTTP_PORT:-8080}

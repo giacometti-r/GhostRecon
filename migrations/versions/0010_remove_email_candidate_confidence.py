@@ -1,6 +1,6 @@
 """remove email candidate confidence
 
-Revision ID: 0010_remove_email_candidate_confidence
+Revision ID: 0010_email_confidence
 Revises: 0009_meeting_handoff
 Create Date: 2026-07-08
 """
@@ -8,7 +8,7 @@ Create Date: 2026-07-08
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0010_remove_email_candidate_confidence"
+revision = "0010_email_confidence"
 down_revision = "0009_meeting_handoff"
 branch_labels = None
 depends_on = None

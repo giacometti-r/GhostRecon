@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from typing import Any
 
@@ -133,6 +134,31 @@ def test_compose_runs_migrations_before_demo_services() -> None:
         service_block = compose.split(f"  {service_name}:", maxsplit=1)[1].split("\n\n", 1)[0]
         assert "migrate:" in service_block
         assert "condition: service_completed_successfully" in service_block
+
+
+def test_seeded_source_migrations_type_jsonb_bulk_insert_columns() -> None:
+    for migration_path in (
+        Path("migrations/versions/0003_event_intelligence.py"),
+        Path("migrations/versions/0004_incident_intelligence.py"),
+    ):
+        migration = migration_path.read_text(encoding="utf-8")
+
+        for column_name in (
+            "query_scope",
+            "rate_limit_policy",
+            "checkpoint_state",
+            "policy_evidence",
+            "participant_reuse_evidence",
+        ):
+            assert f'sa.column("{column_name}", postgresql.JSONB())' in migration
+
+
+def test_alembic_revision_ids_fit_default_version_table() -> None:
+    for migration_path in Path("migrations/versions").glob("*.py"):
+        migration = migration_path.read_text(encoding="utf-8")
+        match = re.search(r'^revision = "([^"]+)"', migration, flags=re.MULTILINE)
+        assert match is not None, migration_path
+        assert len(match.group(1)) <= 32, migration_path
 
 
 def _run(coroutine):

@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -34,7 +35,12 @@ def get_engine(settings: Settings | None = None) -> AsyncEngine:
     global _engine
     if _engine is None:
         resolved = settings or get_settings()
-        _engine = create_async_engine(str(resolved.database_url), pool_pre_ping=True)
+        _engine = create_async_engine(
+            str(resolved.database_url),
+            pool_pre_ping=True,
+            json_serializer=json.dumps,
+            json_deserializer=json.loads,
+        )
     return _engine
 
 

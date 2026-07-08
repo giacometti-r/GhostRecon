@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 13 Compose migration bootstrap complete; Sprint 14 local demo reset and health scripts are next. The local Compose stack now runs Alembic migrations against Postgres before gateway/dashboard traffic is treated as ready, and schema-sensitive readiness checks fail clearly when public tables are missing.
+Stage: Sprint 14 local demo reset and health scripts complete; Sprint 15 deterministic fake demo data is next. The local Compose stack now has repeatable reset, migration, deterministic smoke seeding, and health-check commands for validating a ready local demo without manual database commands.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
@@ -148,6 +148,14 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Added a minimal schema-only `scripts/demo_reset.sh` and `make demo-reset-schema` path for resetting local Compose volumes and reapplying migrations.
 - Updated local development documentation for automatic Compose migrations and direct non-Compose migration usage.
 
+### Sprint 14 - Local Demo Reset and Health Scripts
+
+- Added deterministic local smoke seeding through `python -m ghostrecon.demo_seed`, guarded against non-local environments unless explicitly overridden.
+- Expanded `scripts/demo_reset.sh` to reset Compose volumes, start Postgres/Redis, apply migrations, and seed local demo rows.
+- Added `scripts/demo_check.sh` to verify required containers, representative PostgreSQL schema and seed rows, Redis, gateway health/readiness/reporting APIs, console health/readiness/root, and Dash callback dependency metadata.
+- Added `make demo-reset`, `make demo-check`, and `make demo` while preserving `make demo-reset-schema` compatibility.
+- Updated local development documentation for the repeatable demo command sequence.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -157,15 +165,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
 ## Future Sprints
-
-### Sprint 14 - Local Demo Reset and Health Scripts
-
-Goal: make the local demo repeatable with clear operator commands.
-
-- Define `scripts/demo_reset.sh` to reset local demo state, apply migrations, and reseed deterministic fake data.
-- Define `scripts/demo_check.sh` to verify containers, database schema, Redis, gateway routes, reporting APIs, console root, and Dash callback endpoints.
-- Add Makefile targets for the demo workflow, such as `make demo-reset`, `make demo-check`, and `make demo`.
-- Acceptance: a developer can run the documented demo command sequence on a clean checkout and get a ready local demo without manual DB commands.
 
 ### Sprint 15 - Deterministic Fake Demo Data
 

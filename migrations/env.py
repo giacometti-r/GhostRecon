@@ -1,4 +1,5 @@
 import asyncio
+import json
 from logging.config import fileConfig
 
 from alembic import context
@@ -46,6 +47,8 @@ async def run_async_migrations() -> None:
         configuration,
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        json_serializer=json.dumps,
+        json_deserializer=json.loads,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)

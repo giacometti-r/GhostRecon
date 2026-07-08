@@ -1,4 +1,4 @@
-.PHONY: install lint type test security migrate dev demo-reset-schema docker-build helm-lint helm-template helm-template-external helm-check helm-template-secrets
+.PHONY: install lint type test security migrate dev demo-reset-schema demo-reset demo-check demo docker-build helm-lint helm-template helm-template-external helm-check helm-template-secrets
 
 install:
 	python -m pip install --upgrade pip
@@ -24,6 +24,16 @@ dev:
 
 demo-reset-schema:
 	sh scripts/demo_reset.sh
+
+demo-reset:
+	sh scripts/demo_reset.sh
+
+demo-check:
+	sh scripts/demo_check.sh
+
+demo: demo-reset
+	docker compose up --build -d
+	sh scripts/demo_check.sh
 
 docker-build:
 	docker build -t ghostrecon:local .
