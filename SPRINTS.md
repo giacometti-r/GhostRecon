@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 12 Python Dash intelligence dashboard UI complete; Sprint 13 local demo bootstrap is next. The immediate local-demo blocker is that Compose can be running while Postgres has no public tables, which causes gateway reporting APIs to return `500` because migrations have not run and leaves the Dash console dependent on failing callbacks.
+Stage: Sprint 13 Compose migration bootstrap complete; Sprint 14 local demo reset and health scripts are next. The local Compose stack now runs Alembic migrations against Postgres before gateway/dashboard traffic is treated as ready, and schema-sensitive readiness checks fail clearly when public tables are missing.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
@@ -139,6 +139,15 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Added local Compose support for `console-service` on `GHOSTRECON_CONSOLE_HTTP_PORT`, plus Helm defaults for the internal gateway URL.
 - Updated dashboard, service, architecture, operations, Helm, README, and sprint documentation for the implemented Dash console.
 
+### Sprint 13 - Compose Migration Bootstrap
+
+- Added a one-shot local Compose `migrate` service that runs `alembic upgrade head` against the Compose Postgres database before API and worker services start.
+- Made `gateway-service`, `console-service`, and the Celery worker depend on successful Compose migration completion.
+- Added schema-aware `/readyz` checks for gateway, reporting, and console services while keeping `/healthz` process-only.
+- Added clear readiness failures for unreachable databases, missing `alembic_version`, and missing public tables instead of surfacing `UndefinedTableError` through reporting APIs.
+- Added a minimal schema-only `scripts/demo_reset.sh` and `make demo-reset-schema` path for resetting local Compose volumes and reapplying migrations.
+- Updated local development documentation for automatic Compose migrations and direct non-Compose migration usage.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -148,16 +157,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
 ## Future Sprints
-
-### Sprint 13 - Compose Migration Bootstrap
-
-Goal: make a fresh local Compose stack create the database schema before demo traffic hits the gateway.
-
-- Add a local migration path that runs `alembic upgrade head` against the Compose Postgres database.
-- Support both a one-shot Compose migration service and an explicit demo reset path, so fresh startup and manual reset are covered.
-- Ensure gateway, reporting, and dashboard services do not present as demo-ready until migrations have completed.
-- Add checks that fail clearly when public tables are missing.
-- Acceptance: from empty Compose volumes, reporting endpoints no longer fail with `UndefinedTableError`, and `/v1/reporting/events?limit=3` returns a valid response instead of `500`.
 
 ### Sprint 14 - Local Demo Reset and Health Scripts
 

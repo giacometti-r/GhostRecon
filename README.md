@@ -145,11 +145,24 @@ make test
 make dev
 ```
 
-The local stack starts PostgreSQL, Redis, `gateway-service`, `console-service`, a Celery worker, and the email verifier sidecar.
+The local stack starts PostgreSQL, Redis, a one-shot migration container,
+`gateway-service`, `console-service`, a Celery worker, and the email verifier sidecar.
+Compose runs `alembic upgrade head` before the API and dashboard services are treated as
+ready, so fresh local volumes get the public schema before reporting traffic reaches the
+gateway.
 If a default host port is already in use, override it with `GHOSTRECON_POSTGRES_PORT`,
 `GHOSTRECON_REDIS_PORT`, `GHOSTRECON_HTTP_PORT`, `GHOSTRECON_CONSOLE_HTTP_PORT`, or
 `GHOSTRECON_EMAIL_VERIFIER_PORT`. The gateway defaults to `http://localhost:8080`;
 the Dash console defaults to `http://localhost:8082`.
+
+Reset local Compose volumes and reapply only the schema bootstrap:
+
+```bash
+make demo-reset-schema
+```
+
+This reset path does not seed fake demo records; deterministic demo data and the full
+demo health script are later local-demo work.
 
 Run one implemented service directly:
 
@@ -166,7 +179,7 @@ GHOSTRECON_GATEWAY_BASE_URL=http://localhost:8080 \
 uvicorn ghostrecon.service_apps.runtime:app --reload --port 8082
 ```
 
-Run migrations:
+Run migrations for direct, non-Compose local development:
 
 ```bash
 make migrate

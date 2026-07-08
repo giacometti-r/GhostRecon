@@ -7,6 +7,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from ghostrecon.common.config import Settings
+from ghostrecon.common.database import check_database_schema_ready
 from ghostrecon.common.logging import configure_logging
 
 REQUEST_COUNT = Counter(
@@ -19,6 +20,7 @@ REQUEST_LATENCY = Histogram(
     "HTTP request latency by service, method, and path.",
     ["service", "method", "path"],
 )
+SCHEMA_READY_SERVICES = {"gateway-service", "reporting-service", "console-service"}
 
 
 def create_base_app(settings: Settings) -> FastAPI:
@@ -36,8 +38,21 @@ def create_base_app(settings: Settings) -> FastAPI:
     async def healthz() -> dict[str, str]:
         return {"status": "ok", "service": settings.service_name}
 
-    @app.get("/readyz", tags=["system"])
-    async def readyz() -> dict[str, str]:
+    @app.get("/readyz", tags=["system"], response_model=None)
+    async def readyz() -> dict[str, str] | JSONResponse:
+        if settings.service_name in SCHEMA_READY_SERVICES:
+            schema = await check_database_schema_ready(settings)
+            if not schema.ready:
+                payload: dict[str, object] = {
+                    "status": "not_ready",
+                    "service": settings.service_name,
+                    "reason": schema.reason or "database schema is not ready",
+                }
+                if schema.missing_tables:
+                    payload["missing_tables"] = list(schema.missing_tables)
+                if schema.error:
+                    payload["error"] = schema.error
+                return JSONResponse(status_code=503, content=payload)
         return {"status": "ready", "service": settings.service_name}
 
     @app.get("/metrics", tags=["system"])

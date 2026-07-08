@@ -25,6 +25,32 @@ services:
       timeout: 5s
       retries: 20
 
+  migrate:
+    build: .
+    command:
+      - sh
+      - -ec
+      - |
+        attempt=1
+        until alembic upgrade head; do
+          if [ "$$attempt" -ge 20 ]; then
+            echo "database migration failed after $$attempt attempts" >&2
+            exit 1
+          fi
+          echo "database unavailable; retrying migration in 3 seconds" >&2
+          attempt=$$((attempt + 1))
+          sleep 3
+        done
+    environment:
+      GHOSTRECON_ENVIRONMENT: local
+      GHOSTRECON_SERVICE_NAME: migration-job
+      GHOSTRECON_DATABASE_URL: postgresql+asyncpg://ghostrecon:ghostrecon@postgres:5432/ghostrecon
+      GHOSTRECON_REDIS_URL: redis://redis:6379/0
+      GHOSTRECON_EMAIL_VERIFIER_URL: http://email-verifier:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   gateway-service:
     build: .
     environment: &service-env
@@ -40,6 +66,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   console-service:
     build: .
@@ -52,6 +80,8 @@ services:
     depends_on:
       gateway-service:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build: .
@@ -64,6 +94,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   email-verifier:
     image: umutert/emailvalidator:latest
