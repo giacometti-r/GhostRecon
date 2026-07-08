@@ -53,6 +53,11 @@ Server-side authorization is required for every action. Hiding a button is not a
 
 ## Navigation and Views
 
+The implemented Dash console uses `dcc.Location` as the single routing source for
+sidebar tabs, detail links, and pagination links. The sidebar marks the current
+section with active styling and `aria-current`; detail routes inherit the active
+state from their parent section.
+
 ### 1. Global Events
 
 Views:
@@ -249,6 +254,7 @@ Each response includes `generated_at`, source watermark(s), projection version, 
 ## Empty, Loading, Error, and Stale States
 
 - Empty state distinguishes “no matching data” from “source has never succeeded.”
+- Failed dashboard API reads show endpoint/status context directly on the route so operators can distinguish gateway/reporting outages from empty data.
 - Partial dependency failure renders available read data, names the degraded dependency, and blocks unsafe mutations.
 - Stale evidence or policy projection blocks approval/export when the owning policy requires current state.
 - Long-running actions return an operation/batch ID; the UI polls bounded status endpoints and can be safely refreshed.

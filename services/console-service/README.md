@@ -49,6 +49,7 @@ Serves the Dash operator console, queries reporting/gateway APIs, renders pages,
 - Preserve policy, lineage, and audit fields when backfilling or replaying data.
 - Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
 - Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+- Dashboard sidebar, detail, and pagination links route through Dash `dcc.Location`; the active sidebar item follows the current URL and highlights parent sections for detail routes.
 
 ## Failure Modes
 
@@ -56,6 +57,7 @@ Serves the Dash operator console, queries reporting/gateway APIs, renders pages,
 - Missing records are surfaced as `404` on detail/action endpoints.
 - Provider outages should degrade or retry according to the service implementation rather than bypassing policy gates.
 - Database or outbox failures leave the operation incomplete and should be retried with the same idempotency key when available.
+- Failed dashboard API reads render visible error notices with endpoint/status context instead of leaving the page looking frozen.
 
 ## Local Run
 
@@ -67,4 +69,5 @@ GHOSTRECON_SERVICE_NAME=console-service uvicorn ghostrecon.service_apps.runtime:
 
 ```bash
 pytest tests/unit/test_console_dashboard.py
+pytest tests/browser/test_console_navigation_playwright.py
 ```

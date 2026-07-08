@@ -18,11 +18,18 @@ def icon(name: str, *, size: int = 18) -> DashIconify:
     return DashIconify(icon=f"lucide:{name}", width=size, height=size)
 
 
-def nav_link(label: str, href: str, icon_name: str) -> dcc.Link:
-    return dcc.Link(
-        [icon(icon_name, size=17), html.Span(label)],
-        href=href,
-        className="nav-link",
+def nav_link(label: str, href: str, icon_name: str, *, active: bool = False) -> html.Div:
+    class_name = "nav-link active" if active else "nav-link"
+    aria_current = "page" if active else "false"
+    return html.Div(
+        dcc.Link(
+            [icon(icon_name, size=17), html.Span(label)],
+            href=href,
+            refresh=False,
+            className="nav-link-target",
+        ),
+        className=class_name,
+        **{"aria-current": aria_current},
     )
 
 

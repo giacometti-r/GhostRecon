@@ -117,6 +117,8 @@ Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 - Dashboard reads use `gateway-service`/`reporting-service` APIs with `X-Actor` and `X-Operator-Role` context; callbacks never query canonical tables.
 - Mutating controls call owning feature-service APIs through the gateway for review decisions, bounded bulk review, CRM export/retry, watchlist promotion/toggle, sequence pause/resume/cancel, and meeting handoff actions.
 - Every route surfaces freshness/degraded metadata where reporting provides it and preserves table alternatives for map/calendar views.
+- Sidebar, detail, and pagination navigation use Dash client-side routing with visible active section state.
+- Failed dashboard reads render endpoint/status context on the page so gateway/reporting issues are visible during local demos.
 - Source-health operations are visible but read-only until source-operations APIs are implemented during hardening/pilot work.
 
 ## Source Policy
@@ -176,6 +178,8 @@ make demo
 
 The demo check verifies Compose containers, PostgreSQL schema and seed rows, Redis,
 gateway readiness/reporting routes, the console root, and Dash callback metadata.
+Browser-level console navigation and action coverage lives in the Playwright pytest
+suite.
 The Sprint 14 seed is intentionally small; the richer story-linked dashboard dataset
 is Sprint 15 work.
 

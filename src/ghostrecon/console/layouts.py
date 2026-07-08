@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections import Counter
 from typing import Any
 from urllib.parse import parse_qs
@@ -92,7 +93,8 @@ def build_shell(settings: Settings) -> html.Div:
             html.Div(
                 [
                     html.Nav(
-                        [nav_link(label, href, icon_name) for label, href, icon_name in NAV_ITEMS],
+                        render_navigation("/"),
+                        id="sidebar-nav",
                         className="sidebar-nav",
                         **{"aria-label": "Dashboard navigation"},
                     ),
@@ -166,6 +168,28 @@ def render_page(
     return _page("Not found", [], [empty_state(f"No dashboard route exists for {path}.")])
 
 
+def render_navigation(pathname: str | None) -> list[Any]:
+    active_href = _active_nav_href(pathname)
+    return [
+        nav_link(label, href, icon_name, active=href == active_href)
+        for label, href, icon_name in NAV_ITEMS
+    ]
+
+
+def _active_nav_href(pathname: str | None) -> str:
+    path = (pathname or "/").rstrip("/") or "/"
+    if path == "/":
+        return "/"
+    matches = [
+        href
+        for _, href, _ in NAV_ITEMS
+        if href != "/" and (path == href or path.startswith(f"{href}/"))
+    ]
+    if not matches:
+        return ""
+    return max(matches, key=len)
+
+
 def overview_page(client: ConsoleApiClient, params: dict[str, Any]) -> html.Div:
     payloads = {
         "kpis": _safe_get(client, "/v1/reporting/kpis/catalog"),
@@ -181,7 +205,6 @@ def overview_page(client: ConsoleApiClient, params: dict[str, Any]) -> html.Div:
         summary_tile("Sources", _count(payloads["sources"], "sources")),
     ]
     kpis = payloads["kpis"].get("kpis", {}) if isinstance(payloads["kpis"], dict) else {}
-    errors = _errors(payloads)
     children = [
         html.Div(tiles, className="summary-grid"),
         detail_panel(
@@ -197,7 +220,6 @@ def overview_page(client: ConsoleApiClient, params: dict[str, Any]) -> html.Div:
                 ("Lag seconds", "freshness_lag_seconds"),
             ],
         ),
-        *errors,
     ]
     return _page("Operator Overview", list(payloads.values()), children, query_params=params)
 
@@ -223,7 +245,9 @@ def events_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) 
                 ("Country", "country"),
                 ("Confidence", "confidence"),
             ],
-            actions=lambda record: [dcc.Link("Open", href=f"/events/{record.get('id')}")],
+            actions=lambda record: [
+                dcc.Link("Open", href=f"/events/{record.get('id')}", refresh=False)
+            ],
         ),
         _pagination(payload, "/events", params),
     ]
@@ -360,7 +384,12 @@ def review_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) 
     )
     children = [
         query_badges(params),
-        dcc.Link("Open enrichment queue", href="/review/enrichment", className="text-link"),
+        dcc.Link(
+            "Open enrichment queue",
+            href="/review/enrichment",
+            refresh=False,
+            className="text-link",
+        ),
         html.Div(
             _bulk_review_actions(payload.get("candidates", []), role),
             className="bulk-actions",
@@ -510,7 +539,9 @@ def meetings_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str
                 ("CRM sync", "crm_sync_status"),
                 ("Outcome", "outcome_status"),
             ],
-            actions=lambda record: [dcc.Link("Open", href=f"/meetings/{record.get('id')}")],
+            actions=lambda record: [
+                dcc.Link("Open", href=f"/meetings/{record.get('id')}", refresh=False)
+            ],
         ),
         _pagination(payload, "/meetings", params),
     ]
@@ -596,6 +627,7 @@ def _page(
         [
             page_header(title, subtitle=subtitle),
             metadata_banner(payloads),
+            *_payload_error_notices(payloads),
             html.Div(children, className="page-stack"),
         ],
         className="dashboard-page",
@@ -616,11 +648,25 @@ def _safe_get(
         return {"_error": exc.to_dict()}
 
 
-def _errors(payloads: dict[str, dict[str, Any]]) -> list[html.Div]:
+def _payload_error_notices(payloads: list[dict[str, Any] | None]) -> list[html.Div]:
     errors = []
-    for name, payload in payloads.items():
-        if "_error" in payload:
-            errors.append(error_notice(f"{name} unavailable", payload["_error"].get("message")))
+    for payload in payloads:
+        if not isinstance(payload, dict) or "_error" not in payload:
+            continue
+        error = payload["_error"]
+        if not isinstance(error, dict):
+            errors.append(error_notice("Gateway request failed", str(error)))
+            continue
+        status = error.get("status_code")
+        path = error.get("path")
+        detail_parts = []
+        if path:
+            detail_parts.append(f"Endpoint: {path}")
+        if status:
+            detail_parts.append(f"Status: {status}")
+        message = error.get("message") or "Gateway request failed"
+        detail = " · ".join(detail_parts) or "Check the gateway service and retry the page."
+        errors.append(error_notice(str(message), detail))
     return errors
 
 
@@ -648,7 +694,10 @@ def _pagination(payload: dict[str, Any], base_path: str, params: dict[str, Any])
     query = "&".join(
         f"{key}={value}" for key, value in next_params.items() if value not in (None, "")
     )
-    return html.Div(dcc.Link("Next page", href=f"{base_path}?{query}"), className="pagination")
+    return html.Div(
+        dcc.Link("Next page", href=f"{base_path}?{query}", refresh=False),
+        className="pagination",
+    )
 
 
 def _event_calendar(events: list[dict[str, Any]]) -> html.Div:
@@ -781,7 +830,12 @@ def _incident_actions(record: dict[str, Any], role: str) -> list[Any]:
     disabled = not _can_mutate(role)
     version_missing = record.get("version") is None
     return [
-        dcc.Link("Open", href=f"/incidents/{record.get('id')}", className="text-link"),
+        dcc.Link(
+            "Open",
+            href=f"/incidents/{record.get('id')}",
+            refresh=False,
+            className="text-link",
+        ),
         action_button(
             "Watch",
             _action_id("incident", "promote", record.get("id")),
@@ -893,10 +947,18 @@ def _action_id(
         "kind": kind,
         "action": action,
         "target_id": str(target_id or ""),
-        "version": version,
-        "policy_hash": policy_hash,
-        "enabled": enabled,
+        "version": _action_value(version),
+        "policy_hash": policy_hash or "",
+        "enabled": enabled if enabled is not None else "",
     }
+
+
+def _action_value(value: Any) -> str | int | float | bool:
+    if value is None:
+        return ""
+    if isinstance(value, str | int | float | bool):
+        return value
+    return json.dumps(value, sort_keys=True, default=str)
 
 
 def _can_mutate(role: str) -> bool:

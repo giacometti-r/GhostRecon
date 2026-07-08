@@ -107,17 +107,45 @@ a:hover {
 .nav-link {
   display: flex;
   align-items: center;
-  gap: 10px;
   min-height: 38px;
-  padding: 8px 10px;
   border-radius: 6px;
   color: #dbe5f2;
 }
 
-.nav-link:hover {
+.nav-link-target {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: inherit;
+}
+
+.nav-link:hover,
+.nav-link-target:hover {
   background: #1d293d;
   color: #ffffff;
   text-decoration: none;
+}
+
+.nav-link.active,
+.nav-link[aria-current="page"] {
+  background: #eef6f5;
+  color: var(--accent-dark);
+  font-weight: 700;
+}
+
+.nav-link.active:hover,
+.nav-link[aria-current="page"]:hover {
+  background: #ffffff;
+  color: var(--accent-dark);
+}
+
+.nav-link.active .nav-link-target:hover,
+.nav-link[aria-current="page"] .nav-link-target:hover {
+  background: transparent;
+  color: var(--accent-dark);
 }
 
 .console-main {

@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 15 deterministic fake demo data complete; Sprint 16 dashboard navigation and interactivity fixes are next. The local Compose stack now has repeatable reset, migration, linked deterministic fake data, and health-check commands for validating a ready local demo without manual database commands.
+Stage: Sprint 16 dashboard navigation and interactivity fixes complete; Sprint 17 end-to-end live demo runbook is next. The local Compose stack now has repeatable reset, migration, linked deterministic fake data, dashboard navigation acceptance coverage, and health-check commands for validating a ready local demo without manual database commands.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
@@ -163,6 +163,14 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Linked fixture records so dashboard list pages, detail pages, and owner-service action APIs have realistic targets after `make demo-reset`.
 - Expanded `demo_check.sh` to verify the broader seeded schema plus meeting detail, sequence enrollment, and CRM export batch detail endpoints.
 
+### Sprint 16 - Dashboard Navigation and Interactivity Fixes
+
+- Fixed Dash dashboard navigation by making sidebar, detail, and pagination links use client-side `dcc.Location` routing consistently.
+- Added active sidebar navigation state, including parent-route highlighting for detail pages and `aria-current` for the current section.
+- Improved route-level API failure rendering so failed gateway/reporting reads show endpoint and status details while preserving any available page content.
+- Added Playwright browser acceptance coverage for sidebar tab clicks, URL/content changes, refresh, filters, pagination, role switching, detail links, action buttons, and visible failed-API states.
+- Kept console reads and writes inside the existing gateway-backed `console-service` boundary with no direct canonical table access.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -172,17 +180,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
 ## Future Sprints
-
-### Sprint 16 - Dashboard Navigation and Interactivity Fixes
-
-Goal: make the dashboard behave like a real interactive local demo console.
-
-- Fix the bug where clicking dashboard tabs or links does not reliably change the visible page.
-- Verify Dash routing through `dcc.Location` for every sidebar route and detail route.
-- Add active navigation state so the current page is visually obvious.
-- Improve dashboard error states so failed API calls show actionable messages instead of appearing frozen.
-- Add browser-level acceptance coverage for tab clicks, URL changes, page content changes, refresh, filters, pagination, role switching, and action buttons.
-- Acceptance: clicking every sidebar tab changes both URL and page content without manual refresh.
 
 ### Sprint 17 - End-to-End Live Demo Runbook
 

@@ -16,7 +16,7 @@ from ghostrecon.console.api import (
     degraded_dependencies,
 )
 from ghostrecon.console.callbacks import perform_dashboard_action
-from ghostrecon.console.layouts import render_page
+from ghostrecon.console.layouts import render_navigation, render_page
 from ghostrecon.service_apps.factory import build_app
 
 NOW = datetime(2026, 7, 7, tzinfo=UTC).isoformat()
@@ -168,6 +168,40 @@ def test_render_page_handles_empty_and_degraded_reporting_payload() -> None:
     rendered = str(page)
     assert "Stale reporting data" in rendered
     assert "No records match" in rendered
+
+
+def test_render_navigation_marks_active_parent_route() -> None:
+    links = render_navigation("/meetings/meeting-1")
+    rendered_links = [str(link) for link in links]
+
+    assert sum("nav-link active" in rendered for rendered in rendered_links) == 1
+    active = next(rendered for rendered in rendered_links if "nav-link active" in rendered)
+    assert "Meetings" in active
+    assert "aria-current" in active
+
+
+def test_render_page_surfaces_gateway_error_path_and_status() -> None:
+    client = _client()
+    FakeHttpClient.responses = {
+        ("GET", "/v1/reporting/events"): (
+            503,
+            {"detail": "reporting database unavailable"},
+        )
+    }
+
+    page = render_page(
+        "/events",
+        "",
+        "analyst@example.com",
+        "analyst",
+        Settings(service_name="console-service"),
+        client=client,
+    )
+
+    rendered = str(page)
+    assert "reporting database unavailable" in rendered
+    assert "Endpoint: /v1/reporting/events" in rendered
+    assert "Status: 503" in rendered
 
 
 def test_dashboard_actions_send_expected_gateway_mutations() -> None:

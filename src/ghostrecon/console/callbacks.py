@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import httpx
@@ -13,7 +14,7 @@ from ghostrecon.console.api import (
     normalize_role,
 )
 from ghostrecon.console.components import error_notice, icon
-from ghostrecon.console.layouts import render_page
+from ghostrecon.console.layouts import render_navigation, render_page
 from ghostrecon.models.api import DashboardRole
 
 ACTION_PATTERN = {
@@ -52,6 +53,13 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         _mutation_refresh: int | None,
     ) -> html.Div:
         return render_page(pathname, search, actor, role, settings)
+
+    @dash_app.callback(
+        Output("sidebar-nav", "children"),
+        Input("console-url", "pathname"),
+    )
+    def route_navigation(pathname: str | None) -> list[Any]:
+        return render_navigation(pathname)
 
     @dash_app.callback(
         Output("mutation-status", "children"),
@@ -132,7 +140,7 @@ def perform_dashboard_action(
         payload = {
             "candidate_ids": candidate_ids,
             "decision": decision,
-            "candidate_versions": action_id.get("version") or {},
+            "candidate_versions": _version_map(action_id.get("version")),
             "reason_code": f"dashboard_bulk_{action}",
             "reason": "Sprint 12 dashboard bulk review action.",
             "policy_snapshot_hash": action_id.get("policy_hash"),
@@ -270,3 +278,15 @@ def _int(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 1
+
+
+def _version_map(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if isinstance(value, str) and value:
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
