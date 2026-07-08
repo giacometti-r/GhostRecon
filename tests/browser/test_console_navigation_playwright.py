@@ -63,6 +63,7 @@ def test_sidebar_routes_change_url_content_and_active_state(page, console_server
 
     page.goto(base_url)
     _heading(page, "Operator Overview").wait_for()
+    _select_role(page, "analyst")
 
     for route, heading in expected_routes.items():
         label = "Overview" if route == "/" else _nav_label(heading)
@@ -72,6 +73,7 @@ def test_sidebar_routes_change_url_content_and_active_state(page, console_server
         active = page.locator(".nav-link.active")
         assert active.count() == 1
         assert active.first.get_attribute("aria-current") == "page"
+        assert console_server["mutations"] == []
 
 
 def test_detail_links_refresh_filters_pagination_role_and_action(page, console_server) -> None:
@@ -105,9 +107,11 @@ def test_detail_links_refresh_filters_pagination_role_and_action(page, console_s
     page.goto(f"{base_url}/review")
     approve = page.locator('button[title="Approve"]').first
     assert approve.is_disabled()
+    assert console_server["mutations"] == []
     _select_role(page, "analyst")
     approve = page.locator('button[title="Approve"]').first
     playwright_sync_api.expect(approve).to_be_enabled()
+    assert console_server["mutations"] == []
     approve.click()
     page.get_by_text("Review candidate review-1 approved.").wait_for()
     assert any(

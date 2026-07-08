@@ -79,6 +79,8 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         action_id = ctx.triggered_id
         if not isinstance(action_id, dict):
             return no_update, no_update
+        if _triggered_click_count() < 1:
+            return no_update, no_update
         try:
             message = perform_dashboard_action(
                 action_id,
@@ -290,3 +292,14 @@ def _version_map(value: Any) -> dict[str, Any]:
             return {}
         return parsed if isinstance(parsed, dict) else {}
     return {}
+
+
+def _triggered_click_count() -> int:
+    triggered = getattr(ctx, "triggered", None) or []
+    if not triggered:
+        return 0
+    value = triggered[0].get("value")
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
