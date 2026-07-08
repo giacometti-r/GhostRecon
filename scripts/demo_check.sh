@@ -84,7 +84,7 @@ docker exec "$postgres_id" psql -U ghostrecon -d ghostrecon -tAc \
   || fail "PostgreSQL alembic_version check failed"
 pass "PostgreSQL alembic_version exists"
 
-expected_tables="source_definitions cyber_events security_incidents watch_targets review_candidates crm_targets"
+expected_tables="source_definitions cyber_events event_participants security_incidents watch_targets review_candidates crm_targets crm_export_batches crm_export_items accounts contacts sequences sequence_steps sequence_enrollments meeting_handoffs meeting_prep_packets meeting_follow_up_tasks"
 for table_name in $expected_tables; do
   exists=$(docker exec "$postgres_id" psql -U ghostrecon -d ghostrecon -tAc \
     "select to_regclass('public.$table_name') is not null")
@@ -99,6 +99,14 @@ for table_name in $expected_tables; do
 done
 pass "PostgreSQL deterministic demo seed rows exist"
 
+demo_meeting_id=$(docker exec "$postgres_id" psql -U ghostrecon -d ghostrecon -tAc \
+  "select id from meeting_handoffs where idempotency_key = 'demo:sprint15:meeting:security-discovery' limit 1")
+[ -n "$demo_meeting_id" ] || fail "PostgreSQL demo meeting handoff id not found"
+
+demo_crm_export_batch_id=$(docker exec "$postgres_id" psql -U ghostrecon -d ghostrecon -tAc \
+  "select id from crm_export_batches where idempotency_key = 'demo:sprint15:crm-export-batch:retryable' limit 1")
+[ -n "$demo_crm_export_batch_id" ] || fail "PostgreSQL demo CRM export batch id not found"
+
 redis_ping=$(docker exec "$redis_id" redis-cli ping)
 [ "$redis_ping" = "PONG" ] || fail "Redis ping failed: $redis_ping"
 pass "Redis ping"
@@ -111,6 +119,10 @@ http_get "gateway reporting incidents" "$GATEWAY_URL/v1/reporting/incidents"
 http_get "gateway reporting watch targets" "$GATEWAY_URL/v1/reporting/watch-targets"
 http_get "gateway reporting review queue" "$GATEWAY_URL/v1/reporting/review-queue"
 http_get "gateway reporting CRM targets" "$GATEWAY_URL/v1/reporting/crm-targets"
+http_get "gateway reporting meetings" "$GATEWAY_URL/v1/reporting/meetings"
+http_get "gateway reporting meeting detail" "$GATEWAY_URL/v1/reporting/meetings/$demo_meeting_id"
+http_get "gateway sequence enrollments" "$GATEWAY_URL/v1/sequences/enrollments"
+http_get "gateway CRM export batch detail" "$GATEWAY_URL/v1/crm/exports/$demo_crm_export_batch_id"
 http_get "gateway reporting source health" "$GATEWAY_URL/v1/reporting/source-health"
 
 wait_for_http "console health endpoint is reachable" "$CONSOLE_URL/healthz"

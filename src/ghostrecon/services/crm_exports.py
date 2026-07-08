@@ -32,7 +32,9 @@ from ghostrecon.services.crm_attio import (
     AttioCrmClient,
     CrmClient,
     CrmExportPlan,
+    CrmExportResult,
     CrmProviderError,
+    CrmSyncPlan,
 )
 
 CRM_SERVICE_NAME = "crm-service"
@@ -155,7 +157,7 @@ async def process_crm_export_batch(
     client: CrmClient | None = None,
 ) -> CrmExportBatchOut:
     resolved = settings or get_settings()
-    crm_client = client or AttioCrmClient(resolved)
+    crm_client = client or _crm_client_for_settings(resolved)
     async with session_scope(resolved) as session:
         batch = await session.get(CrmExportBatch, batch_id)
         if batch is None:
@@ -229,6 +231,35 @@ async def process_crm_export_batch(
 def selection_hash(target_ids: list[str]) -> str:
     payload = json.dumps(sorted(target_ids), separators=(",", ":"))
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _crm_client_for_settings(settings: Settings) -> CrmClient:
+    if settings.attio_access_token:
+        return AttioCrmClient(settings)
+    if settings.environment in {"local", "dev"}:
+        return LocalDemoCrmClient()
+    return AttioCrmClient(settings)
+
+
+class LocalDemoCrmClient:
+    async def export(self, plan: CrmExportPlan) -> CrmExportResult:
+        return _demo_result(plan)
+
+    async def sync(self, plan: CrmSyncPlan) -> CrmExportResult:
+        return _demo_result(plan)
+
+
+def _demo_result(plan: CrmExportPlan | CrmSyncPlan) -> CrmExportResult:
+    digest = hashlib.sha256(f"{plan.provider_object}:{plan.stable_match_key}".encode()).hexdigest()
+    record_id = f"demo-{plan.provider_object}-{digest[:12]}"
+    list_id = f"demo-list-{plan.list_api_slug}" if plan.list_api_slug else None
+    entry_id = f"demo-entry-{digest[12:24]}" if plan.list_api_slug else None
+    return CrmExportResult(
+        provider_record_id=record_id,
+        provider_list_id=list_id,
+        provider_list_entry_id=entry_id,
+        raw_response={"provider": "local-demo", "stable_match_key": plan.stable_match_key},
+    )
 
 
 def crm_export_item_to_model(item: CrmExportItem) -> CrmExportItemOut:

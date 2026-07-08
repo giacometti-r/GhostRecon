@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 14 local demo reset and health scripts complete; Sprint 15 deterministic fake demo data is next. The local Compose stack now has repeatable reset, migration, deterministic smoke seeding, and health-check commands for validating a ready local demo without manual database commands.
+Stage: Sprint 15 deterministic fake demo data complete; Sprint 16 dashboard navigation and interactivity fixes are next. The local Compose stack now has repeatable reset, migration, linked deterministic fake data, and health-check commands for validating a ready local demo without manual database commands.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
@@ -156,6 +156,13 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Added `make demo-reset`, `make demo-check`, and `make demo` while preserving `make demo-reset-schema` compatibility.
 - Updated local development documentation for the repeatable demo command sequence.
 
+### Sprint 15 - Deterministic Fake Demo Data
+
+- Expanded local-only deterministic seeding to cover linked events, event participants, incidents, watch targets, review candidates, CRM targets, CRM export batches/items, accounts, contacts, sequences, meetings, prep packets, follow-up tasks, and fresh/degraded source-health records.
+- Seeded actionable local demo records for review approve/reject, incident watch promotion, watch target toggle, CRM export start/retry, sequence pause/resume/cancel, meeting prep generation, meeting outcome recording, and meeting CRM retry.
+- Linked fixture records so dashboard list pages, detail pages, and owner-service action APIs have realistic targets after `make demo-reset`.
+- Expanded `demo_check.sh` to verify the broader seeded schema plus meeting detail, sequence enrollment, and CRM export batch detail endpoints.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -165,15 +172,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
 ## Future Sprints
-
-### Sprint 15 - Deterministic Fake Demo Data
-
-Goal: seed enough fake data to demonstrate the full GhostRecon story locally.
-
-- Add local-only deterministic fixture data for events, incidents, watch targets, review candidates, CRM targets, CRM export batches, sequence enrollments, meetings, prep packets, follow-up tasks, source health, and stale/degraded metadata.
-- Ensure fixture records are linked so list pages, detail pages, and action buttons all have realistic targets.
-- Include at least one actionable record per workflow: approve/reject review, promote incident to watchlist, toggle watch target, start/retry CRM export, pause/resume/cancel sequence, generate meeting prep, and record meeting outcome.
-- Acceptance: after demo reset, all dashboard pages render non-empty and linked records open correctly.
 
 ### Sprint 16 - Dashboard Navigation and Interactivity Fixes
 

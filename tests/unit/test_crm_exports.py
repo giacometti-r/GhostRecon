@@ -21,6 +21,8 @@ from ghostrecon.services.crm_attio import (
     CrmSyncPlan,
 )
 from ghostrecon.services.crm_exports import (
+    LocalDemoCrmClient,
+    _crm_client_for_settings,
     _require_exportable_targets,
     selection_hash,
 )
@@ -136,6 +138,12 @@ def test_exportable_target_validation_requires_current_approved_targets() -> Non
 
 def test_selection_hash_is_order_independent() -> None:
     assert selection_hash(["b", "a"]) == selection_hash(["a", "b"])
+
+
+def test_local_demo_crm_client_is_used_without_attio_token() -> None:
+    client = _crm_client_for_settings(Settings(environment="local", attio_access_token=None))
+
+    assert isinstance(client, LocalDemoCrmClient)
 
 
 @pytest.mark.asyncio

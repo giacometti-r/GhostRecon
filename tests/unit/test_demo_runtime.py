@@ -16,12 +16,29 @@ def test_demo_seed_ids_are_stable_uuid_strings() -> None:
     ids = DEMO_SEED_IDS.__dict__
 
     assert set(ids) == {
-        "source_definition_id",
+        "fresh_source_definition_id",
+        "degraded_source_definition_id",
         "cyber_event_id",
+        "event_participant_id",
         "security_incident_id",
+        "review_incident_id",
         "watch_target_id",
-        "review_candidate_id",
-        "crm_target_id",
+        "approve_review_candidate_id",
+        "reject_review_candidate_id",
+        "export_crm_target_id",
+        "retry_crm_target_id",
+        "meeting_crm_target_id",
+        "crm_export_batch_id",
+        "crm_export_item_id",
+        "account_id",
+        "contact_id",
+        "sequence_id",
+        "sequence_step_id",
+        "active_sequence_enrollment_id",
+        "paused_sequence_enrollment_id",
+        "meeting_handoff_id",
+        "meeting_prep_packet_id",
+        "meeting_follow_up_task_id",
     }
     assert all(str(UUID(value)) == value for value in ids.values())
     assert len(set(ids.values())) == len(ids)
@@ -44,10 +61,21 @@ def test_demo_seed_covers_demo_check_reporting_resources() -> None:
     assert DEMO_SEED_REPORTING_RESOURCES == (
         "source_definitions",
         "cyber_events",
+        "event_participants",
         "security_incidents",
         "watch_targets",
         "review_candidates",
         "crm_targets",
+        "crm_export_batches",
+        "crm_export_items",
+        "accounts",
+        "contacts",
+        "sequences",
+        "sequence_steps",
+        "sequence_enrollments",
+        "meeting_handoffs",
+        "meeting_prep_packets",
+        "meeting_follow_up_tasks",
     )
 
 
@@ -85,6 +113,10 @@ def test_demo_check_script_covers_required_health_checks() -> None:
         "/v1/reporting/watch-targets",
         "/v1/reporting/review-queue",
         "/v1/reporting/crm-targets",
+        "/v1/reporting/meetings",
+        "/v1/reporting/meetings/$demo_meeting_id",
+        "/v1/sequences/enrollments",
+        "/v1/crm/exports/$demo_crm_export_batch_id",
         "/v1/reporting/source-health",
         "/_dash-dependencies",
     ):
@@ -92,3 +124,5 @@ def test_demo_check_script_covers_required_health_checks() -> None:
 
     assert "redis-cli ping" in script
     assert "alembic_version" in script
+    assert "demo:sprint15:meeting:security-discovery" in script
+    assert "demo:sprint15:crm-export-batch:retryable" in script
