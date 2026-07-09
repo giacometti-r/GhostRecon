@@ -127,6 +127,45 @@ def test_manual_event_route_uses_additive_create_contract(monkeypatch) -> None:
     assert response.json()["id"] == "event-1"
 
 
+def test_manual_event_route_rejects_non_iso_country_code() -> None:
+    client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
+    response = client.post(
+        "/v1/intelligence/events/manual",
+        headers={"Idempotency-Key": "manual-event-1", "X-Actor": "analyst@example.com"},
+        json={
+            "name": "Manual Event",
+            "canonical_url": "https://example.com/manual-event",
+            "starts_at_utc": "2026-07-03T12:00:00Z",
+            "event_format": "in-person",
+            "street_address": "Bahnhofstrasse",
+            "city": "Zurich",
+            "postcode": "8001",
+            "country": "SWITZERLAND",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "two-letter ISO 3166-1 alpha-2 code" in response.text
+
+
+def test_manual_event_route_rejects_malformed_canonical_url() -> None:
+    client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
+    response = client.post(
+        "/v1/intelligence/events/manual",
+        headers={"Idempotency-Key": "manual-event-1", "X-Actor": "analyst@example.com"},
+        json={
+            "name": "Manual Event",
+            "canonical_url": "https:example.com/manual-event",
+            "starts_at_utc": "2026-07-03T12:00:00Z",
+            "event_format": "online",
+            "virtual_url": "https://example.com/manual-event/join",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "absolute http(s) URL" in response.text
+
+
 def test_event_patch_route_uses_versioned_update_contract(monkeypatch) -> None:
     async def fake_update_event(event_id, request, **kwargs):
         assert event_id == "event-1"

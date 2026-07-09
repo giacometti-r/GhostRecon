@@ -14,6 +14,7 @@ from ghostrecon.console.api import (
     ConsoleApiError,
     any_stale,
     degraded_dependencies,
+    idempotency_key,
 )
 from ghostrecon.console.callbacks import perform_dashboard_action
 from ghostrecon.console.layouts import render_navigation, render_page
@@ -121,6 +122,12 @@ def test_console_api_client_maps_timeout() -> None:
         assert "timed out" in str(exc)
     else:
         raise AssertionError("expected timeout error")
+
+
+def test_dashboard_idempotency_key_accepts_composite_target_parts() -> None:
+    key = idempotency_key("manual-event", "Cyber Summit", "https://example.test/event")
+
+    assert key.startswith("dashboard:manual-event:Cyber Summit:https://example.test/event:")
 
 
 def test_console_service_renders_dash_and_preserves_existing_routes(monkeypatch) -> None:

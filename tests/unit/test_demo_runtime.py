@@ -46,6 +46,7 @@ def test_demo_seed_ids_are_stable_uuid_strings() -> None:
         "sequence_meeting_step_id",
         "active_sequence_enrollment_id",
         "paused_sequence_enrollment_id",
+        "sequence_activity_id",
         "meeting_handoff_id",
         "meeting_prep_packet_id",
         "meeting_follow_up_task_id",

@@ -33,6 +33,7 @@ from ghostrecon.models.db import (
     Sequence,
     SequenceEnrollment,
     SequenceStep,
+    SequenceStepActivity,
     SourceDefinition,
     WatchTarget,
     WatchTargetMonitoringRun,
@@ -77,6 +78,7 @@ class DemoSeedIds:
     sequence_meeting_step_id: str = _seed_uuid("sequence-step/meeting")
     active_sequence_enrollment_id: str = _seed_uuid("sequence-enrollment/active")
     paused_sequence_enrollment_id: str = _seed_uuid("sequence-enrollment/paused")
+    sequence_activity_id: str = _seed_uuid("sequence-activity/email-approval")
     meeting_handoff_id: str = _seed_uuid("meeting/security-discovery")
     meeting_prep_packet_id: str = _seed_uuid("meeting-prep/security-discovery")
     meeting_follow_up_task_id: str = _seed_uuid("meeting-follow-up/security-discovery")
@@ -579,6 +581,12 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
         pause_reason=None,
         idempotency_key="demo:sprint15:sequence-enrollment:active",
     )
+    await _sequence_activity(
+        session,
+        now=now,
+        sequence_enrollment=active_enrollment,
+        sequence_step=step,
+    )
     await _sequence_enrollment(
         session,
         DEMO_SEED_IDS.paused_sequence_enrollment_id,
@@ -1048,6 +1056,39 @@ async def _sequence_enrollment(
     return enrollment
 
 
+async def _sequence_activity(
+    session: AsyncSession,
+    *,
+    now: datetime,
+    sequence_enrollment: SequenceEnrollment,
+    sequence_step: SequenceStep,
+) -> None:
+    activity = await _get_or_create(
+        session,
+        SequenceStepActivity,
+        DEMO_SEED_IDS.sequence_activity_id,
+    )
+    activity.enrollment_id = sequence_enrollment.id
+    activity.sequence_step_id = sequence_step.id
+    activity.outbound_email_id = None
+    activity.meeting_handoff_id = None
+    activity.step_order = sequence_step.step_order
+    activity.channel = sequence_step.channel
+    activity.status = "pending_approval"
+    activity.due_at = now
+    activity.approved_by = None
+    activity.approved_at = None
+    activity.completed_by = None
+    activity.completed_at = None
+    activity.metadata_payload = {
+        "display_label": "Review approved email",
+        "instructions": "Approve the local demo email before the sequence can send.",
+    }
+    activity.idempotency_key = "demo:sprint21:sequence-activity:email-approval"
+    activity.created_at = now
+    activity.updated_at = now
+
+
 async def _meeting(
     session: AsyncSession,
     *,
@@ -1192,6 +1233,7 @@ async def _seeded_counts(settings: Settings) -> dict[str, int]:
             "sequences": await _count_seeded(session, Sequence),
             "sequence_steps": await _count_seeded(session, SequenceStep),
             "sequence_enrollments": await _count_seeded(session, SequenceEnrollment),
+            "sequence_step_activities": await _count_seeded(session, SequenceStepActivity),
             "meeting_handoffs": await _count_seeded(session, MeetingHandoff),
             "meeting_prep_packets": await _count_seeded(session, MeetingPrepPacket),
             "meeting_follow_up_tasks": await _count_seeded(session, MeetingFollowUpTask),

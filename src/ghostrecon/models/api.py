@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from pydantic import (
@@ -274,6 +275,25 @@ def normalize_event_format_value(value: object) -> object:
     return value
 
 
+def _validate_absolute_http_url(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    parsed = urlsplit(normalized)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("must be an absolute http(s) URL")
+    return normalized
+
+
+def _validate_country_code(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().upper()
+    if len(normalized) != 2 or not normalized.isalpha():
+        raise ValueError("country must be a two-letter ISO 3166-1 alpha-2 code")
+    return normalized
+
+
 class EventCanonicalState(StrEnum):
     CANONICAL = "canonical"
     DUPLICATE = "duplicate"
@@ -395,6 +415,16 @@ class ManualEventCreate(BaseModel):
     def normalize_event_format(cls, value: object) -> object:
         return normalize_event_format_value(value)
 
+    @field_validator("canonical_url", "virtual_url")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        return _validate_absolute_http_url(value)
+
+    @field_validator("country")
+    @classmethod
+    def validate_country(cls, value: str | None) -> str | None:
+        return _validate_country_code(value)
+
 
 class EventUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -426,6 +456,16 @@ class EventUpdateRequest(BaseModel):
     @classmethod
     def normalize_event_format(cls, value: object) -> object:
         return normalize_event_format_value(value)
+
+    @field_validator("canonical_url", "virtual_url")
+    @classmethod
+    def validate_url(cls, value: str | None) -> str | None:
+        return _validate_absolute_http_url(value)
+
+    @field_validator("country")
+    @classmethod
+    def validate_country(cls, value: str | None) -> str | None:
+        return _validate_country_code(value)
 
 
 class SecurityIncidentStatus(StrEnum):

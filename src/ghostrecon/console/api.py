@@ -180,8 +180,9 @@ def normalize_role(role: str | None) -> str:
         return DashboardRole.VIEWER.value
 
 
-def idempotency_key(action: str, target_id: str | None = None) -> str:
-    suffix = f":{target_id}" if target_id else ""
+def idempotency_key(action: str, *target_parts: object | None) -> str:
+    stable_parts = [str(part) for part in target_parts if part not in (None, "")]
+    suffix = f":{':'.join(stable_parts)}" if stable_parts else ""
     return f"dashboard:{action}{suffix}:{uuid4()}"
 
 
