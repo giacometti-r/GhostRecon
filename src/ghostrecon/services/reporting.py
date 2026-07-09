@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from ghostrecon.common.config import Settings
 from ghostrecon.common.database import session_scope
@@ -30,6 +30,7 @@ from ghostrecon.models.api import (
     SourceHealth,
     SourceHealthStatus,
     WatchTargetOut,
+    normalize_event_format_value,
 )
 from ghostrecon.models.db import (
     CrmTarget,
@@ -109,9 +110,7 @@ def reporting_metadata_from_sources(
     generated = generated_at or datetime.now(UTC)
     latest_success = _latest_datetime(source.last_success_at for source in sources)
     degraded = [
-        source.name
-        for source in sources
-        if source.freshness_status in STALE_SOURCE_STATUSES
+        source.name for source in sources if source.freshness_status in STALE_SOURCE_STATUSES
     ]
     watermarks: dict[str, object] = {"projection_generated_at": generated}
     if latest_success is not None:
@@ -169,7 +168,8 @@ async def get_reporting_events(
         if country:
             stmt = stmt.where(CyberEvent.country == country.upper())
         if event_format:
-            stmt = stmt.where(CyberEvent.event_format == event_format)
+            normalized_format = normalize_event_format_value(event_format)
+            stmt = stmt.where(CyberEvent.event_format == str(normalized_format))
         if topic:
             stmt = stmt.where(CyberEvent.topics.contains([topic]))
         result = await session.execute(stmt.offset(offset).limit(limit + 1))
@@ -236,7 +236,12 @@ async def get_reporting_incidents(
         if source:
             stmt = stmt.where(SecurityIncident.source_definition_id == source)
         if company:
-            stmt = stmt.where(SecurityIncident.affected_companies.contains([company]))
+            stmt = stmt.where(
+                or_(
+                    SecurityIncident.primary_affected_company == company,
+                    SecurityIncident.affected_companies.contains([company]),
+                )
+            )
         if attack_vector:
             stmt = stmt.where(SecurityIncident.attack_vector == attack_vector)
         if incident_type:
@@ -254,8 +259,7 @@ async def get_reporting_incidents(
     return ReportingIncidentList(
         metadata=metadata,
         incidents=[
-            SecurityIncidentOut.model_validate(incident_to_api(incident))
-            for incident in incidents
+            SecurityIncidentOut.model_validate(incident_to_api(incident)) for incident in incidents
         ],
         next_cursor=next_cursor(rows, limit, offset),
     )
@@ -317,8 +321,7 @@ async def get_reporting_watch_targets(
     return ReportingWatchTargetList(
         metadata=metadata,
         watch_targets=[
-            WatchTargetOut.model_validate(watch_target_to_api(target))
-            for target in targets
+            WatchTargetOut.model_validate(watch_target_to_api(target)) for target in targets
         ],
         next_cursor=next_cursor(rows, limit, offset),
     )
@@ -415,9 +418,7 @@ async def get_reporting_source_health(
     sources = await list_source_health(kind, settings)
     if freshness_status:
         sources = [
-            source
-            for source in sources
-            if source.freshness_status.value == freshness_status
+            source for source in sources if source.freshness_status.value == freshness_status
         ]
     sources = sorted(sources, key=lambda source: (source.source_kind, source.name))
     rows = sources[offset : offset + limit + 1]

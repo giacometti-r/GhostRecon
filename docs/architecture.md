@@ -47,8 +47,8 @@ flowchart TD
 
 | Boundary | Owns | Does not own |
 | --- | --- | --- |
-| Event intelligence | Event-source adapters, event/series normalization, participant-source permissions | Contact generation, CRM writes |
-| Incident intelligence | Article discovery, incident candidates, corroboration evidence, watchlists | Full-article archives, breached data, CRM writes |
+| Event intelligence | Event-source adapters, event/series normalization, address/geocoding state, participant-source permissions | Contact generation, CRM writes |
+| Incident intelligence | Article discovery, company-specific incident candidates, corroboration evidence, watchlists | Full-article archives, breached data, CRM writes |
 | Enrichment and email intelligence | Entity resolution and permitted public-business-contact enrichment | Source-reuse decisions, final approval |
 | Scoring and governance | Explainable scores, corroboration policy, suppression, retention, approvals, inert CRM targets, audits | Dashboard read models, vendor-specific CRM mapping |
 | Console and reporting | Python Dash console UI boundary, review actions, reporting read models, freshness indicators | Intelligence ingestion, independent dashboard service |
@@ -56,7 +56,7 @@ flowchart TD
 | Sequencing | Separate outreach approval, sequence templates/enrollments, SMTP/IMAP execution, reply/bounce/unsubscribe handling, send rate limits | CRM export, meeting handoff, source acquisition |
 | Meeting handoff | Google Calendar booking, AE/SE prep packets, meeting outcomes, follow-up tasks, CRM sync state | Source acquisition, CRM export approval, outreach execution |
 
-The existing `ingestion-service` remains for source imports and other compatibility intake. It is not the primary acquisition path. Attio interaction is handled through the CRM service's Attio API adapter. Sprint 3 implements the shared `SourceDefinition` / `RawSourceItem` foundation, adapter helpers, source-health API, source-ingestion events, and source-fetch Celery task. Sprint 4 implements event intelligence; Sprint 5 implements incident article discovery, candidate incident detection, corroboration inputs, and watchlists; Sprint 6 implements entity resolution, permitted contact enrichment, persisted email candidates, verification payloads, and minimal review routing; Sprint 7 implements versioned scoring, governance review decisions, incident analyst decisions, suppression persistence, and non-exported CRM targets; Sprint 8 implements query-backed reporting read APIs and dashboard freshness/degraded metadata; Sprint 9 implements CRM export batches/items; Sprint 10 implements sequencing and outbound state; Sprint 11 implements Google Calendar meeting handoff, prep packets, outcomes, follow-up tasks, and meeting reporting read APIs; Sprint 12 implements the Python Dash operator dashboard in `console-service`.
+The existing `ingestion-service` remains for source imports and other compatibility intake. It is not the primary acquisition path. Attio interaction is handled through the CRM service's Attio API adapter. Sprint 3 implements the shared `SourceDefinition` / `RawSourceItem` foundation, adapter helpers, source-health API, source-ingestion events, and source-fetch Celery task. Sprint 4 implements event intelligence; Sprint 5 implements incident article discovery, candidate incident detection, corroboration inputs, and watchlists; Sprint 6 implements entity resolution, permitted contact enrichment, persisted email candidates, verification payloads, and minimal review routing; Sprint 7 implements versioned scoring, governance review decisions, incident analyst decisions, suppression persistence, and non-exported CRM targets; Sprint 8 implements query-backed reporting read APIs and dashboard freshness/degraded metadata; Sprint 9 implements CRM export batches/items; Sprint 10 implements sequencing and outbound state; Sprint 11 implements Google Calendar meeting handoff, prep packets, outcomes, follow-up tasks, and meeting reporting read APIs; Sprint 12 implements the Python Dash operator dashboard in `console-service`; Sprints 17 and 18 implement geocoded event create/edit workflows, durable participant enrichment queueing, company-specific incident governance, revert, and corroborated-only company watch promotion.
 
 ## Runtime Pattern
 
@@ -73,7 +73,7 @@ The existing `ingestion-service` remains for source imports and other compatibil
 - `SourceDefinition` and `RawSourceItem` are implemented as the shared ingestion foundation. Canonical intelligence and workflow entities now include `CyberEvent`, `EventParticipant`, `NewsArticle`, `SecurityIncident`, `WatchTarget`, `EntityResolutionCase`, `ContactEnrichmentCandidate`, `OrganizationEmailPattern`, `ReviewCandidate`, `CandidateScore`, `ReviewDecision`, `CrmTarget`, `CrmExportBatch`, `CrmExportItem`, `Sequence`, `SequenceStep`, `SequenceEnrollment`, `OutboundEmail`, `InboundEmailEvent`, `SequenceSuppressionEvent`, `MeetingHandoff`, `MeetingPrepPacket`, and `MeetingFollowUpTask`.
 - All canonical entities retain GhostRecon IDs, source URLs, fetch timestamps, hashes, permission/licensing state, and evidence references.
 - Lead sources include `cyber_event` and `security_incident` in addition to existing sources.
-- Mutating APIs require an idempotency key; events use deterministic aggregate and source keys.
+- Mutating APIs require an idempotency key; mutable event and incident workflows also use optimistic versions where the owning service can conflict.
 - Contracts and lifecycle rules are defined in [the intelligence pipeline specification](specifications/intelligence-pipeline.md).
 
 ## Reliability Pattern

@@ -35,10 +35,13 @@ Mounts the aggregate API surface and forwards gateway routes to the same impleme
 - `GET /v1/reporting/source-health` via `reporting_source_health` (gateway).
 - `GET /v1/reporting/kpis/catalog` via `reporting_kpi_catalog` (gateway).
 - `GET /v1/intelligence/events` via `intelligence_events` (gateway).
+- `POST /v1/intelligence/events/manual` via `intelligence_create_manual_event` (gateway).
+- `PATCH /v1/intelligence/events/{event_id}` via `intelligence_patch_event` (gateway).
 - `GET /v1/intelligence/events/{event_id}` via `intelligence_event_detail` (gateway).
 - `GET /v1/intelligence/events/{event_id}/participants` via `intelligence_event_participants` (gateway).
 - `GET /v1/intelligence/participants` via `intelligence_participants` (gateway).
 - `GET /v1/intelligence/incidents` via `intelligence_incidents` (gateway).
+- `POST /v1/intelligence/incidents/manual` via `intelligence_create_manual_incident` (gateway).
 - `GET /v1/intelligence/incidents/{incident_id}` via `intelligence_incident_detail` (gateway).
 - `GET /v1/intelligence/watch-targets` via `intelligence_watch_targets` (gateway).
 - `POST /v1/intelligence/watch-targets` via `intelligence_create_watch_target` (gateway).
@@ -51,6 +54,7 @@ Mounts the aggregate API surface and forwards gateway routes to the same impleme
 - `GET /v1/enrichment/entity-resolutions` via `enrichment_entity_resolutions` (gateway).
 - `POST /v1/enrichment/contact-candidates` via `enrichment_create_contact_candidate` (gateway).
 - `GET /v1/enrichment/contact-candidates` via `enrichment_contact_candidates` (gateway).
+- `POST /v1/enrichment/event-participants/{participant_id}/enrich-target` via `enrichment_event_participant_enrich_target` (gateway).
 - `POST /v1/email/candidates/persist` via `email_persist_candidates` (gateway).
 - `POST /v1/email/verify-batch` via `email_verify_batch` (gateway).
 - `POST /v1/scoring/candidates` via `candidate_score` (gateway).
@@ -81,6 +85,7 @@ Mounts the aggregate API surface and forwards gateway routes to the same impleme
 - `GET /v1/review/crm-targets` via `review_crm_targets` (gateway).
 - `POST /v1/governance/incidents/{incident_id}/corroborate` via `governance_corroborate_incident` (gateway).
 - `POST /v1/governance/incidents/{incident_id}/reject` via `governance_reject_incident` (gateway).
+- `POST /v1/governance/incidents/{incident_id}/revert` via `governance_revert_incident` (gateway).
 - `GET /v1/kpis/catalog` via `kpi_catalog` (gateway).
 
 ## Dependencies

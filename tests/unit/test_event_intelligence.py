@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from ghostrecon.events.contracts import EventName, new_event
+from ghostrecon.models.api import CyberEventOut, EventFormat, ManualEventCreate
 from ghostrecon.services.event_intelligence import (
     build_event_dedupe_key,
     candidates_from_raw_item,
@@ -70,10 +71,13 @@ def test_schema_org_event_candidate_preserves_lineage_fields_and_dedupe_key() ->
                 "location": {
                     "name": "Mandalay Bay",
                     "address": {
+                        "streetAddress": "3950 Las Vegas Blvd S",
                         "addressLocality": "Las Vegas",
                         "addressRegion": "NV",
+                        "postalCode": "89119",
                         "addressCountry": "US",
                     },
+                    "geo": {"latitude": 36.0908, "longitude": -115.1761},
                 },
                 "keywords": "security, research",
             }
@@ -84,10 +88,37 @@ def test_schema_org_event_candidate_preserves_lineage_fields_and_dedupe_key() ->
 
     assert candidate.name == "Black Hat USA 2026"
     assert candidate.event_series_key == "black-hat"
-    assert candidate.event_format == "physical"
+    assert candidate.event_format == "in-person"
+    assert candidate.street_address == "3950 Las Vegas Blvd S"
+    assert candidate.postcode == "89119"
     assert candidate.country == "US"
+    assert candidate.latitude == 36.0908
     assert "security" in candidate.topics
     assert build_event_dedupe_key(candidate) == build_event_dedupe_key(candidate)
+
+
+def test_event_api_accepts_legacy_format_aliases() -> None:
+    assert (
+        ManualEventCreate(
+            name="Virtual event",
+            canonical_url="https://example.com/event",
+            starts_at_utc=datetime(2026, 8, 6, 16, 0, tzinfo=UTC),
+            event_format="virtual",
+        ).event_format
+        == EventFormat.ONLINE
+    )
+    assert (
+        CyberEventOut(
+            id="event-1",
+            name="Physical event",
+            event_series_key="demo",
+            event_format="physical",
+            confidence=90,
+            created_at=datetime(2026, 8, 6, 16, 0, tzinfo=UTC),
+            updated_at=datetime(2026, 8, 6, 16, 0, tzinfo=UTC),
+        ).event_format
+        == EventFormat.IN_PERSON
+    )
 
 
 def test_schema_org_participants_are_published_only_and_policy_gated() -> None:

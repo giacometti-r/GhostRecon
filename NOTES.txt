@@ -1,0 +1,4 @@
+For finding people on linkedin -> openSERP API (google search) -> site:linkedin.com/in ("Head of Cybersecurity" OR "CISO" OR "Chief Information Security Officer" OR "CTO" OR "Chief Technology Officer") "Swisscom"
+
+- when an event is manually entered there should be a system that goes to the URL 
+provided and scrapes it for the participant list or organisers. 

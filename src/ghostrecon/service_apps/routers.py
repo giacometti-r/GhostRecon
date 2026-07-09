@@ -34,7 +34,9 @@ from ghostrecon.models.api import (
     EventParticipantEnrichResult,
     EventParticipantList,
     EventParticipantOut,
+    EventUpdateRequest,
     IncidentDecisionRequest,
+    IncidentWatchPromotionRequest,
     ManualEventCreate,
     ManualIncidentCreate,
     MeetingActionRequest,
@@ -111,6 +113,7 @@ from ghostrecon.services.event_intelligence import (
     list_events,
     list_participants,
     participant_to_api,
+    update_event,
 )
 from ghostrecon.services.governance import (
     approve_review_candidate,
@@ -122,6 +125,7 @@ from ghostrecon.services.governance import (
     list_crm_targets,
     reject_incident,
     reject_review_candidate,
+    revert_incident,
     review_decision_to_model,
     suppression_to_model,
 )
@@ -306,9 +310,7 @@ async def reporting_incidents(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@gateway_router.get(
-    "/v1/reporting/incidents/{incident_id}", response_model=ReportingIncidentDetail
-)
+@gateway_router.get("/v1/reporting/incidents/{incident_id}", response_model=ReportingIncidentDetail)
 @reporting_router.get(
     "/v1/reporting/incidents/{incident_id}", response_model=ReportingIncidentDetail
 )
@@ -493,12 +495,38 @@ async def intelligence_create_manual_event(
     idempotency_key: str = Header(alias="Idempotency-Key"),
     actor: str = Header(default="system", alias="X-Actor"),
 ) -> CyberEventOut:
-    event = await create_manual_event(
-        request,
-        actor=actor,
-        idempotency_key=idempotency_key,
-        settings=get_settings(),
-    )
+    try:
+        event = await create_manual_event(
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return CyberEventOut.model_validate(event_to_api(event))
+
+
+@gateway_router.patch("/v1/intelligence/events/{event_id}", response_model=CyberEventOut)
+@event_intelligence_router.patch("/v1/intelligence/events/{event_id}", response_model=CyberEventOut)
+async def intelligence_patch_event(
+    event_id: str,
+    request: EventUpdateRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> CyberEventOut:
+    try:
+        event = await update_event(
+            event_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if event is None:
+        raise HTTPException(status_code=404, detail="event not found")
     return CyberEventOut.model_validate(event_to_api(event))
 
 
@@ -572,22 +600,26 @@ async def intelligence_incidents(
     )
 
 
-@gateway_router.post("/v1/intelligence/incidents/manual", response_model=SecurityIncidentOut)
+@gateway_router.post("/v1/intelligence/incidents/manual", response_model=SecurityIncidentList)
 @incident_intelligence_router.post(
-    "/v1/intelligence/incidents/manual", response_model=SecurityIncidentOut
+    "/v1/intelligence/incidents/manual", response_model=SecurityIncidentList
 )
 async def intelligence_create_manual_incident(
     request: ManualIncidentCreate,
     idempotency_key: str = Header(alias="Idempotency-Key"),
     actor: str = Header(default="system", alias="X-Actor"),
-) -> SecurityIncidentOut:
-    incident = await create_manual_incident(
+) -> SecurityIncidentList:
+    incidents = await create_manual_incident(
         request,
         actor=actor,
         idempotency_key=idempotency_key,
         settings=get_settings(),
     )
-    return SecurityIncidentOut.model_validate(incident_to_api(incident))
+    return SecurityIncidentList(
+        incidents=[
+            SecurityIncidentOut.model_validate(incident_to_api(incident)) for incident in incidents
+        ]
+    )
 
 
 @gateway_router.get("/v1/intelligence/incidents/{incident_id}", response_model=SecurityIncidentOut)
@@ -666,12 +698,20 @@ async def intelligence_patch_watch_target(
 )
 async def intelligence_promote_incident_to_watchlist(
     incident_id: str,
+    request: IncidentWatchPromotionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
     actor: str = Header(default="system", alias="X-Actor"),
 ) -> WatchTargetOut:
-    target = await promote_incident_to_watchlist(
-        incident_id, actor=actor, idempotency_key=idempotency_key, settings=get_settings()
-    )
+    try:
+        target = await promote_incident_to_watchlist(
+            incident_id,
+            version=request.version,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if target is None:
         raise HTTPException(status_code=404, detail="incident not found")
     return WatchTargetOut.model_validate(watch_target_to_api(target))
@@ -716,12 +756,8 @@ async def crm_export_detail(batch_id: str) -> CrmExportBatchOut:
     return batch
 
 
-@gateway_router.post(
-    "/v1/crm/exports/{batch_id}/retry-failed", response_model=CrmExportBatchOut
-)
-@crm_router.post(
-    "/v1/crm/exports/{batch_id}/retry-failed", response_model=CrmExportBatchOut
-)
+@gateway_router.post("/v1/crm/exports/{batch_id}/retry-failed", response_model=CrmExportBatchOut)
+@crm_router.post("/v1/crm/exports/{batch_id}/retry-failed", response_model=CrmExportBatchOut)
 async def crm_export_retry_failed(
     batch_id: str,
     request: CrmExportRetryRequest | None = None,
@@ -790,10 +826,15 @@ async def enrichment_create_contact_candidate(
 async def enrichment_contact_candidates(
     status: str | None = None,
     origin_type: str | None = None,
+    origin_id: str | None = None,
     limit: int = Query(default=100, ge=1, le=500),
 ) -> ContactEnrichmentList:
     candidates = await list_contact_enrichment_candidates(
-        status=status, origin_type=origin_type, limit=limit, settings=get_settings()
+        status=status,
+        origin_type=origin_type,
+        origin_id=origin_id,
+        limit=limit,
+        settings=get_settings(),
     )
     return ContactEnrichmentList(
         candidates=[contact_candidate_to_model(candidate) for candidate in candidates]
@@ -1154,12 +1195,8 @@ async def meeting_detail(meeting_id: str) -> MeetingHandoffOut:
     return meeting
 
 
-@gateway_router.post(
-    "/v1/meetings/{meeting_id}/prep-packet", response_model=MeetingHandoffOut
-)
-@meeting_router.post(
-    "/v1/meetings/{meeting_id}/prep-packet", response_model=MeetingHandoffOut
-)
+@gateway_router.post("/v1/meetings/{meeting_id}/prep-packet", response_model=MeetingHandoffOut)
+@meeting_router.post("/v1/meetings/{meeting_id}/prep-packet", response_model=MeetingHandoffOut)
 async def meeting_generate_prep_packet(
     meeting_id: str,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
@@ -1337,15 +1374,11 @@ async def review_candidate_reject(
     return review_decision_to_model(decision)
 
 
-@gateway_router.post(
-    "/v1/review/candidates/bulk-decision", response_model=BulkReviewDecisionResult
-)
+@gateway_router.post("/v1/review/candidates/bulk-decision", response_model=BulkReviewDecisionResult)
 @governance_router.post(
     "/v1/review/candidates/bulk-decision", response_model=BulkReviewDecisionResult
 )
-@console_router.post(
-    "/v1/review/candidates/bulk-decision", response_model=BulkReviewDecisionResult
-)
+@console_router.post("/v1/review/candidates/bulk-decision", response_model=BulkReviewDecisionResult)
 async def review_candidates_bulk_decision(
     request: BulkReviewDecisionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
@@ -1417,6 +1450,33 @@ async def governance_reject_incident(
 ) -> ReviewDecisionOut:
     try:
         decision = await reject_incident(
+            incident_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if decision is None:
+        raise HTTPException(status_code=404, detail="incident not found")
+    return review_decision_to_model(decision)
+
+
+@gateway_router.post(
+    "/v1/governance/incidents/{incident_id}/revert", response_model=ReviewDecisionOut
+)
+@governance_router.post(
+    "/v1/governance/incidents/{incident_id}/revert", response_model=ReviewDecisionOut
+)
+async def governance_revert_incident(
+    incident_id: str,
+    request: IncidentDecisionRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> ReviewDecisionOut:
+    try:
+        decision = await revert_incident(
             incident_id,
             request,
             actor=actor,

@@ -12,12 +12,14 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 | Exposure | Method | Path | Handler |
 | --- | --- | --- | --- |
 | service | `GET` | `/v1/intelligence/incidents` | `intelligence_incidents` |
+| service | `POST` | `/v1/intelligence/incidents/manual` | `intelligence_create_manual_incident` |
 | service | `GET` | `/v1/intelligence/incidents/{incident_id}` | `intelligence_incident_detail` |
 | service | `GET` | `/v1/intelligence/watch-targets` | `intelligence_watch_targets` |
 | service | `POST` | `/v1/intelligence/watch-targets` | `intelligence_create_watch_target` |
 | service | `PATCH` | `/v1/intelligence/watch-targets/{watch_target_id}` | `intelligence_patch_watch_target` |
 | service | `POST` | `/v1/intelligence/incidents/{incident_id}/promote-to-watchlist` | `intelligence_promote_incident_to_watchlist` |
 | gateway | `GET` | `/v1/intelligence/incidents` | `intelligence_incidents` |
+| gateway | `POST` | `/v1/intelligence/incidents/manual` | `intelligence_create_manual_incident` |
 | gateway | `GET` | `/v1/intelligence/incidents/{incident_id}` | `intelligence_incident_detail` |
 | gateway | `GET` | `/v1/intelligence/watch-targets` | `intelligence_watch_targets` |
 | gateway | `POST` | `/v1/intelligence/watch-targets` | `intelligence_create_watch_target` |
@@ -31,6 +33,8 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 - Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
 - Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
 - Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
+- Incident candidates and manual incident requests are split into company/domain-scoped rows with a shared `incident_group_key`.
+- Incident watch promotion requires an optimistic version match and `status=corroborated`, and creates actor-owned `company` watch targets.
 
 ## Function Reference
 
@@ -44,7 +48,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 
 ##### `IncidentCandidate`
 
-`IncidentCandidate` is a data container or runtime class decorated with `dataclass(frozen=True)` based on `object`. Fields: `title` (str), `affected_companies` (list[object]), `affected_domains` (list[object]), `incident_type` (str | None), `attack_vector` (str | None), `first_observed_at` (datetime | None), `last_observed_at` (datetime | None), `geography` (list[object]), `languages` (list[object]), `confidence` (int), `dedupe_key` (str), `evidence_family_key` (str), `authoritative` (bool).
+`IncidentCandidate` is a data container or runtime class decorated with `dataclass(frozen=True)` based on `object`. Fields: `title` (str), `affected_companies` (list[object]), `affected_domains` (list[object]), `incident_type` (str | None), `attack_vector` (str | None), `first_observed_at` (datetime | None), `last_observed_at` (datetime | None), `geography` (list[object]), `languages` (list[object]), `confidence` (int), `dedupe_key` (str), `evidence_family_key` (str), `authoritative` (bool), `incident_group_key` (str | None), `primary_affected_company` (str | None), `primary_affected_domain` (str | None), `evidence_urls` (list[object]).
 
 ##### `IncidentIntelligenceRepository`
 
@@ -218,14 +222,23 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data.
 
-##### `async promote_incident_to_watchlist(incident_id: str, *, actor: str, idempotency_key: str, settings: Settings | None = None) -> WatchTarget | None`
+##### `async create_manual_incident(request: ManualIncidentCreate, *, actor: str, idempotency_key: str, settings: Settings | None = None) -> list[SecurityIncident]`
 
-- Inputs: `incident_id` (str), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
+- Inputs: `request` (ManualIncidentCreate), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
+- Output: Returns `list[SecurityIncident]`.
+- Why: `create_manual_incident` records operator-supplied incident evidence as canonical company/domain-scoped incident rows.
+- How: It derives one context per company/domain pair, shares an `incident_group_key`, writes incidents idempotently, and emits audit/outbox events.
+- Side effects: mutates database state; adds audit/outbox records.
+- Failures: upstream callers still need to handle dependency errors from invoked helpers.
+
+##### `async promote_incident_to_watchlist(incident_id: str, *, version: int, actor: str, idempotency_key: str, settings: Settings | None = None) -> WatchTarget | None`
+
+- Inputs: `incident_id` (str), `version` (int), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
 - Output: Returns `WatchTarget | None`; callers must handle the documented not-found or unavailable path.
 - Why: `promote_incident_to_watchlist` turns an upstream intelligence object into a downstream workflow target.
-- How: It calls `session_scope`, `WatchTargetCreate`, `IncidentIntelligenceRepository`, `session.get`, `repository.create_watch_target`; uses database session queries, idempotency lookup.
+- How: It checks incident version/status/company context, builds a `company` watch target owned by the actor, and delegates idempotent target creation to the repository.
 - Side effects: runs asynchronously and may await database or provider operations.
-- Failures: may return `None` for not-found or unavailable data.
+- Failures: raises `ValueError` for version conflicts or invalid state; may return `None` for not-found or unavailable data.
 
 ##### `incident_to_api(incident: SecurityIncident) -> dict[str, object]`
 

@@ -1,7 +1,17 @@
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -130,10 +140,18 @@ class CyberEvent(Base):
     ends_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     event_format: Mapped[str] = mapped_column(String(64), default="unknown")
     venue_name: Mapped[str | None] = mapped_column(String(255))
+    street_address: Mapped[str | None] = mapped_column(String(255))
     city: Mapped[str | None] = mapped_column(String(128))
     region: Mapped[str | None] = mapped_column(String(128))
+    postcode: Mapped[str | None] = mapped_column(String(32))
     country: Mapped[str | None] = mapped_column(String(2))
     virtual_url: Mapped[str | None] = mapped_column(String(2048))
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    geocode_status: Mapped[str] = mapped_column(String(64), default="not_required")
+    geocode_provider: Mapped[str | None] = mapped_column(String(64))
+    geocode_display_name: Mapped[str | None] = mapped_column(String(512))
+    geocoded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     topics: Mapped[list[object]] = mapped_column(JSONB, default=list)
     organizers: Mapped[list[object]] = mapped_column(JSONB, default=list)
     confidence: Mapped[int] = mapped_column(Integer, default=0)
@@ -143,6 +161,7 @@ class CyberEvent(Base):
         ForeignKey("source_definitions.id", ondelete="SET NULL")
     )
     source_item_ids: Mapped[list[object]] = mapped_column(JSONB, default=list)
+    version: Mapped[int] = mapped_column(Integer, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
@@ -242,6 +261,9 @@ class SecurityIncident(Base):
     )
     status: Mapped[str] = mapped_column(String(64), default="candidate")
     title: Mapped[str] = mapped_column(String(512))
+    incident_group_key: Mapped[str | None] = mapped_column(String(255))
+    primary_affected_company: Mapped[str | None] = mapped_column(String(255))
+    primary_affected_domain: Mapped[str | None] = mapped_column(String(255))
     affected_companies: Mapped[list[object]] = mapped_column(JSONB, default=list)
     affected_domains: Mapped[list[object]] = mapped_column(JSONB, default=list)
     incident_type: Mapped[str | None] = mapped_column(String(128))
@@ -254,6 +276,7 @@ class SecurityIncident(Base):
     evidence_article_ids: Mapped[list[object]] = mapped_column(JSONB, default=list)
     evidence_source_item_ids: Mapped[list[object]] = mapped_column(JSONB, default=list)
     evidence_families: Mapped[list[object]] = mapped_column(JSONB, default=list)
+    evidence_urls: Mapped[list[object]] = mapped_column(JSONB, default=list)
     corroboration_method: Mapped[str] = mapped_column(String(64), default="none")
     analyst_decision_ref: Mapped[str | None] = mapped_column(String(255))
     canonical_state: Mapped[str] = mapped_column(String(64), default="canonical")
@@ -625,9 +648,7 @@ class CrmExportItem(Base):
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
     )
-    batch_id: Mapped[str] = mapped_column(
-        ForeignKey("crm_export_batches.id", ondelete="CASCADE")
-    )
+    batch_id: Mapped[str] = mapped_column(ForeignKey("crm_export_batches.id", ondelete="CASCADE"))
     crm_target_id: Mapped[str] = mapped_column(ForeignKey("crm_targets.id", ondelete="CASCADE"))
     target_type: Mapped[str] = mapped_column(String(64))
     target_id: Mapped[str] = mapped_column(String(128))

@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 16 dashboard navigation and interactivity fixes complete; Sprint 17 end-to-end live demo runbook is next. The local Compose stack now has repeatable reset, migration, linked deterministic fake data, dashboard navigation acceptance coverage, and health-check commands for validating a ready local demo without manual database commands.
+Stage: Sprint 18 global incidents governance and watchlist promotion workflow complete; Sprint 19 watchlist detail, ownership, contact discovery, and monitoring is next. The local Compose stack now has repeatable reset, migration, linked deterministic fake data, dashboard workflow coverage, and health-check commands for validating a ready local demo without manual database commands.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
@@ -171,6 +171,23 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Added Playwright browser acceptance coverage for sidebar tab clicks, URL/content changes, refresh, filters, pagination, role switching, detail links, action buttons, and visible failed-API states.
 - Kept console reads and writes inside the existing gateway-backed `console-service` boundary with no direct canonical table access.
 
+### Sprint 17 - Global Events Dashboard Workflow
+
+- Added event address/geocoding fields, canonical event formats `in-person`, `online`, `hybrid`, and `unknown`, and legacy `physical`/`virtual` alias support.
+- Added Nominatim-compatible and deterministic local-demo geocoder adapters, non-blocking geocode failure handling, and map-ready event reporting fields.
+- Added manual event creation and optimistic-version event edit APIs behind the existing event-intelligence boundary.
+- Updated the Dash events workflow with a larger coordinate-backed event map, create/edit modals, bullet-free event detail topics, governance-reviewer-only metadata, and durable participant enrichment-queue button disabling.
+- Seeded local demo event coordinates and added focused tests for event aliases, geocoder behavior, event create/update routes, reporting projection fields, and console role rendering.
+
+### Sprint 18 - Global Incidents Governance and Watchlist Promotion
+
+- Added incident grouping, primary company/domain context, and evidence URL persistence for company-specific incident rows.
+- Updated incident ingestion and manual creation to split multi-company contexts into separate canonical incident rows with a shared `incident_group_key`.
+- Made incident watch promotion optimistic-version aware, corroborated-only, company-targeted, actor-owned, and idempotent at the company watch-target key.
+- Added incident revert governance flow to move corroborated incidents back to candidate state with audit/review-decision evidence.
+- Updated the Dash incidents workflow with inline company/evidence rendering, hidden confidence/languages, table-only open links, Revert after corroboration, local dismissed rows after reject/promote, governance-reviewer-only metadata, and a manual incident modal.
+- Seeded a multi-company local demo incident group and added focused tests for incident splitting, route contracts, revert routing, company watch promotion, schema registration, and console action payloads.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -181,14 +198,145 @@ The repository contains the production-oriented microservice scaffold, shared Py
 
 ## Future Sprints
 
-### Sprint 17 - End-to-End Live Demo Runbook
+### Sprint 19 - Watchlist Detail, Ownership, Contact Discovery, and Monitoring
 
-Goal: make the local demo presentable and repeatable for a live walkthrough.
+Goal: make the Watchlist tab company-centric, inspectable, role-aware, and ready for follow-on contact discovery and monitoring workflows.
+
+#### User-facing workflow
+
+- Add an `Open` action on each watchlist row that navigates to a detail page named `Watchlist Item`.
+- Model the watchlist list view around company names. The name column should show the company, and the type and key columns should be removed from the default table.
+- Keep origin incident visible only to governance reviewers.
+- Populate the owner column from the actor who approved the incident-to-watchlist promotion.
+- Add a `Find Contact` button in the Watchlist Item view.
+- Use OpenSERP for contact discovery with the Google dork `site:linkedin.com/in ("Head of Cybersecurity" OR "CISO" OR "Chief Information Security Officer" OR "CTO" OR "Chief Technology Officer") "{company name}"`.
+- Make the row action toggle monitoring for that watchlist company.
+- When monitoring is enabled for a company, run hourly Google News API checks for board-of-directors changes, newly appointed CISO, CTO, CIO, or head of cybersecurity, and cybersecurity attacks.
+
+#### Implementation notes
+
+- Treat company watch targets as the primary watchlist entity for dashboard presentation, even when they originated from an incident.
+- Record the approving actor during watchlist promotion if it is not already available in the watch target projection.
+- Keep contact discovery and monitoring behind service-owned adapters so OpenSERP and Google News API usage remains fakeable in tests and configurable in local demo mode.
+- Store enough monitoring state to show whether monitoring is enabled, when it last ran, and whether the most recent run was degraded or failed.
+- Ensure governance-only origin incident visibility uses the same role-projection pattern as event and incident metadata.
+
+#### Acceptance
+
+- The Watchlist tab shows company name, owner, monitoring state, and action controls without type or key columns.
+- Viewer, analyst, and admin roles do not see origin incident; governance reviewers do.
+- Opening a row lands on a `Watchlist Item` detail page.
+- `Find Contact` issues the intended OpenSERP LinkedIn search for the selected company through a fakeable adapter path.
+- Enabling monitoring schedules or activates hourly Google News API monitoring for the selected company categories.
+- The owner shown for an incident-promoted watchlist item is the actor who approved the promotion.
+
+### Sprint 20 - Analyst Review Demo Data and Domain Discovery
+
+Goal: make Analyst Review demo content realistic enough for live use and add deterministic company-domain discovery for contact enrichment.
+
+#### User-facing workflow
+
+- Replace confusing fake review data with realistic deterministic examples that reflect cyber event participants, affected companies, enrichment candidates, email candidates, and review decisions.
+- Seed the contact enrichment queue with realistic fake records so the Analyst Review tab is not empty after `make demo-reset`.
+- Add domain discovery for contact enrichment by searching OpenSERP for `{company name} official website`.
+- Pick the first suitable search result and normalize it to a registrable company domain, for example converting `https://www.apple.com/en` to `apple.com`.
+
+#### Implementation notes
+
+- Keep deterministic seed data local-only and repeatable across `make demo-reset` runs.
+- Avoid paid enrichment dependencies; OpenSERP should be adapter-backed and fakeable for tests and local demo data.
+- Normalize discovered website domains consistently with existing canonical domain helpers where possible.
+- Route ambiguous, missing, or suspicious domain matches into review rather than silently accepting them.
+- Ensure seeded contact enrichment records link back to realistic companies, events, incidents, or review candidates so the dashboard tells a coherent story.
+
+#### Acceptance
+
+- After `make demo-reset`, Analyst Review shows realistic review records and a populated contact enrichment queue.
+- Demo records use plausible company, contact, incident, event, and evidence relationships instead of placeholder-looking data.
+- Domain discovery searches for the official company website, selects the first suitable result, and stores a normalized domain.
+- The normalization examples cover paths, schemes, and `www` prefixes.
+- Ambiguous or failed domain discovery is visible to the analyst review workflow instead of being treated as a confirmed match.
+
+### Sprint 21 - Sequence Definitions, Multi-Channel Steps, and CRM Imports
+
+Goal: expand Sequence State from a single email-oriented runtime view into an operator workflow for managing multiple sequence definitions, multi-channel steps, and CRM-sourced prospects.
+
+#### User-facing workflow
+
+- Add a `Sequence Definitions` button from Sequence State that opens a dedicated sequence definitions page.
+- Support multiple sequence definitions instead of a single implicit or hard-coded sequence.
+- Make the sequence definitions editor easier to use, with clear editing controls for sequence metadata and step order.
+- Allow users to add more steps to a sequence definition.
+- Support channels beyond email, including at minimum email, call, and demo or Google Meet steps.
+- For email steps, require user approval before the email can be sent.
+- For call or demo steps, coordinate with the Meetings tab so meeting handoff and calendar workflows stay in sync.
+- Allow users to import prospects from the CRM and assign a selected prospect to a selected sequence.
+
+#### Implementation notes
+
+- Keep sequence definition management in the sequencing service boundary and dashboard reads/writes through the gateway-backed console client.
+- Preserve the existing separation between CRM export approval and outreach approval; importing a CRM prospect must not automatically authorize email sends.
+- Represent non-email steps without forcing them through outbound email tables.
+- Connect demo or Google Meet steps to meeting handoff records where scheduling is required.
+- Ensure sequence definition edits are version-aware so active enrollments have predictable behavior when definitions change.
+- Make CRM import fakeable for local demo and test execution while preserving the provider-neutral CRM adapter boundary.
+
+#### Acceptance
+
+- Sequence State exposes a `Sequence Definitions` navigation path.
+- Users can create or edit multiple sequence definitions and add ordered steps.
+- Sequence steps can be email, call, or demo/Google Meet.
+- Email steps do not send until an authorized user approves them.
+- Call or demo steps create or coordinate the expected meeting handoff state.
+- A CRM prospect can be imported and assigned to a selected sequence without bypassing outreach approval checks.
+
+### Sprint 22 - Meeting Detail Readability and Prep Packet Legibility
+
+Goal: improve the Meetings tab detail experience so live operators can read meeting context and prep packets without formatting noise.
+
+#### User-facing workflow
+
+- Remove visible bullet-point artifacts from meeting detail fields.
+- Preserve the same meeting detail content and ordering while rendering list-like values as clean text or structured rows.
+- Add vertical spacing to prep packet sections so account context, contacts, signals, incidents, events, recommended talk tracks, and follow-up guidance are easier to scan.
+
+#### Implementation notes
+
+- Prefer dashboard rendering fixes when the underlying meeting reporting payload already contains the required content.
+- Keep meeting detail reads behind the reporting and gateway-backed console boundaries.
+- Ensure spacing changes work in both seeded local demo data and longer real prep packets.
+- Avoid changing meeting handoff semantics, calendar sync behavior, or CRM sync behavior in this sprint.
+
+#### Acceptance
+
+- Meeting detail pages no longer display bullet formatting artifacts.
+- Prep packet sections have visibly improved vertical spacing and remain readable with both short and long seeded content.
+- Existing meeting actions, prep generation, outcome recording, cancel, and CRM retry behavior remain unchanged.
+
+### Sprint 23 - End-to-End Live Demo Runbook
+
+Goal: make the local demo presentable and repeatable for a live walkthrough after the dashboard workflow sprints are complete.
+
+#### User-facing workflow
 
 - Add a concise runbook for starting, resetting, validating, and presenting the demo.
-- Define the walkthrough: open overview, inspect events/incidents, promote or review an item, export to CRM, show sequence state, book or update meeting handoff, and verify source health.
-- Require `demo_check.sh` to prove migrations, fake data, reporting APIs, console loading, Dash navigation, and at least one mutation path work.
-- Acceptance: a new developer can complete the local live demo without manual database edits or ad hoc API calls.
+- Define the walkthrough from a fresh local stack: open overview, inspect events and incidents, add or edit an event, queue an event participant for enrichment, corroborate and promote an incident company to the watchlist, open a Watchlist Item, run or fake contact discovery, review analyst queue data, export to CRM, import or assign a prospect to a sequence, show sequence definitions, book or update meeting handoff, inspect meeting prep, and verify source health.
+- Document which operator role to use for each step, including viewer read-only behavior, analyst/admin mutations, and governance-only metadata visibility.
+- Document the expected visible state before and after each mutation so presenters can tell whether the demo is healthy.
+
+#### Implementation notes
+
+- Keep the runbook focused on local Docker Compose and deterministic fake data, not Kubernetes or production deployment.
+- Require `demo_check.sh` to prove migrations, fake data, reporting APIs, console loading, Dash navigation, and representative mutation paths work.
+- Extend demo validation to cover the newly planned Global Events, Global Incidents, Watchlist Item, Analyst Review, Sequence Definitions, and Meeting Detail workflows.
+- Include recovery instructions for common local demo failures such as missing migrations, empty seed data, broken dashboard callbacks, failed gateway readiness, or unavailable fake external adapters.
+
+#### Acceptance
+
+- A new developer can complete the local live demo without manual database edits or ad hoc API calls.
+- The runbook verifies the Global Events, Global Incidents, Watchlist, Analyst Review, Sequence State, Meetings, CRM export, meeting handoff, and source-health paths in order.
+- `demo_check.sh` or the documented validation steps fail clearly when migrations, seed data, gateway/reporting APIs, dashboard callbacks, fake external adapters, or key mutation paths are broken.
+- The live demo script shows governance-only metadata with a governance reviewer and confirms the same metadata is hidden from non-governance roles.
 
 ## Local Demo Acceptance Scenarios
 

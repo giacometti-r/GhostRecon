@@ -25,10 +25,12 @@ Resolves organizations and contact candidates, enriches domains, verifies candid
 - `GET /v1/enrichment/entity-resolutions` via `enrichment_entity_resolutions` (service router).
 - `POST /v1/enrichment/contact-candidates` via `enrichment_create_contact_candidate` (service router).
 - `GET /v1/enrichment/contact-candidates` via `enrichment_contact_candidates` (service router).
+- `POST /v1/enrichment/event-participants/{participant_id}/enrich-target` via `enrichment_event_participant_enrich_target` (service router).
 - `POST /v1/enrichment/entity-resolutions` via `enrichment_create_entity_resolution` (gateway).
 - `GET /v1/enrichment/entity-resolutions` via `enrichment_entity_resolutions` (gateway).
 - `POST /v1/enrichment/contact-candidates` via `enrichment_create_contact_candidate` (gateway).
 - `GET /v1/enrichment/contact-candidates` via `enrichment_contact_candidates` (gateway).
+- `POST /v1/enrichment/event-participants/{participant_id}/enrich-target` via `enrichment_event_participant_enrich_target` (gateway).
 - Worker/helper entrypoint: `ghostrecon.crawl_company_domain`.
 - Worker/helper entrypoint: `ghostrecon.resolve_entity`.
 - Worker/helper entrypoint: `ghostrecon.enrich_contact_candidate`.
@@ -46,6 +48,7 @@ Resolves organizations and contact candidates, enriches domains, verifies candid
 - Preserve policy, lineage, and audit fields when backfilling or replaying data.
 - Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
 - Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+- Contact candidate listing supports `origin_id` alongside `origin_type` so event detail pages can detect already queued participant enrichment durably.
 
 ## Failure Modes
 

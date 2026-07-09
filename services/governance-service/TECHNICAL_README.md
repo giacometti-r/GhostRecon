@@ -18,6 +18,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 | service | `GET` | `/v1/review/crm-targets` | `review_crm_targets` |
 | service | `POST` | `/v1/governance/incidents/{incident_id}/corroborate` | `governance_corroborate_incident` |
 | service | `POST` | `/v1/governance/incidents/{incident_id}/reject` | `governance_reject_incident` |
+| service | `POST` | `/v1/governance/incidents/{incident_id}/revert` | `governance_revert_incident` |
 | gateway | `POST` | `/v1/suppressions` | `suppression_create` |
 | gateway | `POST` | `/v1/suppressions/evaluate` | `suppression_check` |
 | gateway | `GET` | `/v1/review/candidates` | `review_candidates` |
@@ -27,6 +28,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 | gateway | `GET` | `/v1/review/crm-targets` | `review_crm_targets` |
 | gateway | `POST` | `/v1/governance/incidents/{incident_id}/corroborate` | `governance_corroborate_incident` |
 | gateway | `POST` | `/v1/governance/incidents/{incident_id}/reject` | `governance_reject_incident` |
+| gateway | `POST` | `/v1/governance/incidents/{incident_id}/revert` | `governance_revert_incident` |
 
 ## Data Flow And Contracts
 
@@ -35,6 +37,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 - Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
 - Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
 - Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
+- Incident decisions are optimistic-version aware; `revert_incident` is limited to `corroborated` incidents and returns them to `candidate`.
 
 ## Function Reference
 

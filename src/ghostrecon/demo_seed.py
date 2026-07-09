@@ -48,6 +48,7 @@ class DemoSeedIds:
     cyber_event_id: str = _seed_uuid("event/cloud-security-summit")
     event_participant_id: str = _seed_uuid("event-participant/morgan-lee")
     security_incident_id: str = _seed_uuid("incident/example-ransomware")
+    secondary_incident_id: str = _seed_uuid("incident/contoso-ransomware")
     review_incident_id: str = _seed_uuid("incident/nimbus-phishing")
     watch_target_id: str = _seed_uuid("watch/example-industries")
     approve_review_candidate_id: str = _seed_uuid("review/approve-incident")
@@ -100,8 +101,7 @@ def assert_demo_seed_allowed(settings: Settings) -> None:
     if os.environ.get("GHOSTRECON_ALLOW_DEMO_SEED") == "1":
         return
     raise DemoSeedSafetyError(
-        "refusing to seed demo data outside local/dev; set "
-        "GHOSTRECON_ALLOW_DEMO_SEED=1 to override"
+        "refusing to seed demo data outside local/dev; set GHOSTRECON_ALLOW_DEMO_SEED=1 to override"
     )
 
 
@@ -159,12 +159,20 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
     event.timezone_status = "resolved"
     event.starts_at_utc = event_start
     event.ends_at_utc = event_start + timedelta(days=2)
-    event.event_format = "physical"
+    event.event_format = "in-person"
     event.venue_name = "Demo Convention Center"
+    event.street_address = "Demo Way 42"
     event.city = "Zurich"
     event.region = "ZH"
+    event.postcode = "8001"
     event.country = "CH"
     event.virtual_url = None
+    event.latitude = 47.3769
+    event.longitude = 8.5417
+    event.geocode_status = "resolved"
+    event.geocode_provider = "local_demo"
+    event.geocode_display_name = "Demo Convention Center, Demo Way 42, 8001 Zurich, CH"
+    event.geocoded_at = now
     event.topics = ["cloud security", "incident response", "identity"]
     event.organizers = [{"name": "GhostRecon Demo Team"}]
     event.confidence = 92
@@ -172,6 +180,7 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
     event.dedupe_key = "demo:sprint15:event:cloud-security-summit"
     event.source_definition_id = fresh_source.id
     event.source_item_ids = []
+    event.version = 1
     event.created_at = now
     event.updated_at = now
     await session.flush()
@@ -197,22 +206,44 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
     participant.created_at = now
     participant.updated_at = now
 
-    incident = await _get_or_create(
-        session, SecurityIncident, DEMO_SEED_IDS.security_incident_id
-    )
+    incident = await _get_or_create(session, SecurityIncident, DEMO_SEED_IDS.security_incident_id)
+    ransomware_group_key = "demo:sprint17:incident-group:example-contoso-ransomware"
     _apply_incident(
         incident,
         now=now,
         observed_at=incident_observed,
-        title="Example Industries ransomware exposure",
+        title="Example Industries and Contoso ransomware exposure",
         affected_companies=["Example Industries"],
         affected_domains=["example-industries.test"],
         incident_type="ransomware",
         attack_vector="identity_compromise",
-        status="candidate",
+        status="corroborated",
         confidence=88,
         dedupe_key="demo:sprint15:incident:example-industries-ransomware",
         source_definition_id=degraded_source.id,
+        incident_group_key=ransomware_group_key,
+        corroboration_method="analyst_decision",
+        evidence_urls=["https://ghostrecon.local/demo/incidents/example-contoso-ransomware"],
+    )
+    secondary_incident = await _get_or_create(
+        session, SecurityIncident, DEMO_SEED_IDS.secondary_incident_id
+    )
+    _apply_incident(
+        secondary_incident,
+        now=now,
+        observed_at=incident_observed,
+        title="Example Industries and Contoso ransomware exposure",
+        affected_companies=["Contoso Manufacturing"],
+        affected_domains=["contoso-manufacturing.test"],
+        incident_type="ransomware",
+        attack_vector="identity_compromise",
+        status="corroborated",
+        confidence=84,
+        dedupe_key="demo:sprint17:incident:contoso-ransomware",
+        source_definition_id=degraded_source.id,
+        incident_group_key=ransomware_group_key,
+        corroboration_method="analyst_decision",
+        evidence_urls=["https://ghostrecon.local/demo/incidents/example-contoso-ransomware"],
     )
 
     review_incident = await _get_or_create(
@@ -231,6 +262,7 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
         confidence=61,
         dedupe_key="demo:sprint15:incident:nimbus-retail-phishing",
         source_definition_id=degraded_source.id,
+        evidence_urls=["https://ghostrecon.local/demo/incidents/nimbus-retail-phishing"],
     )
     await session.flush()
 
@@ -494,9 +526,15 @@ def _apply_incident(
     confidence: int,
     dedupe_key: str,
     source_definition_id: str,
+    incident_group_key: str | None = None,
+    corroboration_method: str = "none",
+    evidence_urls: list[str] | None = None,
 ) -> None:
     incident.status = status
     incident.title = title
+    incident.incident_group_key = incident_group_key or dedupe_key
+    incident.primary_affected_company = affected_companies[0] if affected_companies else None
+    incident.primary_affected_domain = affected_domains[0] if affected_domains else None
     incident.affected_companies = affected_companies
     incident.affected_domains = affected_domains
     incident.incident_type = incident_type
@@ -509,7 +547,8 @@ def _apply_incident(
     incident.evidence_article_ids = []
     incident.evidence_source_item_ids = []
     incident.evidence_families = ["demo-authoritative-disclosure"]
-    incident.corroboration_method = "none"
+    incident.evidence_urls = list(evidence_urls or [])
+    incident.corroboration_method = corroboration_method
     incident.analyst_decision_ref = None
     incident.canonical_state = "canonical"
     incident.dedupe_key = dedupe_key
@@ -760,9 +799,7 @@ async def _meeting_prep_packet(
     account: Account,
     contact: Contact,
 ) -> None:
-    packet = await _get_or_create(
-        session, MeetingPrepPacket, DEMO_SEED_IDS.meeting_prep_packet_id
-    )
+    packet = await _get_or_create(session, MeetingPrepPacket, DEMO_SEED_IDS.meeting_prep_packet_id)
     packet.meeting_id = meeting.id
     packet.account_summary = (
         "Example Industries is a tier-1 manufacturing account with recent ransomware "

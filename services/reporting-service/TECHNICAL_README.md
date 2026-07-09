@@ -43,6 +43,8 @@ Reporting Service is implemented by `src/ghostrecon/services/reporting.py`. It i
 - Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
 - Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
 - Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
+- Event projections include exact address and geocode fields; incident projections include company/domain context and evidence URLs for dashboard inline rendering.
+- Event format filters accept canonical values and legacy `physical`/`virtual` aliases.
 
 ## Function Reference
 

@@ -382,9 +382,13 @@ def test_suppression_and_incident_governance_routes(monkeypatch) -> None:
     async def fake_reject_incident(*args, **kwargs):
         return _review_decision("rejected")
 
+    async def fake_revert_incident(*args, **kwargs):
+        return _review_decision("rejected")
+
     monkeypatch.setattr(routers, "create_suppression", fake_create_suppression)
     monkeypatch.setattr(routers, "corroborate_incident", fake_corroborate)
     monkeypatch.setattr(routers, "reject_incident", fake_reject_incident)
+    monkeypatch.setattr(routers, "revert_incident", fake_revert_incident)
 
     client = TestClient(build_app(Settings(service_name="gateway-service")))
     suppression = client.post(
@@ -406,7 +410,13 @@ def test_suppression_and_incident_governance_routes(monkeypatch) -> None:
         headers={"Idempotency-Key": "idem-reject-incident"},
         json={"version": 1, "reason_code": "false_positive"},
     ).json()
+    reverted = client.post(
+        "/v1/governance/incidents/incident-1/revert",
+        headers={"Idempotency-Key": "idem-revert-incident"},
+        json={"version": 2, "reason_code": "analyst_reverted"},
+    ).json()
 
     assert suppression["id"] == "suppression-1"
     assert corroborated["decision"] == "approved"
     assert rejected["decision"] == "rejected"
+    assert reverted["decision"] == "rejected"

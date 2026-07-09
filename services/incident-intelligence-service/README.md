@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Turns public incident/security articles and security feeds into incidents, watch targets, and governance-ready corroboration records. It owns incident candidate parsing, incident APIs, and watchlist APIs and should remain aligned with the implementation modules listed below.
+Turns public incident/security articles and security feeds into company-specific incident rows, watch targets, and governance-ready corroboration records. It owns incident candidate parsing, manual incident creation, incident APIs, and watchlist APIs and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
@@ -21,12 +21,14 @@ Turns public incident/security articles and security feeds into incidents, watch
 ## APIs And Jobs
 
 - `GET /v1/intelligence/incidents` via `intelligence_incidents` (service router).
+- `POST /v1/intelligence/incidents/manual` via `intelligence_create_manual_incident` (service router).
 - `GET /v1/intelligence/incidents/{incident_id}` via `intelligence_incident_detail` (service router).
 - `GET /v1/intelligence/watch-targets` via `intelligence_watch_targets` (service router).
 - `POST /v1/intelligence/watch-targets` via `intelligence_create_watch_target` (service router).
 - `PATCH /v1/intelligence/watch-targets/{watch_target_id}` via `intelligence_patch_watch_target` (service router).
 - `POST /v1/intelligence/incidents/{incident_id}/promote-to-watchlist` via `intelligence_promote_incident_to_watchlist` (service router).
 - `GET /v1/intelligence/incidents` via `intelligence_incidents` (gateway).
+- `POST /v1/intelligence/incidents/manual` via `intelligence_create_manual_incident` (gateway).
 - `GET /v1/intelligence/incidents/{incident_id}` via `intelligence_incident_detail` (gateway).
 - `GET /v1/intelligence/watch-targets` via `intelligence_watch_targets` (gateway).
 - `POST /v1/intelligence/watch-targets` via `intelligence_create_watch_target` (gateway).
@@ -48,6 +50,8 @@ Turns public incident/security articles and security feeds into incidents, watch
 - Preserve policy, lineage, and audit fields when backfilling or replaying data.
 - Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
 - Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+- Multi-company incident inputs are persisted as one row per company/domain context with a shared `incident_group_key`.
+- Incident watch promotion accepts an optimistic `version`, requires `status=corroborated`, and creates idempotent `company` watch targets owned by the approving actor.
 
 ## Failure Modes
 
@@ -65,5 +69,5 @@ GHOSTRECON_SERVICE_NAME=incident-intelligence-service uvicorn ghostrecon.service
 ## Verification
 
 ```bash
-pytest tests/unit/test_incident_intelligence.py tests/unit/test_incident_routes.py
+pytest tests/unit/test_incident_intelligence.py tests/unit/test_incident_routes.py tests/unit/test_governance.py
 ```

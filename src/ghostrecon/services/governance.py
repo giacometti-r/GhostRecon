@@ -409,6 +409,70 @@ async def reject_incident(
         return decision
 
 
+async def revert_incident(
+    incident_id: str,
+    request: IncidentDecisionRequest,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+) -> ReviewDecision | None:
+    async with session_scope(settings) as session:
+        existing = await _existing_decision(session, idempotency_key)
+        if existing is not None:
+            return existing
+        incident = await session.get(SecurityIncident, incident_id)
+        if incident is None:
+            return None
+        if incident.version != request.version:
+            raise ValueError("stale optimistic version")
+        if incident.status != "corroborated":
+            raise ValueError("only corroborated incidents can be reverted")
+
+        incident.status = "candidate"
+        incident.corroboration_method = "none"
+        incident.version += 1
+        decision = _create_decision(
+            session,
+            review_candidate=None,
+            target_type="security_incident",
+            target_id=incident.id,
+            decision="rejected",
+            actor=actor,
+            reason_code=request.reason_code,
+            reason=request.reason,
+            evidence_snapshot=request.evidence_snapshot,
+            policy_snapshot=request.policy_snapshot,
+            idempotency_key=idempotency_key,
+        )
+        await session.flush()
+        incident.analyst_decision_ref = decision.id
+        _audit(
+            session,
+            actor,
+            "security_incident.reverted",
+            "security_incident",
+            incident.id,
+            idempotency_key=f"audit:{idempotency_key}",
+            payload=review_decision_to_api(decision),
+        )
+        _enqueue_event(
+            session,
+            new_event(
+                event_name=EventName.REVIEW_REJECTED,
+                aggregate_type="security_incident",
+                aggregate_id=incident.id,
+                source_service="governance-service",
+                payload={
+                    **review_decision_to_api(decision),
+                    "reverted_from": "corroborated",
+                },
+                idempotency_key=f"security_incident.reverted:{decision.id}",
+            ),
+        )
+        return decision
+
+
 def current_policy_hash(candidate: ReviewCandidate) -> str:
     return candidate.policy_snapshot_hash or policy_snapshot_hash(candidate.policy_snapshot or {})
 
@@ -643,9 +707,8 @@ def _validate_candidate_decision(
         raise ValueError("review candidate is not open")
     if candidate.version != request.version:
         raise ValueError("stale optimistic version")
-    if (
-        request.policy_snapshot_hash
-        and request.policy_snapshot_hash != current_policy_hash(candidate)
+    if request.policy_snapshot_hash and request.policy_snapshot_hash != current_policy_hash(
+        candidate
     ):
         raise ValueError("policy snapshot hash mismatch")
 

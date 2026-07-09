@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Projects operational read models for events, incidents, watch targets, review queues, CRM targets, source health, meetings, and KPI catalog views. It owns read-only operator reporting APIs and pagination/filter projections and should remain aligned with the implementation modules listed below.
+Projects operational read models for geocoded events, company-specific incidents, watch targets, review queues, CRM targets, source health, meetings, and KPI catalog views. It owns read-only operator reporting APIs and pagination/filter projections and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
@@ -57,6 +57,8 @@ Projects operational read models for events, incidents, watch targets, review qu
 - Preserve policy, lineage, and audit fields when backfilling or replaying data.
 - Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
 - Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+- Event projections expose exact address fields and latitude/longitude when geocoding is resolved; event format filters accept the same legacy aliases as the intelligence API.
+- Incident projections expose primary affected company/domain and evidence URLs so console rows can render company/evidence inline without client-side reconstruction.
 
 ## Failure Modes
 

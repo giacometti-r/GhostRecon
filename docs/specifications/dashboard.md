@@ -6,7 +6,7 @@ The intelligence dashboard belongs in the existing `console-service` and is back
 
 The dashboard supports investigation, watchlist management, enrichment review, governance decisions, CRM export, sequencing state, meeting handoff, reconciliation, and source operations. It does not send outreach directly; sequencing actions call backend APIs that enforce approval, suppression, lawful-basis, and rate-limit checks. Meeting actions call the owning meeting-handoff APIs so Google Calendar invites, prep packets, and CRM follow-up sync keep backend policy gates.
 
-Sprint 12 implements the UI with Python Dash mounted at `/` inside `console-service`. The service still exposes FastAPI health, metrics, docs, and `/v1/*` routes before the Dash catch-all route.
+Sprint 12 implements the UI with Python Dash mounted at `/` inside `console-service`; Sprints 17 and 18 add the event create/edit, participant enrichment queue, incident governance, and company-watchlist dashboard workflows. The service still exposes FastAPI health, metrics, docs, and `/v1/*` routes before the Dash catch-all route.
 
 ## Dash Architecture
 
@@ -20,8 +20,8 @@ Sprint 12 implements the UI with Python Dash mounted at `/` inside `console-serv
 ## Implemented Routes
 
 - `/`: KPI, source, review, CRM target, and meeting summary.
-- `/events` and `/events/{event_id}`: event table/calendar/map fallback and participant detail.
-- `/incidents` and `/incidents/{incident_id}`: incident feed/detail and watchlist promotion.
+- `/events` and `/events/{event_id}`: event table, coordinate-backed venue map, create/edit modals, and participant enrichment queue handoff.
+- `/incidents` and `/incidents/{incident_id}`: company-specific incident feed/detail, corroborate/reject/revert controls, manual incident modal, and company watchlist promotion.
 - `/watchlists`: watch target list and enabled-state toggle.
 - `/review` and `/review/enrichment`: analyst review, bounded visible-page bulk review, contact enrichment, and entity resolution queues.
 - `/crm/exports` and `/crm/exports/{batch_id}`: CRM target selection, export start, batch detail, and retry failed items.
@@ -39,6 +39,8 @@ Sprint 12 implements the UI with Python Dash mounted at `/` inside `console-serv
 | `administrator` | All operational data and configuration | Manage source definitions, assignments, replay, degraded-state acknowledgment, and role bindings |
 
 Server-side authorization is required for every action. Hiding a button is not authorization. Permissions, actor, reason, optimistic version, idempotency key, before/after state, and policy version are audited.
+
+Generated-at, stale, projection, and watermark metadata on event and incident detail pages is visible only to the `governance_reviewer` role. Administrators keep operational controls but do not see those governance metadata rows in these detail views.
 
 ## Global Interaction Rules
 
@@ -62,15 +64,15 @@ state from their parent section.
 
 Views:
 
-- map for geocoded physical/hybrid events;
-- calendar in month/week/list modes; and
-- sortable table for precise review and export.
+- large coordinate-backed map for geocoded in-person and hybrid events;
+- sortable table for precise review and export; and
+- create/edit modals for manually entered event intelligence.
 
 Filters:
 
 - UTC/source date range;
 - country, region, and radius;
-- physical, virtual, or hybrid format;
+- in-person, online, hybrid, or unknown format;
 - topic, event series, organizer, and source;
 - participant availability and participant-reuse state;
 - confidence, duplicate/canonical state, and freshness.
@@ -78,24 +80,25 @@ Filters:
 Actions:
 
 - open event detail;
+- create or edit an event when the role can mutate;
+- add an eligible published participant to the enrichment queue with an idempotent action;
 - create event-series/topic watch target;
 - send an eligible event or permitted participant to review;
 - merge/flag a suspected duplicate when authorized; and
 - inspect raw-source lineage.
 
-Event detail shows original and normalized time, venue/geography, topics, organizers, all evidence sources, canonical/duplicate history, and published participant roles. Participant rows show the exact source, reuse evidence/state, organization/title as published, resolution confidence, and whether contact extraction/CRM export is disabled.
+Event detail shows original and normalized time, venue/geography, exact street/city/postcode/country address, topics without bullet artifacts, organizers, all evidence sources, canonical/duplicate history, and published participant roles. Participant rows show the exact source, reuse evidence/state, organization/title as published, resolution confidence, whether contact extraction/CRM export is disabled, and whether the participant has already been queued for enrichment.
 
 ### 2. Global Incidents
 
 The incident feed shows:
 
-- affected company/candidate and resolution confidence;
+- affected company/domain context, one row per affected company for multi-company incidents;
 - candidate/corroborated/rejected state and corroboration method;
 - incident type or attack vector;
-- evidence-source count and independence families;
-- original language and translation provenance;
+- inline evidence families and evidence URLs;
 - geography and first/last observed times;
-- confidence, watchlist state, review state, and freshness.
+- watchlist state, review state, and freshness.
 
 Filters:
 
@@ -107,14 +110,14 @@ Filters:
 
 Actions:
 
-- open the evidence timeline and affected-company alternatives;
-- promote the existing incident into a watchlist;
-- add company/domain/topic watch targets;
-- approve corroboration or reject a false positive when permitted;
+- open the detail view from the table;
+- promote the affected company into a company watchlist only after corroboration;
+- approve corroboration, reject a false positive, or revert corroboration when permitted;
+- manually add incidents and split multi-company/domain inputs into company-specific rows;
 - route eligible company/contact candidates to review; and
 - merge duplicate cases with an audit reason.
 
-Promotion must retain and display `origin_incident_id`; it never creates a duplicate incident.
+Promotion must retain and display `origin_incident_id`; it creates or returns an idempotent company watch target and never creates a duplicate incident.
 
 ### 3. Watchlists and Follow-On Coverage
 
@@ -236,6 +239,8 @@ The console consumes target read endpoints:
 
 Sequencing write/read actions use the owning `/v1/sequences/*` APIs through the gateway. Meeting booking, prep-packet generation, outcome recording, cancellation, availability, and CRM-sync retry use `/v1/meetings/*` and `/v1/calendar/availability` through the gateway. Reporting projections can add workflow summaries later, but dashboard actions must not query or mutate sequencing or meeting tables directly.
 
+Event create/edit actions use `POST /v1/intelligence/events/manual` and `PATCH /v1/intelligence/events/{event_id}` with idempotency keys and optimistic event versions. Incident actions use `POST /v1/intelligence/incidents/manual`, `POST /v1/governance/incidents/{incident_id}/corroborate`, `POST /v1/governance/incidents/{incident_id}/reject`, `POST /v1/governance/incidents/{incident_id}/revert`, and `POST /v1/intelligence/incidents/{incident_id}/promote-to-watchlist`, all through the gateway and owner services.
+
 Each response includes `generated_at`, source watermark(s), projection version, stale boolean, and degraded dependencies. Collection endpoints accept `limit`, `cursor`, stable filters, and operator role context through `X-Operator-Role`. Write actions call the owning feature service through the gateway, not reporting projections.
 
 ## KPI Families
@@ -272,7 +277,7 @@ Each response includes `generated_at`, source watermark(s), projection version, 
 
 - Events can be viewed consistently in map, calendar, and table forms with the specified filters.
 - Event detail exposes source timezone/original time, lineage, participant roles, and enforceable reuse state.
-- Incident feed exposes company, attack vector, evidence, language, geography, confidence, and watchlist state.
+- Incident feed exposes company/domain context, attack vector, inline evidence URLs, geography, status, corroboration/revert controls, and watchlist eligibility state.
 - Promoting an incident preserves the originating incident and follow-on coverage joins the same case.
 - Unknown/prohibited participant reuse disables contact and export actions in both UI and API authorization tests.
 - Contact and analyst queues expose policy/evidence context and support audited, conflict-safe bulk review.

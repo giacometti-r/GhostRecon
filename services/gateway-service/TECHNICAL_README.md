@@ -23,10 +23,13 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 | gateway | `GET` | `/v1/reporting/source-health` | `reporting_source_health` |
 | gateway | `GET` | `/v1/reporting/kpis/catalog` | `reporting_kpi_catalog` |
 | gateway | `GET` | `/v1/intelligence/events` | `intelligence_events` |
+| gateway | `POST` | `/v1/intelligence/events/manual` | `intelligence_create_manual_event` |
+| gateway | `PATCH` | `/v1/intelligence/events/{event_id}` | `intelligence_patch_event` |
 | gateway | `GET` | `/v1/intelligence/events/{event_id}` | `intelligence_event_detail` |
 | gateway | `GET` | `/v1/intelligence/events/{event_id}/participants` | `intelligence_event_participants` |
 | gateway | `GET` | `/v1/intelligence/participants` | `intelligence_participants` |
 | gateway | `GET` | `/v1/intelligence/incidents` | `intelligence_incidents` |
+| gateway | `POST` | `/v1/intelligence/incidents/manual` | `intelligence_create_manual_incident` |
 | gateway | `GET` | `/v1/intelligence/incidents/{incident_id}` | `intelligence_incident_detail` |
 | gateway | `GET` | `/v1/intelligence/watch-targets` | `intelligence_watch_targets` |
 | gateway | `POST` | `/v1/intelligence/watch-targets` | `intelligence_create_watch_target` |
@@ -39,6 +42,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 | gateway | `GET` | `/v1/enrichment/entity-resolutions` | `enrichment_entity_resolutions` |
 | gateway | `POST` | `/v1/enrichment/contact-candidates` | `enrichment_create_contact_candidate` |
 | gateway | `GET` | `/v1/enrichment/contact-candidates` | `enrichment_contact_candidates` |
+| gateway | `POST` | `/v1/enrichment/event-participants/{participant_id}/enrich-target` | `enrichment_event_participant_enrich_target` |
 | gateway | `POST` | `/v1/email/candidates/persist` | `email_persist_candidates` |
 | gateway | `POST` | `/v1/email/verify-batch` | `email_verify_batch` |
 | gateway | `POST` | `/v1/scoring/candidates` | `candidate_score` |
@@ -69,6 +73,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 | gateway | `GET` | `/v1/review/crm-targets` | `review_crm_targets` |
 | gateway | `POST` | `/v1/governance/incidents/{incident_id}/corroborate` | `governance_corroborate_incident` |
 | gateway | `POST` | `/v1/governance/incidents/{incident_id}/reject` | `governance_reject_incident` |
+| gateway | `POST` | `/v1/governance/incidents/{incident_id}/revert` | `governance_revert_incident` |
 | gateway | `GET` | `/v1/kpis/catalog` | `kpi_catalog` |
 
 ## Data Flow And Contracts
@@ -78,6 +83,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 - Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
 - Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
 - Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
+- Sprint 17/18 workflow routes add manual event create/edit, manual incident splitting, version-aware incident promotion/revert, and durable event participant enrichment queueing.
 
 ## Function Reference
 
@@ -292,12 +298,12 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
 
-##### `async intelligence_promote_incident_to_watchlist(incident_id: str, idempotency_key: str = Header(alias='Idempotency-Key'), actor: str = Header(default='system', alias='X-Actor')) -> WatchTargetOut`
+##### `async intelligence_promote_incident_to_watchlist(incident_id: str, request: IncidentWatchPromotionRequest, idempotency_key: str = Header(alias='Idempotency-Key'), actor: str = Header(default='system', alias='X-Actor')) -> WatchTargetOut`
 
-- Inputs: `incident_id` (str), `idempotency_key` (str), `actor` (str)
+- Inputs: `incident_id` (str), `request` (IncidentWatchPromotionRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `WatchTargetOut`.
 - Why: `intelligence_promote_incident_to_watchlist` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
-- How: It calls `Header`, `WatchTargetOut.model_validate`, `promote_incident_to_watchlist`, `HTTPException`, `watch_target_to_api`, `get_settings`; uses idempotency lookup, serialization/projection.
+- How: It calls `Header`, `WatchTargetOut.model_validate`, `promote_incident_to_watchlist`, `HTTPException`, `watch_target_to_api`, `get_settings`; uses optimistic version checks, idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
 

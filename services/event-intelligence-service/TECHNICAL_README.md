@@ -7,17 +7,23 @@ Event Intelligence Service is implemented by `src/ghostrecon/services/event_inte
 
 Related/shared modules referenced by this service: `src/ghostrecon/services/source_adapters.py`, `src/ghostrecon/services/source_registry.py`.
 
+Geocoding support is implemented by `src/ghostrecon/services/geocoding.py`. Production deployments use a Nominatim-compatible structured search adapter; local demo runs use deterministic stored venue coordinates.
+
 ## Route Surface
 
 | Exposure | Method | Path | Handler |
 | --- | --- | --- | --- |
 | service | `GET` | `/v1/intelligence/sources/health` | `source_health` |
 | service | `GET` | `/v1/intelligence/events` | `intelligence_events` |
+| service | `POST` | `/v1/intelligence/events/manual` | `intelligence_create_manual_event` |
+| service | `PATCH` | `/v1/intelligence/events/{event_id}` | `intelligence_patch_event` |
 | service | `GET` | `/v1/intelligence/events/{event_id}` | `intelligence_event_detail` |
 | service | `GET` | `/v1/intelligence/events/{event_id}/participants` | `intelligence_event_participants` |
 | service | `GET` | `/v1/intelligence/participants` | `intelligence_participants` |
 | gateway | `GET` | `/v1/intelligence/sources/health` | `source_health` |
 | gateway | `GET` | `/v1/intelligence/events` | `intelligence_events` |
+| gateway | `POST` | `/v1/intelligence/events/manual` | `intelligence_create_manual_event` |
+| gateway | `PATCH` | `/v1/intelligence/events/{event_id}` | `intelligence_patch_event` |
 | gateway | `GET` | `/v1/intelligence/events/{event_id}` | `intelligence_event_detail` |
 | gateway | `GET` | `/v1/intelligence/events/{event_id}/participants` | `intelligence_event_participants` |
 | gateway | `GET` | `/v1/intelligence/participants` | `intelligence_participants` |
@@ -29,6 +35,8 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 - Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
 - Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
 - Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
+- Event formats are persisted as `in-person`, `online`, `hybrid`, or `unknown`; request/filter aliases `physical` and `virtual` normalize to the canonical values.
+- Manual event creation and event patching are idempotent, version-aware where mutable, and persist address/geocoding status without blocking on geocoder failures.
 
 ## Function Reference
 
@@ -42,7 +50,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 
 ##### `EventCandidate`
 
-`EventCandidate` is a data container or runtime class decorated with `dataclass(frozen=True)` based on `object`. Fields: `name` (str), `event_series_key` (str), `external_id` (str | None), `canonical_url` (str | None), `original_start` (str | None), `original_end` (str | None), `source_timezone` (str | None), `iana_timezone` (str | None), `timezone_status` (str), `starts_at_utc` (datetime | None), `ends_at_utc` (datetime | None), `event_format` (str), `venue_name` (str | None), `city` (str | None), `region` (str | None), `country` (str | None), `virtual_url` (str | None), `topics` (list[object]), `organizers` (list[object]), `confidence` (int), `canonical_state` (str).
+`EventCandidate` is a data container or runtime class decorated with `dataclass(frozen=True)` based on `object`. Fields: `name` (str), `event_series_key` (str), `external_id` (str | None), `canonical_url` (str | None), `original_start` (str | None), `original_end` (str | None), `source_timezone` (str | None), `iana_timezone` (str | None), `timezone_status` (str), `starts_at_utc` (datetime | None), `ends_at_utc` (datetime | None), `event_format` (str), `venue_name` (str | None), `street_address` (str | None), `city` (str | None), `region` (str | None), `postcode` (str | None), `country` (str | None), `latitude` (float | None), `longitude` (float | None), `geocode_status` (str | None), `geocode_provider` (str | None), `geocode_display_name` (str | None), `geocoded_at` (datetime | None), `virtual_url` (str | None), `topics` (list[object]), `organizers` (list[object]), `confidence` (int), `canonical_state` (str).
 
 ##### `ParticipantCandidate`
 
@@ -211,6 +219,24 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 - How: It uses serialization/projection.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
+
+##### `async create_manual_event(request: ManualEventCreate, *, actor: str, idempotency_key: str, settings: Settings | None = None) -> CyberEvent`
+
+- Inputs: `request` (ManualEventCreate), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
+- Output: Returns `CyberEvent`.
+- Why: `create_manual_event` creates an operator-supplied event, resolves optional address coordinates, and preserves source-item lineage.
+- How: It validates the address/format contract, runs the configured geocoder, writes the event, and records audit/outbox events under the idempotency key.
+- Side effects: mutates database state; may call a configured geocoder.
+- Failures: raises `ValueError` for invalid workflow input.
+
+##### `async update_event(event_id: str, request: EventUpdateRequest, *, actor: str, idempotency_key: str, settings: Settings | None = None) -> CyberEvent | None`
+
+- Inputs: `event_id` (str), `request` (EventUpdateRequest), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
+- Output: Returns `CyberEvent | None`.
+- Why: `update_event` applies version-aware event edits from the dashboard/API.
+- How: It checks the optimistic version, patches mutable fields, re-geocodes when address inputs change, increments version, and records audit/outbox events.
+- Side effects: mutates database state; may call a configured geocoder.
+- Failures: raises `ValueError` for version conflicts or invalid workflow input; may return `None` for missing events.
 
 ##### `participant_to_api(participant: EventParticipant) -> dict[str, object]`
 

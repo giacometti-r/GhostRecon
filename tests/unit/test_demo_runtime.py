@@ -21,6 +21,7 @@ def test_demo_seed_ids_are_stable_uuid_strings() -> None:
         "cyber_event_id",
         "event_participant_id",
         "security_incident_id",
+        "secondary_incident_id",
         "review_incident_id",
         "watch_target_id",
         "approve_review_candidate_id",

@@ -78,6 +78,12 @@ def test_sprint_6_models_and_lineage_columns_are_registered() -> None:
     assert "idempotency_key" in tables["entity_resolution_cases"].columns
     assert "policy_snapshot_hash" in tables["review_candidates"].columns
     assert "version" in tables["security_incidents"].columns
+    assert "incident_group_key" in tables["security_incidents"].columns
+    assert "primary_affected_company" in tables["security_incidents"].columns
+    assert "evidence_urls" in tables["security_incidents"].columns
+    assert "street_address" in tables["cyber_events"].columns
+    assert "latitude" in tables["cyber_events"].columns
+    assert "geocode_status" in tables["cyber_events"].columns
     assert "idempotency_key" in tables["suppressions"].columns
     assert "selection_hash" in tables["crm_export_batches"].columns
     assert "provider_record_id" in tables["crm_export_items"].columns

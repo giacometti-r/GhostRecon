@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Normalizes public cyber-event source data into searchable events and participant records for operators and downstream enrichment. It owns event intelligence ingestion and read APIs and should remain aligned with the implementation modules listed below.
+Normalizes public cyber-event source data into searchable events and participant records for operators and downstream enrichment. It owns event intelligence ingestion, manual event create/edit workflows, event geocoding state, and event read APIs and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
@@ -15,6 +15,7 @@ Normalizes public cyber-event source data into searchable events and participant
 ## Implementation Modules
 
 - `src/ghostrecon/services/event_intelligence.py`
+- `src/ghostrecon/services/geocoding.py`
 - Related/shared: `src/ghostrecon/services/source_adapters.py`
 - Related/shared: `src/ghostrecon/services/source_registry.py`
 
@@ -22,11 +23,15 @@ Normalizes public cyber-event source data into searchable events and participant
 
 - `GET /v1/intelligence/sources/health` via `source_health` (service router).
 - `GET /v1/intelligence/events` via `intelligence_events` (service router).
+- `POST /v1/intelligence/events/manual` via `intelligence_create_manual_event` (service router).
+- `PATCH /v1/intelligence/events/{event_id}` via `intelligence_patch_event` (service router).
 - `GET /v1/intelligence/events/{event_id}` via `intelligence_event_detail` (service router).
 - `GET /v1/intelligence/events/{event_id}/participants` via `intelligence_event_participants` (service router).
 - `GET /v1/intelligence/participants` via `intelligence_participants` (service router).
 - `GET /v1/intelligence/sources/health` via `source_health` (gateway).
 - `GET /v1/intelligence/events` via `intelligence_events` (gateway).
+- `POST /v1/intelligence/events/manual` via `intelligence_create_manual_event` (gateway).
+- `PATCH /v1/intelligence/events/{event_id}` via `intelligence_patch_event` (gateway).
 - `GET /v1/intelligence/events/{event_id}` via `intelligence_event_detail` (gateway).
 - `GET /v1/intelligence/events/{event_id}/participants` via `intelligence_event_participants` (gateway).
 - `GET /v1/intelligence/participants` via `intelligence_participants` (gateway).
@@ -38,6 +43,7 @@ Normalizes public cyber-event source data into searchable events and participant
 - source registry definitions.
 - raw source items.
 - event and participant persistence tables.
+- geocoder configuration: `GHOSTRECON_GEOCODER_PROVIDER`, Nominatim base URL, and identifying Nominatim user agent when live geocoding is enabled.
 
 ## Operations
 
@@ -45,6 +51,8 @@ Normalizes public cyber-event source data into searchable events and participant
 - Preserve policy, lineage, and audit fields when backfilling or replaying data.
 - Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
 - Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+- Store canonical event formats as `in-person`, `online`, `hybrid`, or `unknown`; `physical` and `virtual` remain accepted request/filter aliases.
+- Live Nominatim-compatible geocoding uses structured address search with an identifying user agent and low request rate. Geocoding failures store status and must not block event creation.
 
 ## Failure Modes
 
@@ -62,5 +70,5 @@ GHOSTRECON_SERVICE_NAME=event-intelligence-service uvicorn ghostrecon.service_ap
 ## Verification
 
 ```bash
-pytest tests/unit/test_event_intelligence.py tests/unit/test_event_routes.py tests/unit/test_source_adapters.py tests/unit/test_source_registry.py
+pytest tests/unit/test_event_intelligence.py tests/unit/test_event_routes.py tests/unit/test_geocoding.py tests/unit/test_source_adapters.py tests/unit/test_source_registry.py
 ```

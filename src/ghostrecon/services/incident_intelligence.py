@@ -68,6 +68,9 @@ class ArticleCandidate:
 @dataclass(frozen=True)
 class IncidentCandidate:
     title: str
+    incident_group_key: str
+    primary_affected_company: str | None
+    primary_affected_domain: str | None
     affected_companies: list[object]
     affected_domains: list[object]
     incident_type: str | None
@@ -79,6 +82,7 @@ class IncidentCandidate:
     confidence: int
     dedupe_key: str
     evidence_family_key: str
+    evidence_urls: list[object] = field(default_factory=list)
     authoritative: bool = False
 
 
@@ -127,9 +131,9 @@ def article_candidate_from_raw_item(
     )
 
 
-def incident_candidate_from_article(
+def incident_candidates_from_article(
     source: SourceDefinition, raw_item: RawSourceItem, article: ArticleCandidate
-) -> IncidentCandidate | None:
+) -> list[IncidentCandidate]:
     metadata = raw_item.raw_metadata or {}
     gdelt = metadata.get("gdelt_article") if isinstance(metadata.get("gdelt_article"), dict) else {}
     text = " ".join(
@@ -144,7 +148,7 @@ def incident_candidate_from_article(
     )
     lowered = text.lower()
     if not any(term in lowered for term in _SECURITY_TERMS):
-        return None
+        return []
 
     companies = _companies_from_metadata(metadata) or _companies_from_text(text)
     domains = _domains_from_metadata(metadata)
@@ -158,27 +162,50 @@ def incident_candidate_from_article(
         or metadata.get("authoritative")
         or gdelt.get("authoritative")
     )
-    key_company = _slug(str(companies[0])) if companies else _hostname(article.canonical_url)
     key_date = article.published_at.date().isoformat() if article.published_at else "unknown"
     key_vector = attack_vector or "unknown"
-    incident_identity = f"{key_company}:{key_date}:{key_vector}"
-    incident_digest = hashlib.sha256(incident_identity.encode()).hexdigest()
-    dedupe_key = f"security-incident:{incident_digest}"
-    return IncidentCandidate(
-        title=article.title,
-        affected_companies=companies,
-        affected_domains=domains,
-        incident_type=incident_type,
-        attack_vector=attack_vector,
-        first_observed_at=article.published_at,
-        last_observed_at=article.published_at,
-        geography=geography,
-        languages=languages,
-        confidence=75 if companies else 55,
-        dedupe_key=dedupe_key,
-        evidence_family_key=_slug(family or "unknown"),
-        authoritative=authoritative,
+    group_identity = f"{_slug(article.title)}:{key_date}:{key_vector}"
+    incident_group_key = (
+        f"security-incident-group:{hashlib.sha256(group_identity.encode()).hexdigest()}"
     )
+    candidates = []
+    for company, domain in _incident_contexts(companies, domains):
+        key_company = (
+            _slug(str(company))
+            if company
+            else _slug(str(domain or _hostname(article.canonical_url)))
+        )
+        incident_identity = f"{incident_group_key}:{key_company}:{domain or ''}"
+        incident_digest = hashlib.sha256(incident_identity.encode()).hexdigest()
+        candidates.append(
+            IncidentCandidate(
+                title=article.title,
+                incident_group_key=incident_group_key,
+                primary_affected_company=company,
+                primary_affected_domain=domain,
+                affected_companies=[company] if company else [],
+                affected_domains=[domain] if domain else [],
+                incident_type=incident_type,
+                attack_vector=attack_vector,
+                first_observed_at=article.published_at,
+                last_observed_at=article.published_at,
+                geography=geography,
+                languages=languages,
+                confidence=75 if company else 55,
+                dedupe_key=f"security-incident:{incident_digest}",
+                evidence_family_key=_slug(family or "unknown"),
+                evidence_urls=[article.canonical_url],
+                authoritative=authoritative,
+            )
+        )
+    return candidates
+
+
+def incident_candidate_from_article(
+    source: SourceDefinition, raw_item: RawSourceItem, article: ArticleCandidate
+) -> IncidentCandidate | None:
+    candidates = incident_candidates_from_article(source, raw_item, article)
+    return candidates[0] if candidates else None
 
 
 async def fetch_incident_source(
@@ -225,71 +252,88 @@ async def create_manual_incident(
     actor: str,
     idempotency_key: str,
     settings: Settings | None = None,
-) -> SecurityIncident:
+) -> list[SecurityIncident]:
     async with session_scope(settings) as session:
-        existing = await session.scalar(
-            select(SecurityIncident).where(
-                SecurityIncident.dedupe_key == f"manual-incident:{idempotency_key}"
-            )
+        group_key = f"manual-incident:{idempotency_key}"
+        existing = list(
+            (
+                await session.execute(
+                    select(SecurityIncident).where(SecurityIncident.incident_group_key == group_key)
+                )
+            ).scalars()
         )
-        if existing is not None:
+        if existing:
             return existing
-        incident = SecurityIncident(
-            status="candidate",
-            title=payload.title,
-            affected_companies=list(payload.affected_companies),
-            affected_domains=[domain.lower() for domain in payload.affected_domains],
-            incident_type=payload.incident_type,
-            attack_vector=payload.attack_vector,
-            first_observed_at=payload.first_observed_at,
-            last_observed_at=payload.last_observed_at or payload.first_observed_at,
-            geography=list(payload.geography),
-            languages=list(payload.languages),
-            confidence=payload.confidence,
-            evidence_article_ids=[],
-            evidence_source_item_ids=[],
-            evidence_families=["manual"],
-            corroboration_method="none",
-            canonical_state="canonical",
-            dedupe_key=f"manual-incident:{idempotency_key}",
-            source_definition_id=None,
-            source_item_ids=[],
-            version=1,
-        )
-        session.add(incident)
+        incidents = []
+        for index, (company, domain) in enumerate(
+            _incident_contexts(payload.affected_companies, payload.affected_domains)
+        ):
+            dedupe_key = f"{group_key}:{index}:{_slug(company or domain or payload.title)}"
+            incident = SecurityIncident(
+                status="candidate",
+                title=payload.title,
+                incident_group_key=group_key,
+                primary_affected_company=company,
+                primary_affected_domain=domain,
+                affected_companies=[company] if company else [],
+                affected_domains=[domain] if domain else [],
+                incident_type=payload.incident_type,
+                attack_vector=payload.attack_vector,
+                first_observed_at=payload.first_observed_at,
+                last_observed_at=payload.last_observed_at or payload.first_observed_at,
+                geography=list(payload.geography),
+                languages=list(payload.languages),
+                confidence=payload.confidence,
+                evidence_article_ids=[],
+                evidence_source_item_ids=list(payload.source_item_ids),
+                evidence_families=["manual"],
+                evidence_urls=list(payload.evidence_urls),
+                corroboration_method="none",
+                canonical_state="canonical",
+                dedupe_key=dedupe_key,
+                source_definition_id=None,
+                source_item_ids=list(payload.source_item_ids),
+                version=1,
+            )
+            session.add(incident)
+            incidents.append(incident)
         await session.flush()
-        session.add(
-            AuditEvent(
-                actor=actor,
-                action="security_incident.manual_created",
-                entity_type="security_incident",
-                entity_id=incident.id,
-                idempotency_key=idempotency_key,
-                payload={"source": "manual"},
+        for incident in incidents:
+            session.add(
+                AuditEvent(
+                    actor=actor,
+                    action="security_incident.manual_created",
+                    entity_type="security_incident",
+                    entity_id=incident.id,
+                    idempotency_key=f"{idempotency_key}:{incident.id}",
+                    payload={"source": "manual", "incident_group_key": group_key},
+                )
             )
-        )
-        self_event = new_event(
-            event_name=EventName.SECURITY_INCIDENT_DETECTED,
-            aggregate_type="security_incident",
-            aggregate_id=incident.id,
-            source_service=INCIDENT_SERVICE_NAME,
-            payload={
-                "security_incident_id": incident.id,
-                "manual": True,
-                "created_by": actor,
-            },
-            idempotency_key=f"security_incident.manual:{incident.id}",
-        ).model_dump(mode="json")
-        session.add(
-            OutboxEvent(
-                event_name=self_event["event_name"],
-                aggregate_type=self_event["aggregate_type"],
-                aggregate_id=self_event["aggregate_id"],
-                idempotency_key=self_event["idempotency_key"],
-                payload=self_event,
+            self_event = new_event(
+                event_name=EventName.SECURITY_INCIDENT_DETECTED,
+                aggregate_type="security_incident",
+                aggregate_id=incident.id,
+                source_service=INCIDENT_SERVICE_NAME,
+                source_item_ids=[str(item) for item in incident.source_item_ids],
+                payload={
+                    "security_incident_id": incident.id,
+                    "incident_group_key": incident.incident_group_key,
+                    "primary_affected_company": incident.primary_affected_company,
+                    "manual": True,
+                    "created_by": actor,
+                },
+                idempotency_key=f"security_incident.manual:{incident.id}",
+            ).model_dump(mode="json")
+            session.add(
+                OutboxEvent(
+                    event_name=self_event["event_name"],
+                    aggregate_type=self_event["aggregate_type"],
+                    aggregate_id=self_event["aggregate_id"],
+                    idempotency_key=self_event["idempotency_key"],
+                    payload=self_event,
+                )
             )
-        )
-        return incident
+        return incidents
 
 
 async def list_watch_targets(
@@ -334,6 +378,7 @@ async def patch_watch_target(
 async def promote_incident_to_watchlist(
     incident_id: str,
     *,
+    version: int,
     actor: str,
     idempotency_key: str,
     settings: Settings | None = None,
@@ -342,14 +387,26 @@ async def promote_incident_to_watchlist(
         incident = await session.get(SecurityIncident, incident_id)
         if incident is None:
             return None
+        if incident.version != version:
+            raise ValueError("stale optimistic version")
+        if incident.status != "corroborated":
+            raise ValueError("incident must be corroborated before watchlist promotion")
+        company = incident.primary_affected_company or _string(
+            (incident.affected_companies or [None])[0]
+        )
+        if not company:
+            raise ValueError("incident does not have a company to promote")
         payload = WatchTargetCreate(
-            target_type="incident",
-            canonical_target_key=incident.id,
-            display_name=incident.title,
+            target_type="company",
+            canonical_target_key=company,
+            display_name=company,
             query_config={
                 "incident_id": incident.id,
+                "incident_group_key": incident.incident_group_key,
+                "domains": incident.affected_domains or [],
                 "evidence_families": incident.evidence_families or [],
             },
+            owner=actor,
             origin_incident_id=incident.id,
         )
         repository = IncidentIntelligenceRepository(session)
@@ -387,10 +444,10 @@ class IncidentIntelligenceRepository:
                     source, raw_item, article_candidate
                 )
                 articles_created += int(article_created)
-                incident_candidate = incident_candidate_from_article(
+                incident_candidates = incident_candidates_from_article(
                     source, raw_item, article_candidate
                 )
-                if incident_candidate is not None:
+                for incident_candidate in incident_candidates:
                     _, incident_created, corroborated = await self.upsert_incident(
                         source, raw_item, article, incident_candidate
                     )
@@ -476,6 +533,9 @@ class IncidentIntelligenceRepository:
             incident = SecurityIncident(
                 status="candidate",
                 title=candidate.title,
+                incident_group_key=candidate.incident_group_key,
+                primary_affected_company=candidate.primary_affected_company,
+                primary_affected_domain=candidate.primary_affected_domain,
                 affected_companies=candidate.affected_companies,
                 affected_domains=candidate.affected_domains,
                 incident_type=candidate.incident_type,
@@ -488,6 +548,7 @@ class IncidentIntelligenceRepository:
                 evidence_article_ids=[article.id],
                 evidence_source_item_ids=[raw_item.id],
                 evidence_families=[candidate.evidence_family_key],
+                evidence_urls=candidate.evidence_urls,
                 corroboration_method="none",
                 canonical_state="canonical",
                 dedupe_key=candidate.dedupe_key,
@@ -528,6 +589,8 @@ class IncidentIntelligenceRepository:
             incident.evidence_families = _append_unique(
                 incident.evidence_families, candidate.evidence_family_key
             )
+            for url in candidate.evidence_urls:
+                incident.evidence_urls = _append_unique(incident.evidence_urls, url)
             incident.languages = _merge_list(incident.languages, candidate.languages)
             incident.geography = _merge_list(incident.geography, candidate.geography)
             if candidate.last_observed_at and (
@@ -722,6 +785,9 @@ def incident_to_api(incident: SecurityIncident) -> dict[str, object]:
         "id": incident.id,
         "status": incident.status,
         "title": incident.title,
+        "incident_group_key": incident.incident_group_key,
+        "primary_affected_company": incident.primary_affected_company,
+        "primary_affected_domain": incident.primary_affected_domain,
         "affected_companies": incident.affected_companies or [],
         "affected_domains": incident.affected_domains or [],
         "incident_type": incident.incident_type,
@@ -734,6 +800,7 @@ def incident_to_api(incident: SecurityIncident) -> dict[str, object]:
         "evidence_article_ids": incident.evidence_article_ids or [],
         "evidence_source_item_ids": incident.evidence_source_item_ids or [],
         "evidence_families": incident.evidence_families or [],
+        "evidence_urls": incident.evidence_urls or [],
         "corroboration_method": incident.corroboration_method,
         "analyst_decision_ref": incident.analyst_decision_ref,
         "canonical_state": incident.canonical_state,
@@ -805,6 +872,24 @@ def _domains_from_metadata(metadata: dict[str, object]) -> list[object]:
     if isinstance(values, list):
         return [str(value).strip().lower() for value in values if str(value).strip()]
     return []
+
+
+def _incident_contexts(
+    companies: list[object] | None, domains: list[object] | None
+) -> list[tuple[str | None, str | None]]:
+    company_values = [str(value).strip() for value in companies or [] if str(value).strip()]
+    domain_values = [str(value).strip().lower() for value in domains or [] if str(value).strip()]
+    if company_values:
+        contexts = []
+        for index, company in enumerate(company_values):
+            domain = domain_values[index] if index < len(domain_values) else None
+            if domain is None and len(domain_values) == 1:
+                domain = domain_values[0]
+            contexts.append((company, domain))
+        return contexts
+    if domain_values:
+        return [(None, domain) for domain in domain_values]
+    return [(None, None)]
 
 
 def _attack_vector(lowered: str) -> str | None:

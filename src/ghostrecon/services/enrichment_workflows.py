@@ -55,10 +55,7 @@ def normalize_domain(domain: str | None) -> str | None:
 def evaluate_contact_policy(payload: ContactEnrichmentCreate) -> tuple[str, str | None]:
     if payload.breached_data_source:
         return "blocked", "breached_data_rejected"
-    if (
-        payload.origin_type == "manual"
-        and payload.candidate_payload.get("created_by")
-    ):
+    if payload.origin_type == "manual" and payload.candidate_payload.get("created_by"):
         return "eligible", None
     if not payload.source_definition_id or not payload.source_item_ids:
         return "blocked", "missing_source_lineage"
@@ -133,12 +130,13 @@ async def list_contact_enrichment_candidates(
     *,
     status: str | None = None,
     origin_type: str | None = None,
+    origin_id: str | None = None,
     limit: int = 100,
     settings: Settings | None = None,
 ) -> list[ContactEnrichmentCandidate]:
     async with session_scope(settings) as session:
         return await EnrichmentWorkflowRepository(session).list_contact_candidates(
-            status=status, origin_type=origin_type, limit=limit
+            status=status, origin_type=origin_type, origin_id=origin_id, limit=limit
         )
 
 
@@ -197,9 +195,7 @@ async def enrich_event_participant_target(
             )
             if email_records:
                 email_records = await repository.verify_email_candidates(
-                    EmailVerifyBatchRequest(
-                        candidate_ids=[record.id for record in email_records]
-                    ),
+                    EmailVerifyBatchRequest(candidate_ids=[record.id for record in email_records]),
                     verifier or EmailVerifierClient(resolved),
                 )
         verified = next(
@@ -215,11 +211,7 @@ async def enrich_event_participant_target(
         review_reason = contact_candidate.review_reason or contact_candidate.eligibility_reason
         if verified is None:
             review_reason = review_reason or next(
-                (
-                    record.review_reason
-                    for record in email_records
-                    if record.review_reason
-                ),
+                (record.review_reason for record in email_records if record.review_reason),
                 None,
             )
         return EventParticipantEnrichResult(
@@ -364,8 +356,10 @@ class EnrichmentWorkflowRepository:
     async def list_entity_resolutions(
         self, *, status: str | None, origin_type: str | None, limit: int
     ) -> list[EntityResolutionCase]:
-        stmt = select(EntityResolutionCase).order_by(EntityResolutionCase.created_at.desc()).limit(
-            limit
+        stmt = (
+            select(EntityResolutionCase)
+            .order_by(EntityResolutionCase.created_at.desc())
+            .limit(limit)
         )
         if status:
             stmt = stmt.where(EntityResolutionCase.status == status)
@@ -463,7 +457,7 @@ class EnrichmentWorkflowRepository:
         return candidate
 
     async def list_contact_candidates(
-        self, *, status: str | None, origin_type: str | None, limit: int
+        self, *, status: str | None, origin_type: str | None, origin_id: str | None, limit: int
     ) -> list[ContactEnrichmentCandidate]:
         stmt = (
             select(ContactEnrichmentCandidate)
@@ -474,6 +468,8 @@ class EnrichmentWorkflowRepository:
             stmt = stmt.where(ContactEnrichmentCandidate.status == status)
         if origin_type:
             stmt = stmt.where(ContactEnrichmentCandidate.origin_type == origin_type)
+        if origin_id:
+            stmt = stmt.where(ContactEnrichmentCandidate.origin_id == origin_id)
         result = await self.session.execute(stmt)
         return list(result.scalars())
 

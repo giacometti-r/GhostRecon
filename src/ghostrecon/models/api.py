@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
 
 
 class LeadSourceType(StrEnum):
@@ -228,10 +228,25 @@ class DuplicateState(StrEnum):
 
 
 class EventFormat(StrEnum):
-    PHYSICAL = "physical"
-    VIRTUAL = "virtual"
+    IN_PERSON = "in-person"
+    ONLINE = "online"
     HYBRID = "hybrid"
     UNKNOWN = "unknown"
+
+
+def normalize_event_format_value(value: object) -> object:
+    aliases = {
+        "physical": EventFormat.IN_PERSON.value,
+        "in_person": EventFormat.IN_PERSON.value,
+        "in person": EventFormat.IN_PERSON.value,
+        "virtual": EventFormat.ONLINE.value,
+    }
+    if isinstance(value, EventFormat):
+        return value.value
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        return aliases.get(normalized, normalized)
+    return value
 
 
 class EventCanonicalState(StrEnum):
@@ -269,18 +284,32 @@ class CyberEventOut(BaseModel):
     ends_at_utc: datetime | None = None
     event_format: EventFormat = EventFormat.UNKNOWN
     venue_name: str | None = None
+    street_address: str | None = None
     city: str | None = None
     region: str | None = None
+    postcode: str | None = None
     country: str | None = None
     virtual_url: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    geocode_status: str = "not_required"
+    geocode_provider: str | None = None
+    geocode_display_name: str | None = None
+    geocoded_at: datetime | None = None
     topics: list[object] = []
     organizers: list[object] = []
     confidence: int = Field(ge=0, le=100)
     canonical_state: EventCanonicalState = EventCanonicalState.CANONICAL
     source_definition_id: str | None = None
     source_item_ids: list[object] = []
+    version: int = 1
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("event_format", mode="before")
+    @classmethod
+    def normalize_event_format(cls, value: object) -> object:
+        return normalize_event_format_value(value)
 
 
 class CyberEventList(BaseModel):
@@ -316,22 +345,62 @@ class ManualEventCreate(BaseModel):
 
     name: str = Field(min_length=1, max_length=255)
     event_series_key: str = Field(default="manual", min_length=1, max_length=128)
-    canonical_url: str | None = None
+    canonical_url: str = Field(min_length=1, max_length=2048)
+    original_start: str | None = None
+    original_end: str | None = None
+    source_timezone: str | None = None
+    iana_timezone: str | None = None
+    starts_at_utc: datetime
+    ends_at_utc: datetime | None = None
+    event_format: EventFormat
+    venue_name: str | None = None
+    street_address: str | None = None
+    city: str | None = None
+    region: str | None = None
+    postcode: str | None = None
+    country: str | None = None
+    virtual_url: str | None = None
+    topics: list[str] = []
+    organizers: list[dict[str, object]] = []
+    source_item_ids: list[str] = []
+    confidence: int = Field(default=70, ge=0, le=100)
+
+    @field_validator("event_format", mode="before")
+    @classmethod
+    def normalize_event_format(cls, value: object) -> object:
+        return normalize_event_format_value(value)
+
+
+class EventUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    event_series_key: str | None = Field(default=None, min_length=1, max_length=128)
+    canonical_url: str | None = Field(default=None, max_length=2048)
     original_start: str | None = None
     original_end: str | None = None
     source_timezone: str | None = None
     iana_timezone: str | None = None
     starts_at_utc: datetime | None = None
     ends_at_utc: datetime | None = None
-    event_format: EventFormat = EventFormat.UNKNOWN
+    event_format: EventFormat | None = None
     venue_name: str | None = None
+    street_address: str | None = None
     city: str | None = None
     region: str | None = None
+    postcode: str | None = None
     country: str | None = None
     virtual_url: str | None = None
-    topics: list[str] = []
-    organizers: list[dict[str, object]] = []
-    confidence: int = Field(default=70, ge=0, le=100)
+    topics: list[str] | None = None
+    organizers: list[dict[str, object]] | None = None
+    source_item_ids: list[str] | None = None
+    confidence: int | None = Field(default=None, ge=0, le=100)
+
+    @field_validator("event_format", mode="before")
+    @classmethod
+    def normalize_event_format(cls, value: object) -> object:
+        return normalize_event_format_value(value)
 
 
 class SecurityIncidentStatus(StrEnum):
@@ -384,6 +453,9 @@ class SecurityIncidentOut(BaseModel):
     id: str
     status: SecurityIncidentStatus = SecurityIncidentStatus.CANDIDATE
     title: str
+    incident_group_key: str | None = None
+    primary_affected_company: str | None = None
+    primary_affected_domain: str | None = None
     affected_companies: list[object] = []
     affected_domains: list[object] = []
     incident_type: str | None = None
@@ -396,6 +468,7 @@ class SecurityIncidentOut(BaseModel):
     evidence_article_ids: list[object] = []
     evidence_source_item_ids: list[object] = []
     evidence_families: list[object] = []
+    evidence_urls: list[object] = []
     corroboration_method: CorroborationMethod = CorroborationMethod.NONE
     analyst_decision_ref: str | None = None
     canonical_state: IncidentCanonicalState = IncidentCanonicalState.CANONICAL
@@ -422,7 +495,15 @@ class ManualIncidentCreate(BaseModel):
     last_observed_at: datetime | None = None
     geography: list[str] = []
     languages: list[str] = []
+    source_item_ids: list[str] = []
+    evidence_urls: list[str] = []
     confidence: int = Field(default=70, ge=0, le=100)
+
+
+class IncidentWatchPromotionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int
 
 
 class WatchTargetOut(BaseModel):

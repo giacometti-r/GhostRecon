@@ -13,7 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ghostrecon.common.config import Settings
 from ghostrecon.common.database import session_scope
 from ghostrecon.events.contracts import EventName, new_event
-from ghostrecon.models.api import ManualEventCreate
+from ghostrecon.models.api import (
+    EventUpdateRequest,
+    ManualEventCreate,
+    normalize_event_format_value,
+)
 from ghostrecon.models.db import (
     AuditEvent,
     CyberEvent,
@@ -21,6 +25,12 @@ from ghostrecon.models.db import (
     OutboxEvent,
     RawSourceItem,
     SourceDefinition,
+)
+from ghostrecon.services.geocoding import (
+    Geocoder,
+    GeocodeRequest,
+    GeocodeResult,
+    geocoder_for_settings,
 )
 from ghostrecon.services.source_registry import fetch_source_by_id, normalize_url
 
@@ -52,10 +62,14 @@ class EventCandidate:
     ends_at_utc: datetime | None = None
     event_format: str = "unknown"
     venue_name: str | None = None
+    street_address: str | None = None
     city: str | None = None
     region: str | None = None
+    postcode: str | None = None
     country: str | None = None
     virtual_url: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     topics: list[object] = field(default_factory=list)
     organizers: list[object] = field(default_factory=list)
     confidence: int = 50
@@ -220,13 +234,14 @@ async def list_events(
     limit: int = 100,
     settings: Settings | None = None,
 ) -> list[CyberEvent]:
+    normalized_format = normalize_event_format_value(event_format) if event_format else None
     async with session_scope(settings) as session:
         repository = EventIntelligenceRepository(session)
         return await repository.list_events(
             series=series,
             source=source,
             country=country,
-            event_format=event_format,
+            event_format=str(normalized_format) if normalized_format else None,
             limit=limit,
         )
 
@@ -242,8 +257,12 @@ async def create_manual_event(
     actor: str,
     idempotency_key: str,
     settings: Settings | None = None,
+    geocoder: Geocoder | None = None,
 ) -> CyberEvent:
-    async with session_scope(settings) as session:
+    resolved = settings or Settings()
+    _validate_manual_event(payload)
+    geocode = await _geocode_event_payload(payload, resolved, geocoder)
+    async with session_scope(resolved) as session:
         existing = await session.scalar(
             select(CyberEvent).where(CyberEvent.dedupe_key == f"manual-event:{idempotency_key}")
         )
@@ -254,7 +273,7 @@ async def create_manual_event(
             name=payload.name,
             event_series_key=payload.event_series_key,
             external_id=None,
-            canonical_url=payload.canonical_url,
+            canonical_url=normalize_url(payload.canonical_url),
             original_start=payload.original_start,
             original_end=payload.original_end,
             source_timezone=payload.source_timezone,
@@ -264,17 +283,26 @@ async def create_manual_event(
             ends_at_utc=payload.ends_at_utc,
             event_format=payload.event_format.value,
             venue_name=payload.venue_name,
+            street_address=payload.street_address,
             city=payload.city,
             region=payload.region,
+            postcode=payload.postcode,
             country=payload.country.upper() if payload.country else None,
-            virtual_url=payload.virtual_url,
+            virtual_url=normalize_url(payload.virtual_url) if payload.virtual_url else None,
+            latitude=geocode.latitude,
+            longitude=geocode.longitude,
+            geocode_status=geocode.status,
+            geocode_provider=geocode.provider,
+            geocode_display_name=geocode.display_name,
+            geocoded_at=geocode.geocoded_at,
             topics=list(payload.topics),
             organizers=list(payload.organizers),
             confidence=payload.confidence,
             canonical_state="canonical",
             dedupe_key=f"manual-event:{idempotency_key}",
             source_definition_id=None,
-            source_item_ids=[],
+            source_item_ids=list(payload.source_item_ids),
+            version=1,
             created_at=now,
             updated_at=now,
         )
@@ -312,6 +340,156 @@ async def create_manual_event(
             )
         )
         return event
+
+
+async def update_event(
+    event_id: str,
+    payload: EventUpdateRequest,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+    geocoder: Geocoder | None = None,
+) -> CyberEvent | None:
+    resolved = settings or Settings()
+    async with session_scope(resolved) as session:
+        event = await session.get(CyberEvent, event_id)
+        if event is None:
+            return None
+        if event.version != payload.version:
+            raise ValueError("stale optimistic version")
+        fields = payload.model_fields_set - {"version"}
+        if "name" in fields and payload.name is not None:
+            event.name = payload.name
+        if "event_series_key" in fields and payload.event_series_key is not None:
+            event.event_series_key = payload.event_series_key
+        if "canonical_url" in fields:
+            event.canonical_url = (
+                normalize_url(payload.canonical_url) if payload.canonical_url else None
+            )
+        if "original_start" in fields:
+            event.original_start = payload.original_start
+        if "original_end" in fields:
+            event.original_end = payload.original_end
+        if "source_timezone" in fields:
+            event.source_timezone = payload.source_timezone
+        if "iana_timezone" in fields:
+            event.iana_timezone = payload.iana_timezone
+        if "starts_at_utc" in fields:
+            event.starts_at_utc = payload.starts_at_utc
+            event.timezone_status = "resolved" if payload.starts_at_utc else event.timezone_status
+        if "ends_at_utc" in fields:
+            event.ends_at_utc = payload.ends_at_utc
+        if "event_format" in fields and payload.event_format is not None:
+            event.event_format = payload.event_format.value
+        if "venue_name" in fields:
+            event.venue_name = payload.venue_name
+        if "street_address" in fields:
+            event.street_address = payload.street_address
+        if "city" in fields:
+            event.city = payload.city
+        if "region" in fields:
+            event.region = payload.region
+        if "postcode" in fields:
+            event.postcode = payload.postcode
+        if "country" in fields:
+            event.country = payload.country.upper() if payload.country else None
+        if "virtual_url" in fields:
+            event.virtual_url = normalize_url(payload.virtual_url) if payload.virtual_url else None
+        if "topics" in fields and payload.topics is not None:
+            event.topics = list(payload.topics)
+        if "organizers" in fields and payload.organizers is not None:
+            event.organizers = list(payload.organizers)
+        if "source_item_ids" in fields and payload.source_item_ids is not None:
+            event.source_item_ids = list(payload.source_item_ids)
+        if "confidence" in fields and payload.confidence is not None:
+            event.confidence = payload.confidence
+        await _apply_event_geocode(event, resolved, geocoder)
+        event.version += 1
+        event.updated_at = datetime.now(UTC)
+        session.add(
+            AuditEvent(
+                actor=actor,
+                action="cyber_event.updated",
+                entity_type="cyber_event",
+                entity_id=event.id,
+                idempotency_key=idempotency_key,
+                payload={"updated_fields": sorted(fields)},
+            )
+        )
+        return event
+
+
+def _validate_manual_event(payload: ManualEventCreate) -> None:
+    if payload.event_format.value == "in-person":
+        missing = [
+            label
+            for label, value in (
+                ("street_address", payload.street_address),
+                ("city", payload.city),
+                ("postcode", payload.postcode),
+                ("country", payload.country),
+            )
+            if not value
+        ]
+        if missing:
+            raise ValueError(f"in-person event requires {', '.join(missing)}")
+
+
+async def _geocode_event_payload(
+    payload: ManualEventCreate,
+    settings: Settings,
+    geocoder: Geocoder | None,
+) -> GeocodeResult:
+    if payload.event_format.value != "in-person":
+        return GeocodeResult(None, None, "not_required")
+    resolver = geocoder or geocoder_for_settings(settings)
+    return await resolver.geocode(
+        GeocodeRequest(
+            street_address=payload.street_address,
+            city=payload.city,
+            postcode=payload.postcode,
+            country=payload.country,
+        )
+    )
+
+
+async def _apply_event_geocode(
+    event: CyberEvent,
+    settings: Settings,
+    geocoder: Geocoder | None,
+) -> None:
+    if event.event_format != "in-person":
+        event.latitude = None
+        event.longitude = None
+        event.geocode_status = "not_required"
+        event.geocode_provider = None
+        event.geocode_display_name = None
+        event.geocoded_at = None
+        return
+    if not (event.street_address and event.city and event.postcode and event.country):
+        event.geocode_status = "insufficient_address"
+        event.latitude = None
+        event.longitude = None
+        event.geocode_provider = None
+        event.geocode_display_name = None
+        event.geocoded_at = None
+        return
+    resolver = geocoder or geocoder_for_settings(settings)
+    result = await resolver.geocode(
+        GeocodeRequest(
+            street_address=event.street_address,
+            city=event.city,
+            postcode=event.postcode,
+            country=event.country,
+        )
+    )
+    event.latitude = result.latitude
+    event.longitude = result.longitude
+    event.geocode_status = result.status
+    event.geocode_provider = result.provider
+    event.geocode_display_name = result.display_name
+    event.geocoded_at = result.geocoded_at
 
 
 async def list_participants(
@@ -403,10 +581,22 @@ class EventIntelligenceRepository:
             ends_at_utc=candidate.ends_at_utc,
             event_format=candidate.event_format,
             venue_name=candidate.venue_name,
+            street_address=candidate.street_address,
             city=candidate.city,
             region=candidate.region,
+            postcode=candidate.postcode,
             country=candidate.country,
             virtual_url=candidate.virtual_url,
+            latitude=candidate.latitude,
+            longitude=candidate.longitude,
+            geocode_status="resolved"
+            if candidate.latitude is not None and candidate.longitude is not None
+            else "not_required",
+            geocode_provider="source"
+            if candidate.latitude is not None and candidate.longitude is not None
+            else None,
+            geocode_display_name=None,
+            geocoded_at=None,
             topics=candidate.topics,
             organizers=candidate.organizers,
             confidence=candidate.confidence,
@@ -414,6 +604,7 @@ class EventIntelligenceRepository:
             dedupe_key=dedupe_key,
             source_definition_id=source.id,
             source_item_ids=[raw_item.id],
+            version=1,
         )
         self.session.add(event)
         await self.session.flush()
@@ -557,16 +748,25 @@ def event_to_api(event: CyberEvent) -> dict[str, object]:
         "ends_at_utc": event.ends_at_utc,
         "event_format": event.event_format,
         "venue_name": event.venue_name,
+        "street_address": event.street_address,
         "city": event.city,
         "region": event.region,
+        "postcode": event.postcode,
         "country": event.country,
         "virtual_url": event.virtual_url,
+        "latitude": event.latitude,
+        "longitude": event.longitude,
+        "geocode_status": event.geocode_status,
+        "geocode_provider": event.geocode_provider,
+        "geocode_display_name": event.geocode_display_name,
+        "geocoded_at": event.geocoded_at,
         "topics": event.topics or [],
         "organizers": event.organizers or [],
         "confidence": event.confidence,
         "canonical_state": event.canonical_state,
         "source_definition_id": event.source_definition_id,
         "source_item_ids": event.source_item_ids or [],
+        "version": getattr(event, "version", 1),
         "created_at": event.created_at,
         "updated_at": event.updated_at,
     }
@@ -607,6 +807,7 @@ def _candidate_from_schema_org(
     end_time = normalize_event_time(end, timezone_hint) if end else None
     location = event.get("location") if isinstance(event.get("location"), dict) else {}
     address = location.get("address") if isinstance(location.get("address"), dict) else {}
+    geo = location.get("geo") if isinstance(location.get("geo"), dict) else {}
     attendance_mode = _string(event.get("eventAttendanceMode"))
     return EventCandidate(
         name=_string(event.get("name")) or raw_item.permitted_excerpt or source.name,
@@ -622,12 +823,16 @@ def _candidate_from_schema_org(
         ends_at_utc=end_time.value_utc if end_time else None,
         event_format=_format_from_schema(attendance_mode),
         venue_name=_string(location.get("name")),
+        street_address=_string(address.get("streetAddress")),
         city=_string(address.get("addressLocality")),
         region=_string(address.get("addressRegion")),
+        postcode=_string(address.get("postalCode")),
         country=_country_code(address.get("addressCountry")),
         virtual_url=_string(event.get("url"))
         if attendance_mode and "online" in attendance_mode.lower()
         else None,
+        latitude=_float(geo.get("latitude")),
+        longitude=_float(geo.get("longitude")),
         topics=_keywords(event.get("keywords")),
         organizers=[_compact_org(item) for item in _as_list(event.get("organizer"))],
         confidence=85 if start_time.status == "resolved" else 65,
@@ -658,8 +863,8 @@ def _candidate_from_ics(
         timezone_status=start_time.status,
         starts_at_utc=start_time.value_utc,
         ends_at_utc=end_time.value_utc if end_time else None,
-        event_format="virtual" if location and location.lower().startswith("http") else "physical",
-        venue_name=location,
+        event_format="online" if location and location.lower().startswith("http") else "in-person",
+        venue_name=None if location and location.lower().startswith("http") else location,
         virtual_url=location if location and location.lower().startswith("http") else None,
         confidence=80 if start_time.status == "resolved" else 60,
     )
@@ -783,9 +988,9 @@ def _format_from_schema(attendance_mode: str | None) -> str:
     if "mixed" in lowered:
         return "hybrid"
     if "online" in lowered:
-        return "virtual"
+        return "online"
     if "offline" in lowered:
-        return "physical"
+        return "in-person"
     return "unknown"
 
 
@@ -823,6 +1028,13 @@ def _string(value: object) -> str | None:
         return _string(value[0]) if value else None
     text = str(value).strip()
     return text or None
+
+
+def _float(value: object) -> float | None:
+    try:
+        return float(value) if value not in (None, "") else None
+    except (TypeError, ValueError):
+        return None
 
 
 def _slug(value: str) -> str:

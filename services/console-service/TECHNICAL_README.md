@@ -29,6 +29,8 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 - Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
 - Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
 - Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
+- The Dash console uses gateway/reporting clients for event create/edit, participant enrichment queueing, incident corroborate/reject/revert, and company watch promotion.
+- Event and incident metadata/watermarks are visible only to `governance_reviewer`; incident rows locally dismiss rejected/promoted records while backend state remains authoritative.
 
 ## Function Reference
 

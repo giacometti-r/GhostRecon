@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Enforces suppression and review decisions, creates CRM targets from approved candidates, and records incident corroboration or rejection decisions. It owns policy gates, suppressions, review decisions, CRM target creation, and incident governance and should remain aligned with the implementation modules listed below.
+Enforces suppression and review decisions, creates CRM targets from approved candidates, and records incident corroboration, rejection, or revert decisions. It owns policy gates, suppressions, review decisions, CRM target creation, and incident governance and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
@@ -27,6 +27,7 @@ Enforces suppression and review decisions, creates CRM targets from approved can
 - `GET /v1/review/crm-targets` via `review_crm_targets` (service router).
 - `POST /v1/governance/incidents/{incident_id}/corroborate` via `governance_corroborate_incident` (service router).
 - `POST /v1/governance/incidents/{incident_id}/reject` via `governance_reject_incident` (service router).
+- `POST /v1/governance/incidents/{incident_id}/revert` via `governance_revert_incident` (service router).
 - `POST /v1/suppressions` via `suppression_create` (gateway).
 - `POST /v1/suppressions/evaluate` via `suppression_check` (gateway).
 - `GET /v1/review/candidates` via `review_candidates` (gateway).
@@ -36,6 +37,7 @@ Enforces suppression and review decisions, creates CRM targets from approved can
 - `GET /v1/review/crm-targets` via `review_crm_targets` (gateway).
 - `POST /v1/governance/incidents/{incident_id}/corroborate` via `governance_corroborate_incident` (gateway).
 - `POST /v1/governance/incidents/{incident_id}/reject` via `governance_reject_incident` (gateway).
+- `POST /v1/governance/incidents/{incident_id}/revert` via `governance_revert_incident` (gateway).
 
 ## Dependencies
 
@@ -51,6 +53,7 @@ Enforces suppression and review decisions, creates CRM targets from approved can
 - Preserve policy, lineage, and audit fields when backfilling or replaying data.
 - Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
 - Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
+- Incident corroborate, reject, and revert requests are version-aware. Revert is valid only from `corroborated` back to `candidate`.
 
 ## Failure Modes
 

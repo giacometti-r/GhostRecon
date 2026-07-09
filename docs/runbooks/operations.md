@@ -1,6 +1,6 @@
 # Operations Runbook
 
-This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, Sprint 12 Dash console runtime, and the remaining intelligence-first target state for later sprints.
+This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, Sprint 12 Dash console runtime, Sprint 17 event dashboard workflow, Sprint 18 incident governance/watchlist workflow, and the remaining intelligence-first target state for later sprints.
 
 ## Health and Freshness
 
@@ -24,6 +24,13 @@ Do not equate process health with data freshness. A service can be live while it
 4. Replay from the last durable checkpoint with the same source-item idempotency keys.
 5. Verify duplicate rate, timezone normalization, lineage, and permitted-excerpt policy before clearing degraded state.
 
+### Event Geocoding Failure
+
+1. Check whether `GHOSTRECON_GEOCODER_PROVIDER` is `local_demo`, `nominatim`, or `disabled`.
+2. For Nominatim-compatible providers, confirm `GHOSTRECON_NOMINATIM_BASE_URL`, identifying `GHOSTRECON_NOMINATIM_USER_AGENT`, network reachability, and low request rate.
+3. Failed or no-result geocoding should leave events created with `geocode_status=failed` or `not_found`; do not delete manually entered events solely because coordinates are missing.
+4. Correct structured address fields, then patch the event with the current optimistic version to retry geocoding.
+
 ### GDELT, RSS, or Advisory Discovery Outage
 
 1. Confirm whether the failure is provider-specific, query-specific, or a shared network/queue issue.
@@ -41,10 +48,18 @@ Do not equate process health with data freshness. A service can be live while it
 
 ### Incident Corroboration Dispute
 
-1. Keep the incident in `candidate` state and block CRM export.
+1. Keep the incident in `candidate` state and block CRM export/watch promotion until corroborated.
 2. Review authoritative disclosures, source independence, affected-company resolution, translation provenance, and analyst notes.
 3. Corroborate only through an authoritative disclosure, multiple independent sources, or an audited analyst decision.
-4. Reject false positives with a reason code; retain evidence and the decision audit according to policy.
+4. Use `POST /v1/governance/incidents/{incident_id}/revert` with the current version if a corroborated incident must return to candidate state.
+5. Reject false positives with a reason code; retain evidence and the decision audit according to policy.
+
+### Incident Watch Promotion Failure
+
+1. Confirm the incident is `corroborated`, the supplied optimistic version matches, and `primary_affected_company` is populated.
+2. Promotion creates or returns a company watch target owned by the acting user. Do not create incident-level watch targets as a workaround for missing company context.
+3. If a multi-company attack is involved, promote the company-specific incident row for the intended affected company.
+4. Re-run reporting after promotion if the dashboard row does not disappear from the current table view.
 
 ### Participant Permission Violation
 
@@ -82,8 +97,9 @@ Do not equate process health with data freshness. A service can be live while it
 1. Check `console-service` `/healthz`, `/readyz`, and pod/container logs separately from `gateway-service` and `reporting-service`.
 2. Confirm `GHOSTRECON_GATEWAY_BASE_URL`, `GHOSTRECON_CONSOLE_REQUEST_TIMEOUT_SECONDS`, and any ingress/proxy headers for `X-Actor` and `X-Operator-Role`.
 3. If pages render but actions fail, inspect the owning service route, status code, idempotency key, actor, role, optimistic version, and audit/correlation ID.
-4. If reporting callbacks time out, keep the stale/degraded banner visible and avoid bypassing the console by mutating canonical tables.
-5. Source-health pause/replay/acknowledge controls are intentionally read-only until owning source-operations APIs are implemented.
+4. If participant enrichment buttons do not disable after queueing, inspect `/v1/enrichment/contact-candidates?origin_type=event_participant&origin_id=...` for durable queue state.
+5. If reporting callbacks time out, keep the stale/degraded banner visible and avoid bypassing the console by mutating canonical tables.
+6. Source-health pause/replay/acknowledge controls are intentionally read-only until owning source-operations APIs are implemented.
 
 ### Attio API Export Failures
 

@@ -14,10 +14,12 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 | service | `GET` | `/v1/enrichment/entity-resolutions` | `enrichment_entity_resolutions` |
 | service | `POST` | `/v1/enrichment/contact-candidates` | `enrichment_create_contact_candidate` |
 | service | `GET` | `/v1/enrichment/contact-candidates` | `enrichment_contact_candidates` |
+| service | `POST` | `/v1/enrichment/event-participants/{participant_id}/enrich-target` | `enrichment_event_participant_enrich_target` |
 | gateway | `POST` | `/v1/enrichment/entity-resolutions` | `enrichment_create_entity_resolution` |
 | gateway | `GET` | `/v1/enrichment/entity-resolutions` | `enrichment_entity_resolutions` |
 | gateway | `POST` | `/v1/enrichment/contact-candidates` | `enrichment_create_contact_candidate` |
 | gateway | `GET` | `/v1/enrichment/contact-candidates` | `enrichment_contact_candidates` |
+| gateway | `POST` | `/v1/enrichment/event-participants/{participant_id}/enrich-target` | `enrichment_event_participant_enrich_target` |
 
 ## Data Flow And Contracts
 
@@ -26,6 +28,7 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 - Idempotent operations look up existing records by `Idempotency-Key` or derived stable hashes before creating new rows.
 - Cross-service events are written through `OutboxEvent`/`new_event` helpers where the implementation emits asynchronous workflow signals.
 - Policy checks are implemented inside the service layer and should not be bypassed by routes, workers, or console actions.
+- Contact candidate listing accepts `origin_id` for durable event participant queue checks.
 
 ## Function Reference
 

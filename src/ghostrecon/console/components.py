@@ -73,8 +73,11 @@ def metadata_details(payload: dict[str, Any] | None) -> html.Div:
         ("Generated", metadata.get("generated_at")),
         ("Projection", metadata.get("projection_version")),
         ("Stale", metadata.get("stale")),
-        ("Watermarks", watermarks),
     ]
+    if isinstance(watermarks, dict):
+        fields.extend(
+            (f"Watermark: {human_label(key)}", value) for key, value in watermarks.items()
+        )
     return html.Dl(
         [
             html.Div([html.Dt(label), html.Dd(format_value(value))], className="meta-row")
@@ -224,8 +227,7 @@ def render_inline_value(value: Any) -> str:
         return "yes" if value else "no"
     if isinstance(value, dict):
         return ", ".join(
-            f"{human_label(key)}: {render_inline_value(item)}"
-            for key, item in value.items()
+            f"{human_label(key)}: {render_inline_value(item)}" for key, item in value.items()
         )
     if isinstance(value, list):
         return ", ".join(render_inline_value(item) for item in value) or "-"

@@ -60,9 +60,7 @@ class FakeHttpClient:
     ) -> httpx.Response:
         if self.fail_timeout:
             raise httpx.TimeoutException("timeout")
-        self.requests.append(
-            RecordedRequest(method, url, params, json, headers or {})
-        )
+        self.requests.append(RecordedRequest(method, url, params, json, headers or {}))
         path = url.removeprefix("http://gateway.test")
         status, payload = self.responses.get((method, path), (200, {}))
         return httpx.Response(status, json=payload)
@@ -190,6 +188,10 @@ def test_render_page_humanizes_todo_views() -> None:
                         "id": "event-1",
                         "name": "Demo Event",
                         "country": "USA",
+                        "latitude": 36.0908,
+                        "longitude": -115.1761,
+                        "street_address": "3950 Las Vegas Blvd S",
+                        "city": "Las Vegas",
                         "confidence": 90,
                     }
                 ],
@@ -197,15 +199,27 @@ def test_render_page_humanizes_todo_views() -> None:
         ),
         ("GET", "/v1/reporting/events/event-1"): (
             200,
-            {"metadata": _metadata(), "event": {"id": "event-1", "topics": ["security"]}},
+            {
+                "metadata": _metadata(),
+                "event": {
+                    "id": "event-1",
+                    "topics": ["security"],
+                    "version": 1,
+                    "event_format": "in-person",
+                },
+            },
         ),
         ("GET", "/v1/intelligence/events/event-1/participants"): (
             200,
             {"participants": [{"id": "participant-1", "published_name": "Ada Analyst"}]},
         ),
+        ("GET", "/v1/enrichment/contact-candidates"): (200, {"candidates": []}),
         ("GET", "/v1/reporting/incidents"): (
             200,
-            {"metadata": _metadata(), "incidents": [{"id": "incident-1", "version": 1}]},
+            {
+                "metadata": _metadata(),
+                "incidents": [{"id": "incident-1", "version": 1, "status": "candidate"}],
+            },
         ),
     }
 
@@ -225,16 +239,39 @@ def test_render_page_humanizes_todo_views() -> None:
             client=client,
         )
     )
+    event_detail_reviewer = str(
+        render_page(
+            "/events/event-1",
+            "",
+            "reviewer@example.com",
+            "governance_reviewer",
+            Settings(),
+            client=client,
+        )
+    )
+    event_detail_admin = str(
+        render_page(
+            "/events/event-1",
+            "",
+            "admin@example.com",
+            "administrator",
+            Settings(),
+            client=client,
+        )
+    )
     incidents = str(
         render_page("/incidents", "", "analyst@example.com", "analyst", Settings(), client=client)
     )
 
     assert "Source Freshness" in overview
     assert "Parse Yield" in overview
-    assert "World map" in events
+    assert "Event map" in events
     assert "Confidence" not in events
-    assert "Enrich Target" in event_detail
+    assert "Add to Enrichment Queue" in event_detail
     assert "security" in event_detail
+    assert "Projection" not in event_detail
+    assert "Projection" in event_detail_reviewer
+    assert "Projection" not in event_detail_admin
     assert "Incident Status" not in incidents
     assert "Add incident" in incidents
 
@@ -283,6 +320,10 @@ def test_dashboard_actions_send_expected_gateway_mutations() -> None:
         ("POST", "/v1/intelligence/incidents/incident-1/promote-to-watchlist"): (
             200,
             {"id": "watch-1"},
+        ),
+        ("POST", "/v1/governance/incidents/incident-1/revert"): (
+            200,
+            {"id": "decision-2"},
         ),
         ("PATCH", "/v1/intelligence/watch-targets/watch-1"): (200, {"id": "watch-1"}),
         ("POST", "/v1/sequences/enrollments/enroll-1/pause"): (200, {"id": "enroll-1"}),
@@ -334,7 +375,15 @@ def test_dashboard_actions_send_expected_gateway_mutations() -> None:
             "kind": "incident",
             "action": "promote",
             "target_id": "incident-1",
-            "version": None,
+            "version": 1,
+            "policy_hash": None,
+            "enabled": None,
+        },
+        {
+            "kind": "incident",
+            "action": "revert",
+            "target_id": "incident-1",
+            "version": 2,
             "policy_hash": None,
             "enabled": None,
         },
@@ -433,6 +482,13 @@ def test_dashboard_actions_send_expected_gateway_mutations() -> None:
     assert "/v1/review/candidates/bulk-decision" in paths
     assert "/v1/sequences/enrollments/enroll-1/pause" in paths
     assert "/v1/enrichment/event-participants/participant-1/enrich-target" in paths
+    assert "/v1/governance/incidents/incident-1/revert" in paths
+    promote_payloads = [
+        request.json
+        for request in FakeHttpClient.requests
+        if request.url.endswith("/v1/intelligence/incidents/incident-1/promote-to-watchlist")
+    ]
+    assert promote_payloads[-1] == {"version": 1}
     pause_payloads = [
         request.json
         for request in FakeHttpClient.requests

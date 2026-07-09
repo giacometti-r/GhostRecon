@@ -180,6 +180,7 @@ a:hover {
 
 .page-actions,
 .detail-actions,
+.modal-actions,
 .bulk-actions,
 .table-actions {
   display: flex;
@@ -194,6 +195,16 @@ a:hover {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 10px;
   align-items: start;
+}
+
+.toolbar-block,
+.form-launcher {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.toolbar-block {
+  min-height: 36px;
 }
 
 .inline-form input,
@@ -298,6 +309,16 @@ a:hover {
   background: var(--surface);
   padding: 18px;
   box-shadow: 0 24px 64px rgb(16 24 39 / 22%);
+}
+
+.modal-panel.wide {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.modal-actions {
+  margin-top: 14px;
 }
 
 .modal-panel h2 {
@@ -429,6 +450,10 @@ a:hover {
 .chart-panel h2 {
   margin: 0 0 10px;
   font-size: 18px;
+}
+
+.event-map-panel {
+  padding: 8px 10px 10px;
 }
 
 .detail-list,

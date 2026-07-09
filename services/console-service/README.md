@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Serves the Dash operator console, queries reporting/gateway APIs, renders pages, and dispatches governed operator actions. It owns Dash app shell, layouts, reusable components, API client, and action callbacks and should remain aligned with the implementation modules listed below.
+Serves the Dash operator console, queries reporting/gateway APIs, renders pages, and dispatches governed operator actions. It owns Dash app shell, layouts, reusable components, API client, event/incident modal workflows, and action callbacks and should remain aligned with the implementation modules listed below.
 
 ## Runtime
 
@@ -34,6 +34,7 @@ Serves the Dash operator console, queries reporting/gateway APIs, renders pages,
 - `POST /v1/review/candidates/{candidate_id}/reject` via `review_candidate_reject` (gateway).
 - `POST /v1/review/candidates/bulk-decision` via `review_candidates_bulk_decision` (gateway).
 - `GET /v1/review/crm-targets` via `review_crm_targets` (gateway).
+- Console workflow calls through the gateway also use `POST /v1/intelligence/events/manual`, `PATCH /v1/intelligence/events/{event_id}`, `POST /v1/enrichment/event-participants/{participant_id}/enrich-target`, `GET /v1/enrichment/contact-candidates?origin_id=...`, `POST /v1/intelligence/incidents/manual`, `POST /v1/governance/incidents/{incident_id}/revert`, and `POST /v1/intelligence/incidents/{incident_id}/promote-to-watchlist`.
 
 ## Dependencies
 
@@ -50,6 +51,8 @@ Serves the Dash operator console, queries reporting/gateway APIs, renders pages,
 - Use service-specific routes for isolated deployment and gateway routes for aggregate API access.
 - Prefer fixtures and fake adapters in local development; live providers should be explicit environment configuration.
 - Dashboard sidebar, detail, and pagination links route through Dash `dcc.Location`; the active sidebar item follows the current URL and highlights parent sections for detail routes.
+- Event metadata and incident watermarks are visible only to the `governance_reviewer` role; administrator users get operational controls without governance-only metadata.
+- Incident reject/promote actions update a local dismissed-row store immediately while the backend owns the durable state transition.
 
 ## Failure Modes
 

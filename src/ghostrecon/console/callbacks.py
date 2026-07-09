@@ -43,6 +43,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         Input("operator-role", "value"),
         Input("refresh-page", "n_clicks"),
         Input("mutation-refresh-token", "data"),
+        Input("dismissed-incident-ids", "data"),
     )
     def route_page(
         pathname: str | None,
@@ -51,8 +52,16 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         role: str | None,
         _refresh_clicks: int | None,
         _mutation_refresh: int | None,
+        dismissed_incident_ids: list[str] | None,
     ) -> html.Div:
-        return render_page(pathname, search, actor, role, settings)
+        return render_page(
+            pathname,
+            search,
+            actor,
+            role,
+            settings,
+            dismissed_incident_ids=dismissed_incident_ids,
+        )
 
     @dash_app.callback(
         Output("sidebar-nav", "children"),
@@ -65,12 +74,14 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         Output("mutation-status", "children"),
         Output("mutation-refresh-token", "data"),
         Output("mutation-status-clear", "disabled"),
+        Output("dismissed-incident-ids", "data"),
         Input(ACTION_PATTERN, "n_clicks"),
         Input("mutation-status-clear", "n_intervals"),
         State({"type": "event-enrich-domain", "event_id": ALL}, "value"),
         State("operator-actor", "value"),
         State("operator-role", "value"),
         State("mutation-refresh-token", "data"),
+        State("dismissed-incident-ids", "data"),
         prevent_initial_call=True,
     )
     def run_action(
@@ -80,16 +91,17 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         actor: str | None,
         role: str | None,
         token: int | None,
-    ) -> tuple[Any, Any, Any]:
+        dismissed_incident_ids: list[str] | None,
+    ) -> tuple[Any, Any, Any, Any]:
         if ctx.triggered_id == "mutation-status-clear":
-            return "", no_update, True
+            return "", no_update, True, no_update
         action_id = ctx.triggered_id
         if not isinstance(action_id, dict):
-            return no_update, no_update, no_update
+            return no_update, no_update, no_update, no_update
         if _triggered_click_count() < 1:
-            return no_update, no_update, no_update
+            return no_update, no_update, no_update, no_update
         if action_id.get("kind") == "sequence" and action_id.get("action") == "pause":
-            return no_update, no_update, no_update
+            return no_update, no_update, no_update, no_update
         try:
             message = perform_dashboard_action(
                 action_id,
@@ -99,8 +111,13 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
                 extra_payload={"domain": _first_value(event_domains)},
             )
         except ConsoleApiError as exc:
-            return error_notice("Action failed", str(exc)), no_update, False
-        return _success_notice(message), (token or 0) + 1, False
+            return error_notice("Action failed", str(exc)), no_update, False, no_update
+        return (
+            _success_notice(message),
+            (token or 0) + 1,
+            False,
+            _dismissed_incidents(action_id, dismissed_incident_ids),
+        )
 
     @dash_app.callback(
         Output("sequence-pause-target", "data"),
@@ -177,14 +194,66 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         return "modal-backdrop hidden", {}, _success_notice(message), (token or 0) + 1, False
 
     @dash_app.callback(
+        Output("manual-event-modal", "className"),
+        Input("manual-event-open", "n_clicks"),
+        Input("manual-event-cancel", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def toggle_manual_event_modal(open_clicks: int | None, cancel_clicks: int | None) -> str:
+        triggered = ctx.triggered_id
+        if triggered == "manual-event-open" and (open_clicks or 0) > 0:
+            return "modal-backdrop"
+        if triggered == "manual-event-cancel" and (cancel_clicks or 0) > 0:
+            return "modal-backdrop hidden"
+        return no_update
+
+    @dash_app.callback(
+        Output("manual-incident-modal", "className"),
+        Input("manual-incident-open", "n_clicks"),
+        Input("manual-incident-cancel", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def toggle_manual_incident_modal(open_clicks: int | None, cancel_clicks: int | None) -> str:
+        triggered = ctx.triggered_id
+        if triggered == "manual-incident-open" and (open_clicks or 0) > 0:
+            return "modal-backdrop"
+        if triggered == "manual-incident-cancel" and (cancel_clicks or 0) > 0:
+            return "modal-backdrop hidden"
+        return no_update
+
+    @dash_app.callback(
+        Output("event-edit-modal", "className"),
+        Input("event-edit-open", "n_clicks"),
+        Input("event-edit-cancel", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def toggle_event_edit_modal(open_clicks: int | None, cancel_clicks: int | None) -> str:
+        triggered = ctx.triggered_id
+        if triggered == "event-edit-open" and (open_clicks or 0) > 0:
+            return "modal-backdrop"
+        if triggered == "event-edit-cancel" and (cancel_clicks or 0) > 0:
+            return "modal-backdrop hidden"
+        return no_update
+
+    @dash_app.callback(
         Output("mutation-status", "children", allow_duplicate=True),
         Output("mutation-refresh-token", "data", allow_duplicate=True),
         Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Output("manual-event-modal", "className", allow_duplicate=True),
         Input("manual-event-submit", "n_clicks"),
         State("manual-event-name", "value"),
-        State("manual-event-country", "value"),
+        State("manual-event-url", "value"),
         State("manual-event-start", "value"),
+        State("manual-event-format", "value"),
+        State("manual-event-venue", "value"),
+        State("manual-event-street", "value"),
+        State("manual-event-city", "value"),
+        State("manual-event-region", "value"),
+        State("manual-event-postcode", "value"),
+        State("manual-event-country", "value"),
+        State("manual-event-virtual-url", "value"),
         State("manual-event-topics", "value"),
+        State("manual-event-source-items", "value"),
         State("operator-actor", "value"),
         State("operator-role", "value"),
         State("mutation-refresh-token", "data"),
@@ -193,54 +262,169 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
     def create_manual_event(
         clicks: int | None,
         name: str | None,
-        country: str | None,
+        canonical_url: str | None,
         starts_at: str | None,
+        event_format: str | None,
+        venue: str | None,
+        street: str | None,
+        city: str | None,
+        region: str | None,
+        postcode: str | None,
+        country: str | None,
+        virtual_url: str | None,
         topics: str | None,
+        source_items: str | None,
         actor: str | None,
         role: str | None,
         token: int | None,
-    ) -> tuple[Any, Any, Any]:
+    ) -> tuple[Any, Any, Any, Any]:
         if (clicks or 0) < 1:
-            return no_update, no_update, no_update
+            return no_update, no_update, no_update, no_update
         if normalize_role(role) not in MUTATING_ROLES:
             return (
                 error_notice("Action failed", "viewer role cannot create events"),
                 no_update,
                 False,
+                no_update,
             )
         if not (name or "").strip():
-            return error_notice("Event name required"), no_update, False
+            return error_notice("Event name required"), no_update, False, no_update
+        if not (canonical_url or "").strip() or not (starts_at or "").strip():
+            return error_notice("Event URL and UTC start are required"), no_update, False, no_update
         api = ConsoleApiClient.from_settings(
             settings, actor=actor or "dashboard", role=normalize_role(role)
         )
         payload = {
             "name": name.strip(),
-            "country": (country or "").strip() or None,
-            "starts_at_utc": (starts_at or "").strip() or None,
-            "topics": [item.strip() for item in (topics or "").split(",") if item.strip()],
+            "canonical_url": canonical_url.strip(),
+            "starts_at_utc": _datetime_value(starts_at),
+            "event_format": event_format or "unknown",
+            "venue_name": _clean(venue),
+            "street_address": _clean(street),
+            "city": _clean(city),
+            "region": _clean(region),
+            "postcode": _clean(postcode),
+            "country": _clean(country),
+            "virtual_url": _clean(virtual_url),
+            "topics": _csv(topics),
+            "source_item_ids": _csv(source_items),
         }
         try:
             api.post(
                 "/v1/intelligence/events/manual",
                 payload=payload,
-                idempotency_key=idempotency_key("manual-event", name.strip()),
+                idempotency_key=idempotency_key(
+                    "manual-event", name.strip(), canonical_url.strip()
+                ),
             )
         except ConsoleApiError as exc:
-            return error_notice("Action failed", str(exc)), no_update, False
+            return error_notice("Action failed", str(exc)), no_update, False, no_update
         return (
             _success_notice(f"Manual event {name.strip()} created."),
             (token or 0) + 1,
             False,
+            "modal-backdrop hidden",
         )
 
     @dash_app.callback(
         Output("mutation-status", "children", allow_duplicate=True),
         Output("mutation-refresh-token", "data", allow_duplicate=True),
         Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Output("event-edit-modal", "className", allow_duplicate=True),
+        Input({"type": "event-edit-submit", "event_id": ALL, "version": ALL}, "n_clicks"),
+        State("event-edit-name", "value"),
+        State("event-edit-url", "value"),
+        State("event-edit-start", "value"),
+        State("event-edit-format", "value"),
+        State("event-edit-venue", "value"),
+        State("event-edit-street", "value"),
+        State("event-edit-city", "value"),
+        State("event-edit-region", "value"),
+        State("event-edit-postcode", "value"),
+        State("event-edit-country", "value"),
+        State("event-edit-virtual-url", "value"),
+        State("event-edit-topics", "value"),
+        State("event-edit-source-items", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def save_event_edit(
+        clicks: list[int] | None,
+        name: str | None,
+        canonical_url: str | None,
+        starts_at: str | None,
+        event_format: str | None,
+        venue: str | None,
+        street: str | None,
+        city: str | None,
+        region: str | None,
+        postcode: str | None,
+        country: str | None,
+        virtual_url: str | None,
+        topics: str | None,
+        source_items: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any, Any]:
+        action_id = ctx.triggered_id
+        if not isinstance(action_id, dict) or not any(clicks or []):
+            return no_update, no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot edit events"),
+                no_update,
+                False,
+                no_update,
+            )
+        event_id = str(action_id.get("event_id") or "")
+        if not event_id:
+            return error_notice("Action failed", "missing event id"), no_update, False, no_update
+        payload = {
+            "version": _int(action_id.get("version")),
+            "name": _clean(name),
+            "canonical_url": _clean(canonical_url),
+            "starts_at_utc": _datetime_value(starts_at),
+            "event_format": event_format or "unknown",
+            "venue_name": _clean(venue),
+            "street_address": _clean(street),
+            "city": _clean(city),
+            "region": _clean(region),
+            "postcode": _clean(postcode),
+            "country": _clean(country),
+            "virtual_url": _clean(virtual_url),
+            "topics": _csv(topics),
+            "source_item_ids": _csv(source_items),
+        }
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        try:
+            api.patch(
+                f"/v1/intelligence/events/{event_id}",
+                payload=payload,
+                idempotency_key=idempotency_key("event-edit", event_id, payload["version"]),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False, no_update
+        return _success_notice("Event updated."), (token or 0) + 1, False, "modal-backdrop hidden"
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Output("manual-incident-modal", "className", allow_duplicate=True),
         Input("manual-incident-submit", "n_clicks"),
         State("manual-incident-title", "value"),
         State("manual-incident-company", "value"),
+        State("manual-incident-type", "value"),
+        State("manual-incident-first-observed", "value"),
+        State("manual-incident-source-items", "value"),
+        State("manual-incident-domains", "value"),
         State("manual-incident-vector", "value"),
+        State("manual-incident-evidence-urls", "value"),
         State("operator-actor", "value"),
         State("operator-role", "value"),
         State("mutation-refresh-token", "data"),
@@ -249,42 +433,55 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
     def create_manual_incident(
         clicks: int | None,
         title: str | None,
-        company: str | None,
+        companies: str | None,
+        incident_type: str | None,
+        first_observed: str | None,
+        source_items: str | None,
+        domains: str | None,
         vector: str | None,
+        evidence_urls: str | None,
         actor: str | None,
         role: str | None,
         token: int | None,
-    ) -> tuple[Any, Any, Any]:
+    ) -> tuple[Any, Any, Any, Any]:
         if (clicks or 0) < 1:
-            return no_update, no_update, no_update
+            return no_update, no_update, no_update, no_update
         if normalize_role(role) not in MUTATING_ROLES:
             return (
                 error_notice("Action failed", "viewer role cannot create incidents"),
                 no_update,
                 False,
+                no_update,
             )
         if not (title or "").strip():
-            return error_notice("Incident title required"), no_update, False
+            return error_notice("Incident title required"), no_update, False, no_update
         api = ConsoleApiClient.from_settings(
             settings, actor=actor or "dashboard", role=normalize_role(role)
         )
         payload = {
             "title": title.strip(),
-            "affected_companies": [company.strip()] if (company or "").strip() else [],
-            "attack_vector": (vector or "").strip() or None,
+            "affected_companies": _csv(companies),
+            "affected_domains": _csv(domains),
+            "incident_type": _clean(incident_type),
+            "attack_vector": _clean(vector),
+            "first_observed_at": _datetime_value(first_observed),
+            "source_item_ids": _csv(source_items),
+            "evidence_urls": _csv(evidence_urls),
         }
         try:
-            api.post(
+            result = api.post(
                 "/v1/intelligence/incidents/manual",
                 payload=payload,
                 idempotency_key=idempotency_key("manual-incident", title.strip()),
             )
         except ConsoleApiError as exc:
-            return error_notice("Action failed", str(exc)), no_update, False
+            return error_notice("Action failed", str(exc)), no_update, False, no_update
+        count = len(result.get("incidents") or [])
         return (
-            _success_notice(f"Manual incident {title.strip()} created."),
+            _success_notice(f"Manual incident {title.strip()} created ({count} row(s))."),
             (token or 0) + 1,
             False,
+            "modal-backdrop hidden",
         )
 
     @dash_app.callback(
@@ -374,11 +571,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
             parsed_steps = json.loads(steps_json or "[]")
         except json.JSONDecodeError as exc:
             return error_notice("Invalid steps JSON", str(exc)), no_update, False
-        steps = [
-            _sequence_step_payload(step)
-            for step in parsed_steps
-            if isinstance(step, dict)
-        ]
+        steps = [_sequence_step_payload(step) for step in parsed_steps if isinstance(step, dict)]
         sequence_id = str(action_id.get("sequence_id") or "")
         api = ConsoleApiClient.from_settings(
             settings, actor=actor or "dashboard", role=normalize_role(role)
@@ -512,13 +705,13 @@ def perform_dashboard_action(
         result = api.post(
             f"/v1/enrichment/event-participants/{target_id}/enrich-target",
             payload={"domain": domain},
-            idempotency_key=idempotency_key("participant-enrich", target_id),
+            idempotency_key=idempotency_key("participant-enrichment-queue", target_id),
         )
         verified = result.get("verified_email")
         return (
-            f"Participant {target_id} enriched with {verified}."
+            f"Participant {target_id} queued with {verified}."
             if verified
-            else f"Participant {target_id} sent to enrichment review."
+            else f"Participant {target_id} added to enrichment queue."
         )
 
     if kind == "meeting":
@@ -534,26 +727,28 @@ def _perform_incident_action(
     action_id: dict[str, Any],
 ) -> str:
     if action == "promote":
+        version = action_id.get("version")
+        if version in (None, ""):
+            raise ConsoleApiError("incident action requires an optimistic version", status_code=409)
         api.post(
             f"/v1/intelligence/incidents/{target_id}/promote-to-watchlist",
-            payload={},
+            payload={"version": _int(version)},
             idempotency_key=idempotency_key("incident-watch", target_id),
         )
-        return f"Incident {target_id} promoted to watchlist."
-    if action in {"corroborate", "reject"}:
+        return f"Incident {target_id} added to watchlist."
+    if action in {"corroborate", "reject", "revert"}:
         version = action_id.get("version")
-        if version is None:
+        if version in (None, ""):
             raise ConsoleApiError("incident action requires an optimistic version", status_code=409)
-        path_action = "corroborate" if action == "corroborate" else "reject"
         payload = {
             "version": _int(version),
             "reason_code": f"dashboard_incident_{action}",
-            "reason": "Sprint 12 dashboard incident decision.",
+            "reason": "Sprint 17/18 dashboard incident decision.",
             "evidence_snapshot": {},
             "policy_snapshot": {},
         }
         api.post(
-            f"/v1/governance/incidents/{target_id}/{path_action}",
+            f"/v1/governance/incidents/{target_id}/{action}",
             payload=payload,
             idempotency_key=idempotency_key(f"incident-{action}", target_id),
         )
@@ -602,6 +797,41 @@ def _first_value(values: list[Any] | None) -> Any:
         if value not in (None, ""):
             return value
     return None
+
+
+def _clean(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
+
+
+def _csv(value: Any) -> list[str]:
+    return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
+def _datetime_value(value: Any) -> str | None:
+    text = _clean(value)
+    if text is None:
+        return None
+    if "T" in text and "+" not in text and not text.endswith("Z"):
+        return f"{text}:00Z" if len(text) == 16 else f"{text}Z"
+    return text
+
+
+def _dismissed_incidents(
+    action_id: dict[str, Any], dismissed_incident_ids: list[str] | None
+) -> Any:
+    if action_id.get("kind") != "incident" or action_id.get("action") not in {
+        "promote",
+        "reject",
+    }:
+        return no_update
+    target_id = str(action_id.get("target_id") or "")
+    if not target_id:
+        return no_update
+    dismissed = [str(item) for item in dismissed_incident_ids or []]
+    if target_id not in dismissed:
+        dismissed.append(target_id)
+    return dismissed
 
 
 def _action_reason(action: str, extra_payload: dict[str, Any] | None) -> str:

@@ -39,8 +39,8 @@ The pipeline is external sources → normalization and deduplication → contact
 | Service | Purpose |
 | --- | --- |
 | `gateway-service` | Authenticated API entrypoint and route map for intelligence, review, reporting, and export APIs. |
-| `event-intelligence-service` | Global cybersecurity event, series, and permitted published-participant discovery on top of the implemented shared source registry. |
-| `incident-intelligence-service` | Global cyber-incident news discovery, affected-company identification, corroboration evidence, and watchlists on top of the shared source registry. |
+| `event-intelligence-service` | Global cybersecurity event, series, geocoded venue, and permitted published-participant discovery on top of the implemented shared source registry. |
+| `incident-intelligence-service` | Global cyber-incident news discovery, company-specific affected-party identification, corroboration evidence, and watchlists on top of the shared source registry. |
 | `ingestion-service` | Source registry, duplicate detection, source adapter parsing, and idempotent inbound event intake; not the primary acquisition path. |
 | `enrichment-service` | Entity resolution and public company/contact enrichment from approved sources. |
 | `email-intelligence-service` | Eligible business-email candidate generation and verification. |
@@ -71,8 +71,9 @@ Sprint 5 adds the incident runtime used by later enrichment, governance, dashboa
 - PostgreSQL persistence for `NewsArticle`, `SecurityIncident`, `SecurityIncidentEvidence`, and `WatchTarget`.
 - GDELT DOC discovery plus RSS/Atom advisory/news ingestion through the shared source registry.
 - Canonical article dedupe, syndication grouping, affected-company candidates, attack-vector metadata, language/geography metadata, and source lineage.
-- Candidate-first incident lifecycle with authoritative-source and independent-source corroboration support.
-- Watch-target APIs for company, domain, incident, event-series, and topic monitoring, including idempotent promotion from a global incident.
+- Candidate-first incident lifecycle with authoritative-source, independent-source, analyst corroboration, and audited revert/rejection support.
+- Company-specific incident rows for multi-company attacks, linked by shared incident group keys and source/evidence lineage.
+- Watch-target APIs for company, domain, incident, event-series, and topic monitoring, including corroborated-only idempotent promotion of affected companies from global incidents.
 
 ## Implemented Enrichment and Email Intelligence Runtime
 
@@ -115,8 +116,10 @@ Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 
 - Dash is mounted at `/` while FastAPI keeps `/healthz`, `/readyz`, `/metrics`, `/docs`, and existing `/v1/*` review APIs.
 - Dashboard reads use `gateway-service`/`reporting-service` APIs with `X-Actor` and `X-Operator-Role` context; callbacks never query canonical tables.
-- Mutating controls call owning feature-service APIs through the gateway for review decisions, bounded bulk review, CRM export/retry, watchlist promotion/toggle, sequence pause/resume/cancel, and meeting handoff actions.
-- Every route surfaces freshness/degraded metadata where reporting provides it and preserves table alternatives for map/calendar views.
+- Mutating controls call owning feature-service APIs through the gateway for review decisions, bounded bulk review, event create/edit, participant enrichment queueing, incident corroborate/reject/revert, CRM export/retry, company watchlist promotion/toggle, sequence pause/resume/cancel, and meeting handoff actions.
+- Event routes use coordinate-backed maps from structured venue address fields, and detail metadata is limited to governance reviewers.
+- Incident routes use company-specific rows, inline evidence/company rendering, corroborated-only watch promotion, and governance-reviewer-only metadata.
+- Every route surfaces freshness/degraded metadata where reporting provides it and preserves table alternatives when source data is unavailable.
 - Sidebar, detail, and pagination navigation use Dash client-side routing with visible active section state.
 - Failed dashboard reads render endpoint/status context on the page so gateway/reporting issues are visible during local demos.
 - Source-health operations are visible but read-only until source-operations APIs are implemented during hardening/pilot work.
@@ -137,6 +140,7 @@ Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 - SOPS + Age secret management for Helm values.
 - Attio is implemented behind `CrmClient` so future CRMs can provide equivalent object, list, and reconciliation mappings.
 - Google Calendar service-account credentials enable the implemented meeting handoff runtime; local runs without Google credentials use the fake adapter.
+- Production event geocoding uses a Nominatim-compatible structured-search adapter with an identifying User-Agent and low request rate. Local demo geocoding uses deterministic stored coordinates.
 - Paid enrichment APIs are not required. Public enrichment remains allowlisted, bounded, and source-attributed.
 
 ## Local Development
@@ -180,8 +184,8 @@ The demo check verifies Compose containers, PostgreSQL schema and seed rows, Red
 gateway readiness/reporting routes, the console root, and Dash callback metadata.
 Browser-level console navigation and action coverage lives in the Playwright pytest
 suite.
-The Sprint 14 seed is intentionally small; the richer story-linked dashboard dataset
-is Sprint 15 work.
+The local seed includes story-linked dashboard data through Sprint 18, including
+geocoded event venues and multi-company incident examples.
 
 Run one implemented service directly:
 

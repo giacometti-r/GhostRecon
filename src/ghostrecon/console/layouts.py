@@ -50,14 +50,14 @@ REPORTING_LIMIT = 50
 def build_shell(settings: Settings) -> html.Div:
     context = dashboard_context_from_headers()
     role_options = [
-        {"label": role.value.replace("_", " "), "value": role.value}
-        for role in DashboardRole
+        {"label": role.value.replace("_", " "), "value": role.value} for role in DashboardRole
     ]
     return html.Div(
         [
             dcc.Location(id="console-url", refresh=False),
             dcc.Store(id="mutation-refresh-token", data=0),
             dcc.Store(id="sequence-pause-target", data={}),
+            dcc.Store(id="dismissed-incident-ids", data=[]),
             dcc.Interval(
                 id="mutation-status-clear",
                 interval=4000,
@@ -135,6 +135,7 @@ def render_page(
     settings: Settings,
     *,
     client: ConsoleApiClient | None = None,
+    dismissed_incident_ids: list[str] | None = None,
 ) -> html.Div:
     context_role = _normalize_role(role)
     api = client or ConsoleApiClient.from_settings(
@@ -152,7 +153,12 @@ def render_page(
         if path.startswith("/events/"):
             return event_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/incidents":
-            return incidents_page(api, params, role=context_role)
+            return incidents_page(
+                api,
+                params,
+                role=context_role,
+                dismissed_incident_ids=dismissed_incident_ids,
+            )
         if path.startswith("/incidents/"):
             return incident_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/watchlists":
@@ -168,13 +174,9 @@ def render_page(
         if path == "/sequences":
             return sequences_page(api, params, role=context_role)
         if path.startswith("/sequences/enrollments/"):
-            return sequence_enrollment_detail_page(
-                api, path.rsplit("/", 1)[-1], role=context_role
-            )
+            return sequence_enrollment_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path.startswith("/sequences/definitions/"):
-            return sequence_definition_detail_page(
-                api, path.rsplit("/", 1)[-1], role=context_role
-            )
+            return sequence_definition_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/meetings":
             return meetings_page(api, params, role=context_role)
         if path.startswith("/meetings/"):
@@ -277,8 +279,18 @@ def events_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) 
 def event_detail_page(client: ConsoleApiClient, event_id: str, *, role: str) -> html.Div:
     payload = _safe_get(client, f"/v1/reporting/events/{event_id}")
     participants = _safe_get(client, f"/v1/intelligence/events/{event_id}/participants")
+    queued = _safe_get(
+        client,
+        "/v1/enrichment/contact-candidates",
+        {"origin_type": "event_participant", "limit": 500},
+    )
     event = payload.get("event", {})
+    participant_rows = _participant_rows(
+        participants.get("participants", []),
+        queued.get("candidates", []),
+    )
     children = [
+        _event_edit_modal(event, role),
         detail_panel(
             "Event detail",
             [
@@ -289,13 +301,14 @@ def event_detail_page(client: ConsoleApiClient, event_id: str, *, role: str) -> 
                 ("Timezone", event.get("iana_timezone") or event.get("source_timezone")),
                 ("Venue", event.get("venue_name")),
                 ("Location", _location(event)),
+                ("Address", _address(event)),
                 ("Canonical URL", event.get("canonical_url")),
-                ("Topics", event.get("topics")),
-                ("Source items", event.get("source_item_ids")),
+                ("Topics", _inline_list(event.get("topics"))),
+                ("Source items", _inline_list(event.get("source_item_ids"))),
             ],
         ),
         records_table(
-            participants.get("participants", []),
+            participant_rows,
             [
                 ("Name", "published_name"),
                 ("Organization", "organization"),
@@ -307,12 +320,20 @@ def event_detail_page(client: ConsoleApiClient, event_id: str, *, role: str) -> 
             actions=lambda record: _participant_actions(record, role),
         ),
         _participant_enrich_form(event_id, role),
-        metadata_details(payload),
+        metadata_details(payload)
+        if role == DashboardRole.GOVERNANCE_REVIEWER.value
+        else html.Div(),
     ]
     return _page("Event Detail", [payload], children)
 
 
-def incidents_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) -> html.Div:
+def incidents_page(
+    client: ConsoleApiClient,
+    params: dict[str, Any],
+    *,
+    role: str,
+    dismissed_incident_ids: list[str] | None = None,
+) -> html.Div:
     payload = _safe_get(
         client,
         "/v1/reporting/incidents",
@@ -326,19 +347,24 @@ def incidents_page(client: ConsoleApiClient, params: dict[str, Any], *, role: st
             "cursor",
         ),
     )
-    incidents = payload.get("incidents", [])
+    dismissed = {str(item) for item in dismissed_incident_ids or []}
+    incidents = [
+        incident
+        for incident in payload.get("incidents", [])
+        if str(incident.get("id")) not in dismissed
+    ]
+    incident_rows = [_incident_table_row(incident) for incident in incidents]
     children = [
         query_badges(params),
         _manual_incident_form(role),
         records_table(
-            incidents,
+            incident_rows,
             [
                 ("Title", "title"),
                 ("Status", "status"),
-                ("Company", "affected_companies"),
+                ("Companies", "company_display"),
                 ("Attack", "attack_vector"),
-                ("Confidence", "confidence"),
-                ("Evidence", "evidence_families"),
+                ("Evidence", "evidence_display"),
             ],
             actions=lambda record: _incident_actions(record, role),
         ),
@@ -356,19 +382,21 @@ def incident_detail_page(client: ConsoleApiClient, incident_id: str, *, role: st
             [
                 ("Title", incident.get("title")),
                 ("Status", incident.get("status")),
-                ("Affected companies", incident.get("affected_companies")),
-                ("Domains", incident.get("affected_domains")),
+                ("Affected companies", _inline_list(incident.get("affected_companies"))),
+                ("Domains", _inline_list(incident.get("affected_domains"))),
                 ("Type", incident.get("incident_type")),
                 ("Attack vector", incident.get("attack_vector")),
                 ("First observed", incident.get("first_observed_at")),
                 ("Last observed", incident.get("last_observed_at")),
-                ("Languages", incident.get("languages")),
-                ("Evidence families", incident.get("evidence_families")),
-                ("Source items", incident.get("source_item_ids")),
+                ("Evidence families", _inline_list(incident.get("evidence_families"))),
+                ("Evidence URLs", _inline_list(incident.get("evidence_urls"))),
+                ("Source items", _inline_list(incident.get("source_item_ids"))),
             ],
         ),
-        html.Div(_incident_actions(incident, role), className="detail-actions"),
-        metadata_details(payload),
+        html.Div(_incident_actions(incident, role, include_open=False), className="detail-actions"),
+        metadata_details(payload)
+        if role == DashboardRole.GOVERNANCE_REVIEWER.value
+        else html.Div(),
     ]
     return _page("Incident Detail", [payload], children)
 
@@ -829,67 +857,363 @@ def _pagination(payload: dict[str, Any], base_path: str, params: dict[str, Any])
 def _manual_event_form(role: str) -> html.Div:
     if not _can_mutate(role):
         return html.Div()
-    return html.Section(
+    return html.Div(
         [
-            html.H2("Add event"),
+            html.Div(
+                html.Button(
+                    [icon("plus"), html.Span("Add event")],
+                    id="manual-event-open",
+                    n_clicks=0,
+                    className="icon-button",
+                ),
+                className="form-launcher",
+            ),
             html.Div(
                 [
-                    dcc.Input(id="manual-event-name", placeholder="Event name", type="text"),
-                    dcc.Input(id="manual-event-country", placeholder="Country", type="text"),
-                    dcc.Input(id="manual-event-start", placeholder="UTC start ISO", type="text"),
-                    dcc.Input(
-                        id="manual-event-topics",
-                        placeholder="Topics, comma separated",
-                        type="text",
-                    ),
-                    html.Button(
-                        [icon("plus"), html.Span("Add event")],
-                        id="manual-event-submit",
-                        n_clicks=0,
-                        className="icon-button",
-                    ),
+                    html.Div(
+                        [
+                            html.H2("Add event"),
+                            html.Div(
+                                [
+                                    dcc.Input(
+                                        id="manual-event-name",
+                                        placeholder="Event name",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-url",
+                                        placeholder="Canonical URL",
+                                        type="url",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-start",
+                                        placeholder="UTC start",
+                                        type="datetime-local",
+                                    ),
+                                    dcc.Dropdown(
+                                        id="manual-event-format",
+                                        value="in-person",
+                                        clearable=False,
+                                        searchable=False,
+                                        options=[
+                                            {"label": "In person", "value": "in-person"},
+                                            {"label": "Online", "value": "online"},
+                                            {"label": "Hybrid", "value": "hybrid"},
+                                            {"label": "Unknown", "value": "unknown"},
+                                        ],
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-venue",
+                                        placeholder="Venue",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-street",
+                                        placeholder="Street address",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-city",
+                                        placeholder="City",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-region",
+                                        placeholder="Region",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-postcode",
+                                        placeholder="Postcode",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-country",
+                                        placeholder="Country",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-virtual-url",
+                                        placeholder="Meeting URL",
+                                        type="url",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-topics",
+                                        placeholder="Topics, comma separated",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-event-source-items",
+                                        placeholder="Source item IDs, comma separated",
+                                        type="text",
+                                    ),
+                                ],
+                                className="form-grid",
+                            ),
+                            html.Div(
+                                [
+                                    html.Button(
+                                        [icon("check"), html.Span("Create")],
+                                        id="manual-event-submit",
+                                        n_clicks=0,
+                                        className="icon-button",
+                                    ),
+                                    html.Button(
+                                        [icon("x"), html.Span("Cancel")],
+                                        id="manual-event-cancel",
+                                        n_clicks=0,
+                                        className="icon-button",
+                                    ),
+                                ],
+                                className="modal-actions",
+                            ),
+                        ],
+                        className="modal-panel wide",
+                    )
                 ],
-                className="inline-form",
+                id="manual-event-modal",
+                className="modal-backdrop hidden",
             ),
         ],
-        className="detail-panel",
+        className="toolbar-block",
+    )
+
+
+def _event_edit_modal(event: dict[str, Any], role: str) -> html.Div:
+    if not _can_mutate(role) or not event.get("id"):
+        return html.Div()
+    return html.Div(
+        [
+            html.Div(
+                html.Button(
+                    [icon("edit-3"), html.Span("Edit event")],
+                    id="event-edit-open",
+                    n_clicks=0,
+                    className="icon-button",
+                ),
+                className="form-launcher",
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.H2("Edit event"),
+                            html.Div(
+                                [
+                                    dcc.Input(
+                                        id="event-edit-name",
+                                        value=event.get("name"),
+                                        placeholder="Event name",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-url",
+                                        value=event.get("canonical_url"),
+                                        placeholder="Canonical URL",
+                                        type="url",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-start",
+                                        value=_datetime_local_value(event.get("starts_at_utc")),
+                                        placeholder="UTC start",
+                                        type="datetime-local",
+                                    ),
+                                    dcc.Dropdown(
+                                        id="event-edit-format",
+                                        value=event.get("event_format") or "unknown",
+                                        clearable=False,
+                                        searchable=False,
+                                        options=[
+                                            {"label": "In person", "value": "in-person"},
+                                            {"label": "Online", "value": "online"},
+                                            {"label": "Hybrid", "value": "hybrid"},
+                                            {"label": "Unknown", "value": "unknown"},
+                                        ],
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-venue",
+                                        value=event.get("venue_name"),
+                                        placeholder="Venue",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-street",
+                                        value=event.get("street_address"),
+                                        placeholder="Street address",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-city",
+                                        value=event.get("city"),
+                                        placeholder="City",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-region",
+                                        value=event.get("region"),
+                                        placeholder="Region",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-postcode",
+                                        value=event.get("postcode"),
+                                        placeholder="Postcode",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-country",
+                                        value=event.get("country"),
+                                        placeholder="Country",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-virtual-url",
+                                        value=event.get("virtual_url"),
+                                        placeholder="Meeting URL",
+                                        type="url",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-topics",
+                                        value=", ".join(
+                                            str(item) for item in event.get("topics") or []
+                                        ),
+                                        placeholder="Topics, comma separated",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="event-edit-source-items",
+                                        value=", ".join(
+                                            str(item) for item in event.get("source_item_ids") or []
+                                        ),
+                                        placeholder="Source item IDs, comma separated",
+                                        type="text",
+                                    ),
+                                ],
+                                className="form-grid",
+                            ),
+                            html.Div(
+                                [
+                                    html.Button(
+                                        [icon("save"), html.Span("Save")],
+                                        id={
+                                            "type": "event-edit-submit",
+                                            "event_id": str(event.get("id") or ""),
+                                            "version": event.get("version"),
+                                        },
+                                        n_clicks=0,
+                                        className="icon-button",
+                                    ),
+                                    html.Button(
+                                        [icon("x"), html.Span("Cancel")],
+                                        id="event-edit-cancel",
+                                        n_clicks=0,
+                                        className="icon-button",
+                                    ),
+                                ],
+                                className="modal-actions",
+                            ),
+                        ],
+                        className="modal-panel wide",
+                    )
+                ],
+                id="event-edit-modal",
+                className="modal-backdrop hidden",
+            ),
+        ],
+        className="toolbar-block",
     )
 
 
 def _manual_incident_form(role: str) -> html.Div:
     if not _can_mutate(role):
         return html.Div()
-    return html.Section(
+    return html.Div(
         [
-            html.H2("Add incident"),
+            html.Div(
+                html.Button(
+                    [icon("plus"), html.Span("Add incident")],
+                    id="manual-incident-open",
+                    n_clicks=0,
+                    className="icon-button",
+                ),
+                className="form-launcher",
+            ),
             html.Div(
                 [
-                    dcc.Input(
-                        id="manual-incident-title",
-                        placeholder="Incident title",
-                        type="text",
-                    ),
-                    dcc.Input(
-                        id="manual-incident-company",
-                        placeholder="Affected company",
-                        type="text",
-                    ),
-                    dcc.Input(
-                        id="manual-incident-vector",
-                        placeholder="Attack vector",
-                        type="text",
-                    ),
-                    html.Button(
-                        [icon("plus"), html.Span("Add incident")],
-                        id="manual-incident-submit",
-                        n_clicks=0,
-                        className="icon-button",
-                    ),
+                    html.Div(
+                        [
+                            html.H2("Add incident"),
+                            html.Div(
+                                [
+                                    dcc.Input(
+                                        id="manual-incident-title",
+                                        placeholder="Incident title",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-incident-company",
+                                        placeholder="Companies, comma separated",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-incident-type",
+                                        placeholder="Incident type",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-incident-first-observed",
+                                        placeholder="First observed",
+                                        type="datetime-local",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-incident-source-items",
+                                        placeholder="Source item IDs, comma separated",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-incident-domains",
+                                        placeholder="Domains, comma separated",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-incident-vector",
+                                        placeholder="Attack vector",
+                                        type="text",
+                                    ),
+                                    dcc.Input(
+                                        id="manual-incident-evidence-urls",
+                                        placeholder="Evidence URLs, comma separated",
+                                        type="text",
+                                    ),
+                                ],
+                                className="form-grid",
+                            ),
+                            html.Div(
+                                [
+                                    html.Button(
+                                        [icon("check"), html.Span("Create")],
+                                        id="manual-incident-submit",
+                                        n_clicks=0,
+                                        className="icon-button",
+                                    ),
+                                    html.Button(
+                                        [icon("x"), html.Span("Cancel")],
+                                        id="manual-incident-cancel",
+                                        n_clicks=0,
+                                        className="icon-button",
+                                    ),
+                                ],
+                                className="modal-actions",
+                            ),
+                        ],
+                        className="modal-panel wide",
+                    )
                 ],
-                className="inline-form",
+                id="manual-incident-modal",
+                className="modal-backdrop hidden",
             ),
         ],
-        className="detail-panel",
+        className="toolbar-block",
     )
 
 
@@ -936,38 +1260,36 @@ def _event_map(events: list[dict[str, Any]]) -> html.Div:
         for event in events
         if event.get("latitude") is not None and event.get("longitude") is not None
     ]
-    countries = Counter(
-        str(event.get("country") or "").upper()
-        for event in events
-        if event.get("country")
+    if not points:
+        return empty_state("Map view needs geocoded event addresses.")
+    figure = go.Figure(
+        data=[
+            go.Scattergeo(
+                lat=[point.get("latitude") for point in points],
+                lon=[point.get("longitude") for point in points],
+                text=[_event_hover_text(point) for point in points],
+                mode="markers",
+                marker={"size": 11, "color": "#0f766e", "line": {"width": 1, "color": "#ffffff"}},
+                hovertemplate="%{text}<extra></extra>",
+            )
+        ]
     )
-    if points:
-        figure = go.Figure(
-            data=[
-                go.Scattergeo(
-                    lat=[point.get("latitude") for point in points],
-                    lon=[point.get("longitude") for point in points],
-                    text=[point.get("name") for point in points],
-                    mode="markers",
-                )
-            ]
-        )
-    elif countries:
-        figure = go.Figure(
-            data=[
-                go.Choropleth(
-                    locations=list(countries.keys()),
-                    z=list(countries.values()),
-                    locationmode="ISO-3" if any(len(code) == 3 for code in countries) else "ISO-3",
-                    colorscale="Teal",
-                    marker_line_width=0.5,
-                )
-            ]
-        )
-    else:
-        return empty_state("Map view needs country or latitude/longitude data.")
-    figure.update_layout(height=280, margin={"l": 8, "r": 8, "t": 8, "b": 8})
-    return html.Section([html.H2("World map"), dcc.Graph(figure=figure)], className="chart-panel")
+    figure.update_layout(
+        height=460,
+        margin={"l": 8, "r": 8, "t": 8, "b": 8},
+        showlegend=False,
+        geo={
+            "projection_type": "natural earth",
+            "showland": True,
+            "landcolor": "#eef2f7",
+            "countrycolor": "#cbd5e1",
+            "showocean": True,
+            "oceancolor": "#e0f2fe",
+        },
+    )
+    return html.Section(
+        [html.H2("Event map"), dcc.Graph(figure=figure)], className="chart-panel event-map-panel"
+    )
 
 
 def _incident_chart(incidents: list[dict[str, Any]]) -> html.Div:
@@ -1017,9 +1339,7 @@ def _bulk_review_actions(records: list[dict[str, Any]], role: str) -> list[Any]:
     if not records:
         return []
     versions = {
-        str(record.get("id")): record.get("version")
-        for record in records
-        if record.get("id")
+        str(record.get("id")): record.get("version") for record in records if record.get("id")
     }
     target_ids = ",".join(versions.keys())
     disabled = not _can_mutate(role)
@@ -1063,46 +1383,60 @@ def _crm_batch_actions(batch: dict[str, Any], role: str) -> list[Any]:
 
 
 def _participant_actions(record: dict[str, Any], role: str) -> list[Any]:
+    queued = bool(record.get("enrichment_queued"))
     return [
         action_button(
-            "Enrich Target",
+            "Queued" if queued else "Add to Enrichment Queue",
             _action_id("event-participant", "enrich", record.get("id")),
-            "sparkles",
-            disabled=not _can_mutate(role),
+            "check-circle" if queued else "sparkles",
+            disabled=queued or not _can_mutate(role),
         )
     ]
 
 
-def _incident_actions(record: dict[str, Any], role: str) -> list[Any]:
+def _incident_actions(record: dict[str, Any], role: str, *, include_open: bool = True) -> list[Any]:
     disabled = not _can_mutate(role)
     version_missing = record.get("version") is None
-    return [
-        dcc.Link(
-            "Open",
-            href=f"/incidents/{record.get('id')}",
-            refresh=False,
-            className="text-link",
-        ),
-        action_button(
-            "Watch",
-            _action_id("incident", "promote", record.get("id")),
-            "radar",
-            disabled=disabled,
-        ),
-        action_button(
-            "Corroborate",
-            _action_id("incident", "corroborate", record.get("id"), record.get("version")),
-            "badge-check",
-            disabled=disabled or version_missing,
-        ),
-        action_button(
-            "Reject",
-            _action_id("incident", "reject", record.get("id"), record.get("version")),
-            "x",
-            disabled=disabled or version_missing,
-            danger=True,
-        ),
-    ]
+    status = str(record.get("status") or "")
+    actions: list[Any] = []
+    if include_open:
+        actions.append(
+            dcc.Link(
+                "Open",
+                href=f"/incidents/{record.get('id')}",
+                refresh=False,
+                className="text-link",
+            )
+        )
+    actions.extend(
+        [
+            action_button(
+                "Add to Watchlist",
+                _action_id("incident", "promote", record.get("id"), record.get("version")),
+                "radar",
+                disabled=disabled or version_missing or status != "corroborated",
+            ),
+            action_button(
+                "Revert" if status == "corroborated" else "Corroborate",
+                _action_id(
+                    "incident",
+                    "revert" if status == "corroborated" else "corroborate",
+                    record.get("id"),
+                    record.get("version"),
+                ),
+                "undo-2" if status == "corroborated" else "badge-check",
+                disabled=disabled or version_missing,
+            ),
+            action_button(
+                "Reject",
+                _action_id("incident", "reject", record.get("id"), record.get("version")),
+                "x",
+                disabled=disabled or version_missing,
+                danger=True,
+            ),
+        ]
+    )
+    return actions
 
 
 def _watch_actions(record: dict[str, Any], role: str) -> list[Any]:
@@ -1363,6 +1697,77 @@ def _meeting_actions(record: dict[str, Any], role: str) -> list[Any]:
             danger=True,
         ),
     ]
+
+
+def _participant_rows(
+    participants: list[dict[str, Any]],
+    contact_candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    queued_origin_ids = {
+        str(candidate.get("origin_id"))
+        for candidate in contact_candidates
+        if candidate.get("origin_id")
+    }
+    return [
+        {
+            **participant,
+            "enrichment_queued": str(participant.get("id")) in queued_origin_ids,
+        }
+        for participant in participants
+    ]
+
+
+def _incident_table_row(incident: dict[str, Any]) -> dict[str, Any]:
+    companies = incident.get("affected_companies") or [incident.get("primary_affected_company")]
+    evidence = [
+        *(incident.get("evidence_families") or []),
+        *(incident.get("evidence_urls") or []),
+    ]
+    return {
+        **incident,
+        "company_display": _inline_list(companies),
+        "evidence_display": _inline_list(evidence),
+    }
+
+
+def _inline_list(value: Any) -> str:
+    if value in (None, ""):
+        return "-"
+    if isinstance(value, list):
+        values = [str(item) for item in value if item not in (None, "")]
+        return ", ".join(values) if values else "-"
+    return str(value)
+
+
+def _address(event: dict[str, Any]) -> str:
+    locality = " ".join(str(part) for part in (event.get("postcode"), event.get("city")) if part)
+    parts = [
+        event.get("street_address"),
+        locality,
+        event.get("region"),
+        event.get("country"),
+    ]
+    return ", ".join(str(part) for part in parts if part) or "-"
+
+
+def _event_hover_text(event: dict[str, Any]) -> str:
+    rows = [str(event.get("name") or "Event")]
+    address = _address(event)
+    if address != "-":
+        rows.append(address)
+    display_name = event.get("geocode_display_name")
+    if display_name:
+        rows.append(str(display_name))
+    return "<br>".join(rows)
+
+
+def _datetime_local_value(value: Any) -> str | None:
+    if not value:
+        return None
+    text = str(value)
+    if "T" not in text:
+        return text
+    return text[:16]
 
 
 def _action_id(

@@ -2,7 +2,7 @@
 
 ## Status and Scope
 
-This specification defines the target contracts for Sprints 3–11. It is normative for intelligence source adapters, canonical records, review eligibility, CRM export, separately approved sequencing, and meeting handoff. Runtime implementation follows the sprint tracker. As of Sprint 11, the source registry, event intelligence runtime, incident intelligence/watchlist runtime, entity-resolution workflow, contact-enrichment workflow, persisted email candidates, verification payloads, versioned scoring, governance decisions, suppression persistence, incident analyst decisions, CRM targets, CRM export, sequencing runtime, and Google Calendar meeting handoff runtime are implemented.
+This specification defines the implemented and target contracts for the intelligence pipeline. It is normative for intelligence source adapters, canonical records, review eligibility, dashboard workflows, CRM export, separately approved sequencing, and meeting handoff. Runtime implementation follows the sprint tracker. As of Sprint 18, the source registry, event intelligence runtime, geocoded event dashboard workflow, incident intelligence/watchlist runtime, company-specific incident governance workflow, entity-resolution workflow, contact-enrichment workflow, persisted email candidates, verification payloads, versioned scoring, governance decisions, suppression persistence, incident analyst decisions, CRM targets, CRM export, sequencing runtime, and Google Calendar meeting handoff runtime are implemented.
 
 The v1 scope is:
 
@@ -61,6 +61,8 @@ Supported adapter classes:
 
 Initial event-series coverage should include DEF CON, Black Hat, BSides, OWASP, and FIRST. Seed names are discovery configuration, not permission to scrape or reuse participant data. Each concrete source must have its own policy record.
 
+Manual and parsed in-person events store exact venue address fields and may resolve latitude/longitude through a configured geocoder. Production geocoding uses a Nominatim-compatible structured search request (`street`, `city`, `postalcode`, `country`, `format=jsonv2`, `limit=1`) with an identifying User-Agent and a low request rate. Local demo data uses deterministic stored coordinates and does not call an external geocoder.
+
 ### News and Advisory Sources
 
 Supported adapter classes:
@@ -96,10 +98,10 @@ All IDs are GhostRecon-generated UUIDs unless an external identifier is explicit
 | --- | --- |
 | `SourceDefinition` | `id`, `name`, `source_kind`, `adapter_type`, `base_url`, `policy_state`, `participant_reuse_state`, `content_storage_policy`, `freshness_slo_seconds`, `enabled`, `created_at`, `updated_at`. Policy evidence and review timestamps are required for `allowed`. |
 | `RawSourceItem` | `id`, `source_definition_id`, `external_id` when present, `canonical_url`, `content_hash`, `retrieved_at`, `published_at`, `original_language`, `raw_metadata`, `permitted_excerpt`, `parse_status`, `idempotency_key`. It is immutable except for parse/replay status. |
-| `CyberEvent` | `id`, `name`, `event_series_key`, original and normalized start/end, `source_timezone`, IANA timezone, format, venue/geography, topics, organizer identities, confidence, canonical state, and source-item lineage. |
+| `CyberEvent` | `id`, `name`, `event_series_key`, original and normalized start/end, `source_timezone`, IANA timezone, format (`in-person`, `online`, `hybrid`, or `unknown`), venue, exact address (`street_address`, city, postcode, country), geocode status/provider/display name, latitude/longitude when resolved, topics, organizer identities, confidence, optimistic version, canonical state, and source-item lineage. |
 | `EventParticipant` | `id`, `cyber_event_id`, published name, organization, published role/type, profile URL, `source_item_id`, reuse state/evidence, extraction eligibility, export eligibility, and resolution confidence. Do not add private or inferred personal fields. |
 | `NewsArticle` | `id`, canonical URL, publisher, title, permitted excerpt, published/retrieved timestamps, original language, translated-title metadata and provenance, content hash, syndication cluster, and source-item lineage. Unlicensed full text is forbidden. |
-| `SecurityIncident` | `id`, status, affected-company references/candidates, incident type/attack vector, first/last observed windows, geography, confidence, evidence links, corroboration method, analyst decision reference, and canonical/merge state. Status begins as `candidate`. |
+| `SecurityIncident` | `id`, status, incident group key, primary affected company/domain, company/domain scoped affected lists, incident type/attack vector, first/last observed windows, geography, confidence, evidence source/article IDs, evidence URLs, corroboration method, analyst decision reference, optimistic version, and canonical/merge state. Status begins as `candidate`; multi-company attacks are represented as separate company-specific rows sharing an `incident_group_key`. |
 | `WatchTarget` | `id`, `target_type`, canonical target key, display name, query configuration, enabled state, owner, origin incident when promoted, created-by actor, and timestamps. `target_type` is `company`, `domain`, `incident`, `event_series`, or `topic`. |
 | `CandidateScore` | `id`, target type/ID, origin type/ID, scoring config version, component scores, composite score, route, reasons, policy snapshot hash, source lineage, and idempotency key. Sprint 7 uses `sprint7.v1`. |
 | `ReviewCandidate` | `id`, candidate type, target type/ID, origin, source lineage, status, reason code, evidence summary, policy snapshot/hash, SLA due time, version, and idempotency key. |
@@ -150,7 +152,8 @@ stateDiagram-v2
   candidate --> corroborated: independent-source threshold
   candidate --> corroborated: audited analyst decision
   candidate --> rejected: false positive / wrong company / non-security event
-  candidate --> candidate: more coverage or watch promotion
+  candidate --> candidate: more coverage
+  corroborated --> candidate: audited revert
   corroborated --> rejected: audited correction
 ```
 
@@ -160,7 +163,7 @@ Corroboration rules:
 2. Multiple-source corroboration requires at least two independently produced sources. Syndicated copies, copied press releases, and common upstream reporting count as one evidence family.
 3. Analyst corroboration requires an actor, timestamp, reason, evidence snapshot, and policy version.
 
-Promoting a global incident creates an incident `WatchTarget` whose `origin_incident_id` points to the existing incident. It does not create a second incident or automatically change corroboration. Subsequent articles attach to the same canonical incident/evidence case when resolution rules match.
+Promoting a global incident requires `status=corroborated` and a matching optimistic version. It creates or returns an idempotent company `WatchTarget` whose `origin_incident_id` points to the existing incident and whose owner is the acting user. It does not create a second incident or automatically change corroboration. Subsequent articles attach to the same canonical incident/evidence case when resolution rules match.
 
 ## Event Contracts
 
@@ -211,10 +214,13 @@ The gateway exposes these implemented and target routes; feature services own th
 ### Search and Detail
 
 - `GET /v1/intelligence/events`
+- `POST /v1/intelligence/events/manual`
 - `GET /v1/intelligence/events/{event_id}`
+- `PATCH /v1/intelligence/events/{event_id}`
 - `GET /v1/intelligence/events/{event_id}/participants`
 - `GET /v1/intelligence/participants`
 - `GET /v1/intelligence/incidents`
+- `POST /v1/intelligence/incidents/manual`
 - `GET /v1/intelligence/incidents/{incident_id}`
 - `GET /v1/intelligence/sources/health`
 
@@ -227,7 +233,7 @@ Search APIs support cursor pagination, explicit sort, UTC date ranges, geography
 - `PATCH /v1/intelligence/watch-targets/{watch_target_id}`
 - `POST /v1/intelligence/incidents/{incident_id}/promote-to-watchlist`
 
-Promotion returns the existing watch target on an idempotent retry and always returns `origin_incident_id`.
+Incident promotion accepts a body with the current optimistic `version`, requires the incident to be corroborated, promotes only the primary affected company, and returns the existing company watch target on an idempotent retry with `origin_incident_id`.
 
 ### Scoring, Governance, Review, and CRM Targets
 
@@ -236,6 +242,7 @@ Promotion returns the existing watch target on an idempotent retry and always re
 - `POST /v1/suppressions/evaluate`
 - `POST /v1/governance/incidents/{incident_id}/corroborate`
 - `POST /v1/governance/incidents/{incident_id}/reject`
+- `POST /v1/governance/incidents/{incident_id}/revert`
 - `GET /v1/review/candidates`
 - `GET /v1/review/crm-targets`
 - `POST /v1/review/candidates/{candidate_id}/approve`

@@ -77,9 +77,9 @@ def _incident() -> SecurityIncidentOut:
 def _watch_target() -> WatchTargetOut:
     return WatchTargetOut(
         id="watch-1",
-        target_type="incident",
-        canonical_target_key="incident-1",
-        display_name="Example Corp ransomware incident",
+        target_type="company",
+        canonical_target_key="example-corp",
+        display_name="Example Corp",
         enabled=True,
         created_by="analyst@example.com",
         version=1,

@@ -5,6 +5,7 @@ from ghostrecon.events.contracts import EventName, new_event
 from ghostrecon.services.incident_intelligence import (
     article_candidate_from_raw_item,
     incident_candidate_from_article,
+    incident_candidates_from_article,
 )
 
 
@@ -56,9 +57,38 @@ def test_incident_candidate_starts_as_company_linked_candidate_case() -> None:
 
     assert incident is not None
     assert incident.affected_companies == ["Example Corp"]
+    assert incident.primary_affected_company == "Example Corp"
+    assert incident.incident_group_key.startswith("security-incident-group:")
     assert incident.attack_vector == "ransomware"
     assert incident.confidence == 75
     assert incident.evidence_family_key == "news-example"
+    assert incident.evidence_urls == ["https://news.example/breach"]
+
+
+def test_incident_article_splits_multi_company_contexts() -> None:
+    raw = _raw(
+        raw_metadata={
+            "affected_companies": ["Example Corp", "Contoso"],
+            "affected_domains": ["example.com", "contoso.example"],
+            "gdelt_article": {
+                "title": "Example Corp and Contoso report ransomware incident",
+                "domain": "news.example",
+            },
+        }
+    )
+    article = article_candidate_from_raw_item(_source(), raw)
+    incidents = incident_candidates_from_article(_source(), raw, article)
+
+    assert [incident.primary_affected_company for incident in incidents] == [
+        "Example Corp",
+        "Contoso",
+    ]
+    assert [incident.primary_affected_domain for incident in incidents] == [
+        "example.com",
+        "contoso.example",
+    ]
+    assert len({incident.incident_group_key for incident in incidents}) == 1
+    assert len({incident.dedupe_key for incident in incidents}) == 2
 
 
 def test_authoritative_source_marks_candidate_authoritative_input() -> None:
