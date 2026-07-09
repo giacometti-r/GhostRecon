@@ -28,6 +28,7 @@ from ghostrecon.console.components import (
     page_header,
     query_badges,
     records_table,
+    render_inline_value,
     summary_tile,
 )
 from ghostrecon.models.api import DashboardRole
@@ -163,8 +164,10 @@ def render_page(
             return incident_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/watchlists":
             return watchlists_page(api, params, role=context_role)
+        if path.startswith("/watchlists/"):
+            return watchlist_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/review/enrichment":
-            return enrichment_review_page(api, params)
+            return enrichment_review_page(api, params, role=context_role)
         if path == "/review":
             return review_page(api, params, role=context_role)
         if path == "/crm/exports":
@@ -173,6 +176,8 @@ def render_page(
             return crm_export_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/sequences":
             return sequences_page(api, params, role=context_role)
+        if path == "/sequences/definitions":
+            return sequence_definitions_page(api, params, role=context_role)
         if path.startswith("/sequences/enrollments/"):
             return sequence_enrollment_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path.startswith("/sequences/definitions/"):
@@ -407,23 +412,50 @@ def watchlists_page(client: ConsoleApiClient, params: dict[str, Any], *, role: s
         "/v1/reporting/watch-targets",
         _filtered(params, "target_type", "enabled", "owner", "cursor"),
     )
+    columns = [
+        ("Company", "display_name"),
+        ("Owner", "owner"),
+        ("Monitoring", "monitoring_status"),
+        ("Last run", "last_monitored_at"),
+        ("Next run", "next_monitoring_at"),
+    ]
+    if role == DashboardRole.GOVERNANCE_REVIEWER.value:
+        columns.append(("Origin incident", "origin_incident_id"))
     children = [
         query_badges(params),
         records_table(
             payload.get("watch_targets", []),
-            [
-                ("Name", "display_name"),
-                ("Type", "target_type"),
-                ("Key", "canonical_target_key"),
-                ("Owner", "owner"),
-                ("Enabled", "enabled"),
-                ("Origin incident", "origin_incident_id"),
-            ],
+            columns,
             actions=lambda record: _watch_actions(record, role),
         ),
         _pagination(payload, "/watchlists", params),
     ]
     return _page("Watchlists", [payload], children)
+
+
+def watchlist_detail_page(client: ConsoleApiClient, watch_target_id: str, *, role: str) -> html.Div:
+    payload = _safe_get(client, f"/v1/reporting/watch-targets/{watch_target_id}")
+    target = payload.get("watch_target", {})
+    rows = [
+        ("Company", target.get("display_name")),
+        ("Owner", target.get("owner")),
+        ("Monitoring", target.get("monitoring_status")),
+        ("Enabled", target.get("monitoring_enabled")),
+        ("Last run", target.get("last_monitored_at")),
+        ("Next run", target.get("next_monitoring_at")),
+        ("Last error", target.get("monitoring_error")),
+    ]
+    if role == DashboardRole.GOVERNANCE_REVIEWER.value:
+        rows.append(("Origin incident", target.get("origin_incident_id")))
+    children = [
+        detail_panel("Watchlist Item", rows),
+        html.Div(_watch_actions(target, role, include_open=False), className="detail-actions"),
+        detail_panel("Monitoring summary", [("Summary", target.get("monitoring_summary"))]),
+        metadata_details(payload)
+        if role == DashboardRole.GOVERNANCE_REVIEWER.value
+        else html.Div(),
+    ]
+    return _page("Watchlist Item", [payload], children)
 
 
 def review_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) -> html.Div:
@@ -460,7 +492,9 @@ def review_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) 
     return _page("Analyst Review", [payload], children)
 
 
-def enrichment_review_page(client: ConsoleApiClient, params: dict[str, Any]) -> html.Div:
+def enrichment_review_page(
+    client: ConsoleApiClient, params: dict[str, Any], *, role: str
+) -> html.Div:
     contacts = _safe_get(client, "/v1/enrichment/contact-candidates", _filtered(params, "status"))
     cases = _safe_get(client, "/v1/enrichment/entity-resolutions", _filtered(params, "status"))
     contact_rows = [_contact_queue_row(candidate) for candidate in contacts.get("candidates", [])]
@@ -478,6 +512,7 @@ def enrichment_review_page(client: ConsoleApiClient, params: dict[str, Any]) -> 
                 ("Verified email", "verified_email"),
                 ("Reason", "eligibility_reason"),
             ],
+            actions=lambda record: _contact_queue_actions(record, role),
         ),
         records_table(
             cases.get("cases", []),
@@ -551,8 +586,25 @@ def crm_export_detail_page(client: ConsoleApiClient, batch_id: str, *, role: str
 def sequences_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) -> html.Div:
     payload = _safe_get(client, "/v1/sequences/enrollments", _filtered(params, "status"))
     sequences = _safe_get(client, "/v1/sequences", {"limit": REPORTING_LIMIT})
+    activities = _safe_get(client, "/v1/sequences/activities", {"limit": REPORTING_LIMIT})
+    prospects = _safe_get(
+        client,
+        "/v1/sequences/crm-prospects",
+        {"query": str(params.get("prospect") or ""), "limit": 10},
+    )
     children = [
         query_badges(params),
+        html.Div(
+            [
+                dcc.Link(
+                    [icon("list-plus"), html.Span("Sequence Definitions")],
+                    href="/sequences/definitions",
+                    refresh=False,
+                    className="icon-button link-button",
+                )
+            ],
+            className="detail-actions",
+        ),
         html.Section(
             [
                 html.H2("Sequence definitions"),
@@ -572,6 +624,33 @@ def sequences_page(client: ConsoleApiClient, params: dict[str, Any], *, role: st
                             refresh=False,
                         )
                     ],
+                ),
+            ],
+            className="detail-panel",
+        ),
+        _crm_prospect_import_panel(
+            prospects.get("prospects", []),
+            sequences.get("sequences", []),
+            role,
+        ),
+        html.Section(
+            [
+                html.H2("Sequence activities"),
+                records_table(
+                    [
+                        _sequence_activity_row(activity)
+                        for activity in activities.get("activities", [])
+                    ],
+                    [
+                        ("Prospect", "contact_name"),
+                        ("Company", "account_name"),
+                        ("Channel", "channel"),
+                        ("Status", "status"),
+                        ("Due", "due_at"),
+                        ("Step", "step_order"),
+                    ],
+                    actions=lambda record: _sequence_activity_actions(record, role),
+                    empty_message="No pending sequence activities.",
                 ),
             ],
             className="detail-panel",
@@ -596,7 +675,36 @@ def sequences_page(client: ConsoleApiClient, params: dict[str, Any], *, role: st
             className="operator-note",
         ),
     ]
-    return _page("Sequence State", [], children)
+    return _page("Sequence State", [payload, sequences, activities, prospects], children)
+
+
+def sequence_definitions_page(
+    client: ConsoleApiClient, params: dict[str, Any], *, role: str
+) -> html.Div:
+    sequences = _safe_get(client, "/v1/sequences", {"limit": REPORTING_LIMIT})
+    children = [
+        query_badges(params),
+        _sequence_create_form(role),
+        records_table(
+            [_sequence_row(sequence) for sequence in sequences.get("sequences", [])],
+            [
+                ("Name", "name"),
+                ("Owner", "owner_id"),
+                ("Status", "status"),
+                ("Version", "definition_version"),
+                ("Channels", "channels"),
+                ("Steps", "step_count"),
+            ],
+            actions=lambda record: [
+                dcc.Link(
+                    "Open",
+                    href=f"/sequences/definitions/{record.get('id')}",
+                    refresh=False,
+                )
+            ],
+        ),
+    ]
+    return _page("Sequence Definitions", [sequences], children)
 
 
 def sequence_enrollment_detail_page(
@@ -631,12 +739,13 @@ def sequence_enrollment_detail_page(
                 records_table(
                     [_sequence_step_row(step) for step in sequence.get("steps", [])],
                     [
-                        ("Step", "step_order"),
-                        ("Wait", "delay_display"),
-                        ("Subject", "subject_template"),
-                        ("Channel", "channel"),
-                    ],
-                ),
+                ("Step", "step_order"),
+                ("Wait", "delay_display"),
+                ("Subject", "subject_template"),
+                ("Channel", "channel"),
+                ("Approval", "requires_approval"),
+            ],
+        ),
             ],
             className="detail-panel",
         ),
@@ -665,9 +774,10 @@ def sequence_definition_detail_page(
             [_sequence_step_row(step) for step in sequence.get("steps", [])],
             [
                 ("Step", "step_order"),
+                ("Channel", "channel"),
                 ("Wait", "delay_display"),
                 ("Subject", "subject_template"),
-                ("Body", "body_template"),
+                ("Instructions", "instruction_summary"),
                 ("Active", "active"),
             ],
         ),
@@ -723,7 +833,7 @@ def meeting_detail_page(client: ConsoleApiClient, meeting_id: str, *, role: str)
             ],
         ),
         html.Div(_meeting_actions(meeting, role), className="detail-actions"),
-        detail_panel("Prep packet", [("Packet", meeting.get("prep_packet"))]),
+        _prep_packet_panel(meeting.get("prep_packet")),
         records_table(
             meeting.get("follow_up_tasks", []),
             [
@@ -1394,6 +1504,18 @@ def _participant_actions(record: dict[str, Any], role: str) -> list[Any]:
     ]
 
 
+def _contact_queue_actions(record: dict[str, Any], role: str) -> list[Any]:
+    missing_domain = not bool(record.get("domain"))
+    return [
+        action_button(
+            "Discover Domain",
+            _action_id("contact-candidate", "discover-domain", record.get("id")),
+            "globe",
+            disabled=not missing_domain or not _can_mutate(role),
+        )
+    ]
+
+
 def _incident_actions(record: dict[str, Any], role: str, *, include_open: bool = True) -> list[Any]:
     disabled = not _can_mutate(role)
     version_missing = record.get("version") is None
@@ -1439,22 +1561,43 @@ def _incident_actions(record: dict[str, Any], role: str, *, include_open: bool =
     return actions
 
 
-def _watch_actions(record: dict[str, Any], role: str) -> list[Any]:
+def _watch_actions(
+    record: dict[str, Any], role: str, *, include_open: bool = True
+) -> list[Any]:
     next_enabled = not bool(record.get("enabled"))
-    return [
-        action_button(
-            "Enable" if next_enabled else "Pause",
-            _action_id(
-                "watch",
-                "toggle",
-                record.get("id"),
-                record.get("version"),
-                enabled=next_enabled,
-            ),
-            "play" if next_enabled else "pause",
-            disabled=not _can_mutate(role),
+    actions: list[Any] = []
+    if include_open:
+        actions.append(
+            dcc.Link(
+                "Open",
+                href=f"/watchlists/{record.get('id')}",
+                refresh=False,
+                className="text-link",
+            )
         )
-    ]
+    actions.extend(
+        [
+            action_button(
+                "Find Contact",
+                _action_id("watch", "find-contact", record.get("id")),
+                "search",
+                disabled=not _can_mutate(role),
+            ),
+            action_button(
+                "Enable Monitoring" if next_enabled else "Pause Monitoring",
+                _action_id(
+                    "watch",
+                    "toggle",
+                    record.get("id"),
+                    record.get("version"),
+                    enabled=next_enabled,
+                ),
+                "play" if next_enabled else "pause",
+                disabled=not _can_mutate(role),
+            ),
+        ]
+    )
+    return actions
 
 
 def _sequence_actions(record: dict[str, Any], role: str) -> list[Any]:
@@ -1539,11 +1682,186 @@ def _sequence_enrollment_row(enrollment: dict[str, Any]) -> dict[str, Any]:
 
 
 def _sequence_row(sequence: dict[str, Any]) -> dict[str, Any]:
-    return {**sequence, "step_count": len(sequence.get("steps") or [])}
+    channels = sorted({str(step.get("channel") or "email") for step in sequence.get("steps") or []})
+    return {
+        **sequence,
+        "step_count": len(sequence.get("steps") or []),
+        "channels": ", ".join(channels) or "-",
+    }
 
 
 def _sequence_step_row(step: dict[str, Any]) -> dict[str, Any]:
-    return {**step, "delay_display": format_duration(step.get("delay_seconds"))}
+    metadata = step.get("step_metadata") if isinstance(step.get("step_metadata"), dict) else {}
+    instruction = (
+        metadata.get("instructions")
+        or metadata.get("call_script")
+        or metadata.get("meeting_subject")
+        or step.get("body_template")
+        or "-"
+    )
+    return {
+        **step,
+        "delay_display": format_duration(step.get("delay_seconds")),
+        "instruction_summary": instruction,
+    }
+
+
+def _sequence_activity_row(activity: dict[str, Any]) -> dict[str, Any]:
+    return {
+        **activity,
+        "contact_name": activity.get("contact_name") or activity.get("contact_email") or "-",
+        "account_name": activity.get("account_name") or "-",
+    }
+
+
+def _sequence_activity_actions(record: dict[str, Any], role: str) -> list[Any]:
+    disabled = not _can_mutate(role)
+    channel = str(record.get("channel") or "")
+    status = str(record.get("status") or "")
+    actions = []
+    if channel == "email":
+        actions.append(
+            action_button(
+                "Approve",
+                _action_id("sequence-activity", "approve-email", record.get("id")),
+                "send",
+                disabled=disabled or status not in {"pending_approval", "approved"},
+            )
+        )
+    if channel == "call":
+        actions.append(
+            action_button(
+                "Complete",
+                _action_id("sequence-activity", "complete", record.get("id")),
+                "check",
+                disabled=disabled or status != "pending",
+            )
+        )
+    if channel == "google_meet":
+        actions.append(
+            action_button(
+                "Schedule",
+                _action_id("sequence-activity", "schedule-meeting", record.get("id")),
+                "calendar-plus",
+                disabled=disabled or status != "pending",
+            )
+        )
+    return actions
+
+
+def _sequence_create_form(role: str) -> html.Div:
+    if not _can_mutate(role):
+        return html.Div()
+    example_steps = [
+        {
+            "step_order": 1,
+            "channel": "email",
+            "delay_seconds": 0,
+            "subject_template": "Following up on {account_name}",
+            "body_template": "Hi {contact_first_name}, checking in.",
+        },
+        {
+            "step_order": 2,
+            "channel": "call",
+            "delay_seconds": 86400,
+            "step_metadata": {"instructions": "Call and log security priorities."},
+        },
+        {
+            "step_order": 3,
+            "channel": "google_meet",
+            "delay_seconds": 172800,
+            "step_metadata": {"meeting_subject": "Security discovery"},
+        },
+    ]
+    return html.Section(
+        [
+            html.H2("Create sequence"),
+            html.Div(
+                [
+                    dcc.Input(id="sequence-create-name", placeholder="Name", type="text"),
+                    dcc.Input(id="sequence-create-owner", placeholder="Owner", type="text"),
+                    dcc.Textarea(
+                        id="sequence-create-steps",
+                        value=json.dumps(example_steps, indent=2),
+                    ),
+                    html.Button(
+                        [icon("plus"), html.Span("Create sequence")],
+                        id="sequence-create-submit",
+                        n_clicks=0,
+                        className="icon-button",
+                    ),
+                ],
+                className="form-grid",
+            ),
+        ],
+        className="detail-panel",
+    )
+
+
+def _crm_prospect_import_panel(
+    prospects: list[dict[str, Any]],
+    sequences: list[dict[str, Any]],
+    role: str,
+) -> html.Section:
+    sequence_options = [
+        {"label": sequence.get("name") or sequence.get("id"), "value": sequence.get("id")}
+        for sequence in sequences
+    ]
+    default_sequence = sequence_options[0]["value"] if sequence_options else None
+    controls = []
+    if _can_mutate(role):
+        controls = [
+            dcc.Input(
+                id="crm-prospect-query",
+                placeholder="Search CRM prospects",
+                type="text",
+            ),
+            dcc.Dropdown(
+                id="crm-prospect-sequence",
+                options=sequence_options,
+                value=default_sequence,
+                clearable=False,
+            ),
+            dcc.Textarea(
+                id="crm-prospect-approval-reason",
+                value="Approved for local demo outreach.",
+            ),
+        ]
+    rows = [
+        {
+            **prospect,
+            "company": prospect.get("company_name") or prospect.get("company_domain"),
+        }
+        for prospect in prospects
+    ]
+    return html.Section(
+        [
+            html.H2("CRM prospect import"),
+            html.Div(controls, className="form-grid"),
+            records_table(
+                rows,
+                [
+                    ("Prospect", "display_name"),
+                    ("Email", "email"),
+                    ("Title", "title"),
+                    ("Company", "company"),
+                ],
+                actions=lambda record: [
+                    action_button(
+                        "Assign",
+                        {
+                            "type": "crm-prospect-import",
+                            "provider_record_id": record.get("provider_record_id"),
+                        },
+                        "user-plus",
+                        disabled=not _can_mutate(role) or not default_sequence,
+                    )
+                ],
+                empty_message="No CRM prospects returned.",
+            ),
+        ],
+        className="detail-panel",
+    )
 
 
 def _sequence_alert_form(enrollment_id: str, role: str) -> html.Div:
@@ -1590,12 +1908,14 @@ def _sequence_edit_form(sequence: dict[str, Any], role: str) -> html.Div:
                 ("Name", sequence.get("name")),
                 ("Owner", sequence.get("owner_id")),
                 ("Status", sequence.get("status")),
+                ("Version", sequence.get("definition_version")),
                 ("Rate limits", sequence.get("rate_limit_policy")),
             ],
         )
     return html.Section(
         [
             html.H2("Edit sequence"),
+            dcc.Store(id="sequence-edit-version", data=sequence.get("definition_version") or 1),
             html.Div(
                 [
                     dcc.Input(
@@ -1623,6 +1943,7 @@ def _sequence_edit_form(sequence: dict[str, Any], role: str) -> html.Div:
                     dcc.Textarea(
                         id="sequence-edit-steps",
                         value=json.dumps(sequence.get("steps") or [], indent=2, default=str),
+                        placeholder="Ordered email, call, and google_meet steps",
                     ),
                     html.Button(
                         [icon("save"), html.Span("Save sequence")],
@@ -1666,6 +1987,86 @@ def _provenance_label(candidate: dict[str, Any]) -> str:
         actor = payload.get("created_by") or "unknown"
         return f"Manual by {actor}"
     return human_label(origin) if origin else "-"
+
+
+def _prep_packet_panel(packet: Any) -> html.Section:
+    if not isinstance(packet, dict) or not packet:
+        return html.Section(
+            [html.H2("Prep packet"), empty_state("No prep packet yet.")],
+            className="detail-panel",
+        )
+    sections = [
+        ("Account context", [packet.get("account_summary")]),
+        ("Contacts", packet.get("stakeholder_map") or []),
+        ("Signals", packet.get("likely_security_priorities") or []),
+        ("Recommended talk tracks", packet.get("suggested_questions") or []),
+        ("Risks and incidents", packet.get("risks") or []),
+        ("Events and source context", _source_snapshot_rows(packet.get("source_snapshot"))),
+    ]
+    return html.Section(
+        [
+            html.H2("Prep packet"),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.H3(title),
+                            html.Div(
+                                [_prep_packet_value(item) for item in _clean_items(items)],
+                                className="prep-section-body",
+                            ),
+                        ],
+                        className="prep-section",
+                    )
+                    for title, items in sections
+                ],
+                className="prep-packet",
+            ),
+        ],
+        className="detail-panel prep-panel",
+    )
+
+
+def _clean_items(items: Any) -> list[Any]:
+    if items in (None, "", []):
+        return ["-"]
+    if isinstance(items, list):
+        return items or ["-"]
+    return [items]
+
+
+def _source_snapshot_rows(value: Any) -> list[Any]:
+    if not isinstance(value, dict):
+        return []
+    return [
+        {"label": human_label(key), "value": item}
+        for key, item in value.items()
+        if item not in (None, "", [], {})
+    ]
+
+
+def _prep_packet_value(value: Any) -> html.Div:
+    if isinstance(value, dict):
+        if "label" in value and "value" in value:
+            return html.Div(
+                [
+                    html.Strong(str(value["label"])),
+                    html.Span(render_inline_value(value["value"])),
+                ],
+                className="prep-row",
+            )
+        return html.Div(
+            [
+                html.Span(
+                    f"{human_label(key)}: {render_inline_value(item)}",
+                    className="prep-chip",
+                )
+                for key, item in value.items()
+                if item not in (None, "", [], {})
+            ],
+            className="prep-row",
+        )
+    return html.Div(str(value), className="prep-row")
 
 
 def _meeting_actions(record: dict[str, Any], role: str) -> list[Any]:

@@ -100,6 +100,12 @@ def test_detail_links_refresh_filters_pagination_role_and_action(page, console_s
     _heading(page, "Meeting Detail").wait_for()
     assert page.locator(".nav-link.active").first.inner_text() == "Meetings"
 
+    page.goto(f"{base_url}/watchlists")
+    page.get_by_role("link", name="Open").first.click()
+    page.wait_for_url("**/watchlists/watch-1")
+    _heading(page, "Watchlist Item").wait_for()
+    assert page.locator(".nav-link.active").first.inner_text() == "Watchlists"
+
     page.goto(f"{base_url}/crm/exports/batch-1")
     _heading(page, "CRM Export Batch").wait_for()
     assert page.locator(".nav-link.active").first.inner_text() == "CRM Exports"
@@ -270,11 +276,25 @@ def _payload_for(path: str) -> dict[str, Any]:
                 {
                     "id": "watch-1",
                     "display_name": "Acme",
-                    "target_type": "company",
+                    "owner": "analyst@example.com",
                     "enabled": True,
+                    "monitoring_status": "completed",
                     "version": 1,
                 }
             ],
+        },
+        "/v1/reporting/watch-targets/watch-1": {
+            "metadata": metadata,
+            "watch_target": {
+                "id": "watch-1",
+                "display_name": "Acme",
+                "owner": "analyst@example.com",
+                "enabled": True,
+                "monitoring_enabled": True,
+                "monitoring_status": "completed",
+                "monitoring_summary": {"result_count": 1},
+                "version": 1,
+            },
         },
         "/v1/reporting/review-queue": {
             "metadata": metadata,

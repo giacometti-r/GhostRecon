@@ -3,11 +3,11 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ghostrecon.common.config import Settings
@@ -23,6 +23,11 @@ from ghostrecon.models.db import (
     SecurityIncidentEvidence,
     SourceDefinition,
     WatchTarget,
+    WatchTargetMonitoringRun,
+)
+from ghostrecon.services.search_adapters import (
+    news_provider_for_settings,
+    watch_monitoring_queries,
 )
 from ghostrecon.services.source_registry import fetch_source_by_id, normalize_url
 
@@ -350,6 +355,15 @@ async def list_watch_targets(
         )
 
 
+async def get_watch_target(
+    watch_target_id: str,
+    *,
+    settings: Settings | None = None,
+) -> WatchTarget | None:
+    async with session_scope(settings) as session:
+        return await session.get(WatchTarget, watch_target_id)
+
+
 async def create_watch_target(
     payload: WatchTargetCreate,
     *,
@@ -373,6 +387,25 @@ async def patch_watch_target(
     async with session_scope(settings) as session:
         repository = IncidentIntelligenceRepository(session)
         return await repository.patch_watch_target(watch_target_id, payload, actor, idempotency_key)
+
+
+async def monitor_watch_targets(*, settings: Settings | None = None) -> dict[str, object]:
+    resolved = settings or Settings()
+    provider = news_provider_for_settings(resolved)
+    now = datetime.now(UTC)
+    async with session_scope(resolved) as session:
+        repository = IncidentIntelligenceRepository(session)
+        targets = await repository.list_due_monitoring_targets(now)
+        checked = 0
+        failed = 0
+        for target in targets:
+            checked += 1
+            try:
+                await repository.monitor_watch_target(target, provider=provider, settings=resolved)
+            except Exception as exc:  # pragma: no cover - defensive per-target isolation.
+                failed += 1
+                await repository.record_monitoring_failure(target, provider.provider_name, str(exc))
+        return {"checked": checked, "failed": failed, "provider": provider.provider_name}
 
 
 async def promote_incident_to_watchlist(
@@ -675,6 +708,8 @@ class IncidentIntelligenceRepository:
             owner=payload.owner,
             origin_incident_id=payload.origin_incident_id,
             created_by=actor,
+            monitoring_status="not_run",
+            next_monitoring_at=datetime.now(UTC) if payload.target_type == "company" else None,
         )
         self.session.add(target)
         await self.session.flush()
@@ -706,6 +741,8 @@ class IncidentIntelligenceRepository:
             raise ValueError("watch target version conflict")
         if payload.enabled is not None:
             target.enabled = payload.enabled
+            if payload.enabled and target.target_type == "company":
+                target.next_monitoring_at = datetime.now(UTC)
         if payload.display_name is not None:
             target.display_name = payload.display_name
         if payload.query_config is not None:
@@ -715,6 +752,104 @@ class IncidentIntelligenceRepository:
         target.version += 1
         self._audit(actor, "watch_target.updated", "watch_target", target.id, idempotency_key)
         return target
+
+    async def list_due_monitoring_targets(self, now: datetime) -> list[WatchTarget]:
+        result = await self.session.execute(
+            select(WatchTarget)
+            .where(WatchTarget.target_type == "company")
+            .where(WatchTarget.enabled.is_(True))
+            .where(
+                or_(
+                    WatchTarget.next_monitoring_at.is_(None),
+                    WatchTarget.next_monitoring_at <= now,
+                )
+            )
+            .order_by(WatchTarget.next_monitoring_at.asc().nullsfirst(), WatchTarget.id.asc())
+            .limit(100)
+        )
+        return list(result.scalars())
+
+    async def monitor_watch_target(
+        self,
+        target: WatchTarget,
+        *,
+        provider: Any,
+        settings: Settings,
+    ) -> WatchTargetMonitoringRun:
+        started_at = datetime.now(UTC)
+        queries = watch_monitoring_queries(target.display_name)
+        results_by_query: list[dict[str, object]] = []
+        top_results: list[dict[str, object]] = []
+        for query in queries:
+            results = await provider.search_news(query, limit=settings.search_result_limit)
+            rows = [
+                {
+                    "title": result.title,
+                    "url": result.url,
+                    "snippet": result.snippet,
+                    "source": result.source,
+                    "published_at": result.published_at,
+                    "rank": result.rank,
+                }
+                for result in results
+            ]
+            results_by_query.append({"query": query, "result_count": len(rows), "results": rows})
+            top_results.extend(rows[:2])
+
+        completed_at = datetime.now(UTC)
+        status = "not_configured" if provider.provider_name == "disabled" else "completed"
+        result_count = sum(int(item["result_count"]) for item in results_by_query)
+        summary = {
+            "provider": provider.provider_name,
+            "result_count": result_count,
+            "queries": results_by_query,
+            "top_results": top_results[:5],
+        }
+        run = WatchTargetMonitoringRun(
+            watch_target_id=target.id,
+            provider=provider.provider_name,
+            status=status,
+            query_summary={"queries": queries},
+            result_summary=summary,
+            error=None,
+            started_at=started_at,
+            completed_at=completed_at,
+        )
+        self.session.add(run)
+        target.monitoring_status = status
+        target.last_monitored_at = completed_at
+        target.next_monitoring_at = completed_at + timedelta(
+            seconds=settings.watch_monitoring_interval_seconds
+        )
+        target.monitoring_error = None
+        target.monitoring_summary = summary
+        target.version += 1
+        await self.session.flush()
+        return run
+
+    async def record_monitoring_failure(
+        self, target: WatchTarget, provider_name: str, error: str
+    ) -> WatchTargetMonitoringRun:
+        now = datetime.now(UTC)
+        run = WatchTargetMonitoringRun(
+            watch_target_id=target.id,
+            provider=provider_name,
+            status="failed",
+            query_summary={"queries": watch_monitoring_queries(target.display_name)},
+            result_summary={},
+            error=error[:1000],
+            started_at=now,
+            completed_at=now,
+        )
+        self.session.add(run)
+        target.monitoring_status = "failed"
+        target.last_monitored_at = now
+        target.next_monitoring_at = now + timedelta(hours=1)
+        target.monitoring_error = error[:1000]
+        target.monitoring_summary = {}
+        target.version += 1
+        await self.session.flush()
+        return run
 
     async def _link_evidence(
         self,
@@ -820,6 +955,12 @@ def watch_target_to_api(target: WatchTarget) -> dict[str, object]:
         "display_name": target.display_name,
         "query_config": target.query_config or {},
         "enabled": target.enabled,
+        "monitoring_enabled": target.enabled,
+        "monitoring_status": target.monitoring_status,
+        "last_monitored_at": target.last_monitored_at,
+        "next_monitoring_at": target.next_monitoring_at,
+        "monitoring_error": target.monitoring_error,
+        "monitoring_summary": target.monitoring_summary or {},
         "owner": target.owner,
         "origin_incident_id": target.origin_incident_id,
         "created_by": target.created_by,

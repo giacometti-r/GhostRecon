@@ -37,6 +37,7 @@ dependencies = [
   "scrapy>=2.11",
   "sqlalchemy[asyncio]>=2.0",
   "structlog>=24.1",
+  "tldextract>=5.1",
   "uvicorn[standard]>=0.30",
 ]
 

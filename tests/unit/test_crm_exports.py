@@ -147,6 +147,57 @@ def test_local_demo_crm_client_is_used_without_attio_token() -> None:
 
 
 @pytest.mark.asyncio
+async def test_local_demo_crm_client_returns_fake_prospects() -> None:
+    client = LocalDemoCrmClient()
+
+    prospects = await client.search_prospects("taylor", limit=5)
+    prospect = await client.get_prospect("demo-crm-prospect-taylor-ng")
+
+    assert prospects[0].display_name == "Taylor Ng"
+    assert prospects[0].email == "taylor.ng@example-industries.com"
+    assert prospect is not None
+    assert prospect.company_domain == "example-industries.com"
+
+
+@pytest.mark.asyncio
+async def test_attio_crm_client_searches_people_and_companies() -> None:
+    calls: list[tuple[str, str, dict[str, object] | None]] = []
+
+    class FakeHttp:
+        async def request(self, method, path, *, json=None, params=None):
+            _ = params
+            calls.append((method, path, json))
+            return {
+                "data": [
+                    {
+                        "id": {"record_id": "attio-person-1"},
+                        "record_text": "Taylor Ng",
+                        "object_slug": "people",
+                    }
+                ]
+            }
+
+    client = AttioCrmClient.__new__(AttioCrmClient)
+    client.http = FakeHttp()
+
+    prospects = await client.search_prospects("Taylor", limit=3)
+
+    assert prospects[0].provider_record_id == "attio-person-1"
+    assert calls == [
+        (
+            "POST",
+            "/v2/objects/records/search",
+            {
+                "query": "Taylor",
+                "objects": ["people", "companies"],
+                "request_as": {"type": "workspace"},
+                "limit": 3,
+            },
+        )
+    ]
+
+
+@pytest.mark.asyncio
 async def test_attio_crm_client_upserts_record_and_list_entry() -> None:
     calls: list[tuple[str, str, dict[str, object] | None]] = []
 

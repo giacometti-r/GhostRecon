@@ -17,10 +17,13 @@ from ghostrecon.common.database import session_scope
 from ghostrecon.models.db import (
     Account,
     Contact,
+    ContactEnrichmentCandidate,
     CrmExportBatch,
     CrmExportItem,
     CrmTarget,
     CyberEvent,
+    EmailCandidateRecord,
+    EntityResolutionCase,
     EventParticipant,
     MeetingFollowUpTask,
     MeetingHandoff,
@@ -32,6 +35,7 @@ from ghostrecon.models.db import (
     SequenceStep,
     SourceDefinition,
     WatchTarget,
+    WatchTargetMonitoringRun,
 )
 
 DEMO_NAMESPACE = "https://ghostrecon.local/demo/sprint-15"
@@ -53,6 +57,8 @@ class DemoSeedIds:
     watch_target_id: str = _seed_uuid("watch/example-industries")
     approve_review_candidate_id: str = _seed_uuid("review/approve-incident")
     reject_review_candidate_id: str = _seed_uuid("review/reject-incident")
+    contact_review_candidate_id: str = _seed_uuid("review/contact-domain")
+    email_review_candidate_id: str = _seed_uuid("review/email-verification")
     export_crm_target_id: str = _seed_uuid("crm-target/export-ready")
     retry_crm_target_id: str = _seed_uuid("crm-target/retry-demo")
     meeting_crm_target_id: str = _seed_uuid("crm-target/meeting-demo")
@@ -60,8 +66,15 @@ class DemoSeedIds:
     crm_export_item_id: str = _seed_uuid("crm-export-item/retryable")
     account_id: str = _seed_uuid("account/example-industries")
     contact_id: str = _seed_uuid("contact/taylor-ng")
+    entity_resolution_case_id: str = _seed_uuid("entity-resolution/example-industries")
+    contact_candidate_id: str = _seed_uuid("contact-candidate/avery-patel")
+    domain_review_contact_candidate_id: str = _seed_uuid("contact-candidate/domain-review")
+    email_candidate_id: str = _seed_uuid("email-candidate/avery-patel")
+    watch_monitoring_run_id: str = _seed_uuid("watch-monitoring/example-industries")
     sequence_id: str = _seed_uuid("sequence/incident-follow-up")
     sequence_step_id: str = _seed_uuid("sequence-step/initial")
+    sequence_call_step_id: str = _seed_uuid("sequence-step/call")
+    sequence_meeting_step_id: str = _seed_uuid("sequence-step/meeting")
     active_sequence_enrollment_id: str = _seed_uuid("sequence-enrollment/active")
     paused_sequence_enrollment_id: str = _seed_uuid("sequence-enrollment/paused")
     meeting_handoff_id: str = _seed_uuid("meeting/security-discovery")
@@ -76,6 +89,10 @@ DEMO_SEED_REPORTING_RESOURCES = (
     "event_participants",
     "security_incidents",
     "watch_targets",
+    "watch_target_monitoring_runs",
+    "entity_resolution_cases",
+    "contact_enrichment_candidates",
+    "email_candidates",
     "review_candidates",
     "crm_targets",
     "crm_export_batches",
@@ -85,6 +102,7 @@ DEMO_SEED_REPORTING_RESOURCES = (
     "sequences",
     "sequence_steps",
     "sequence_enrollments",
+    "sequence_step_activities",
     "meeting_handoffs",
     "meeting_prep_packets",
     "meeting_follow_up_tasks",
@@ -272,6 +290,21 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
     watch.display_name = "Example Industries"
     watch.query_config = {"domains": ["example-industries.test"], "topics": ["ransomware"]}
     watch.enabled = True
+    watch.monitoring_status = "completed"
+    watch.last_monitored_at = now - timedelta(hours=1)
+    watch.next_monitoring_at = now + timedelta(hours=1)
+    watch.monitoring_error = None
+    watch.monitoring_summary = {
+        "provider": "local_demo",
+        "result_count": 2,
+        "top_results": [
+            {
+                "title": "Example Industries appoints new CISO",
+                "url": "https://ghostrecon.local/demo/news/example-industries-ciso",
+                "source": "local_demo_news",
+            }
+        ],
+    }
     watch.owner = "demo-analyst"
     watch.origin_incident_id = incident.id
     watch.created_by = "demo-seed"
@@ -336,6 +369,76 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
     contact.updated_at = now
     await session.flush()
 
+    resolution = await _get_or_create(
+        session, EntityResolutionCase, DEMO_SEED_IDS.entity_resolution_case_id
+    )
+    resolution.origin_type = "security_incident"
+    resolution.origin_id = incident.id
+    resolution.entity_kind = "organization"
+    resolution.input_name = "Example Industries"
+    resolution.input_domain = "example-industries.test"
+    resolution.resolved_account_id = account.id
+    resolution.resolved_name = account.company_name
+    resolution.resolved_domain = account.domain
+    resolution.status = "resolved"
+    resolution.confidence = 100
+    resolution.alternatives = [{"account_id": account.id, "domain": account.domain}]
+    resolution.source_definition_id = degraded_source.id
+    resolution.source_item_ids = [f"{incident.id}:raw-demo"]
+    resolution.policy_snapshot = {"lawful_basis": "synthetic_demo"}
+    resolution.review_reason = None
+    resolution.idempotency_key = "demo:sprint20:entity-resolution:example-industries"
+    resolution.version = 1
+    resolution.created_at = now
+    resolution.updated_at = now
+    await session.flush()
+
+    contact_candidate = await _contact_candidate(
+        session,
+        DEMO_SEED_IDS.contact_candidate_id,
+        now=now,
+        resolution=resolution,
+        account=account,
+        contact=contact,
+        incident=incident,
+        source_definition_id=degraded_source.id,
+        published_name="Avery Patel",
+        title="Chief Information Security Officer",
+        role_scope="security",
+        domain="example-industries.test",
+        profile_url="https://www.linkedin.com/in/avery-patel-ciso",
+        status="eligible",
+        review_reason=None,
+        idempotency_key="demo:sprint20:contact-candidate:avery-patel",
+    )
+    domain_review_candidate = await _contact_candidate(
+        session,
+        DEMO_SEED_IDS.domain_review_contact_candidate_id,
+        now=now,
+        resolution=resolution,
+        account=account,
+        contact=None,
+        incident=incident,
+        source_definition_id=degraded_source.id,
+        published_name="Jordan Kim",
+        title="Head of Cybersecurity",
+        role_scope="security",
+        domain=None,
+        profile_url="https://www.linkedin.com/in/jordan-kim-security",
+        status="needs_review",
+        review_reason="domain_discovery_failed",
+        idempotency_key="demo:sprint20:contact-candidate:jordan-kim",
+    )
+    email_candidate = await _email_candidate(
+        session,
+        now=now,
+        contact=contact,
+        incident=incident,
+        source_definition_id=degraded_source.id,
+    )
+    await _watch_monitoring_run(session, now=now, watch=watch)
+    await session.flush()
+
     approve_review = await _review_candidate(
         session,
         DEMO_SEED_IDS.approve_review_candidate_id,
@@ -373,6 +476,47 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
         },
         idempotency_key="demo:sprint15:review:reject-nimbus-retail",
         sla_due_at=now + timedelta(days=1),
+    )
+    await _review_candidate(
+        session,
+        DEMO_SEED_IDS.contact_review_candidate_id,
+        now=now,
+        candidate_type="contact_enrichment",
+        target_type="contact_enrichment_candidate",
+        target_id=domain_review_candidate.id,
+        origin_type="security_incident",
+        origin_id=incident.id,
+        source_definition_id=degraded_source.id,
+        reason_code="domain_discovery_failed",
+        reason="Official website discovery needs analyst review before accepting the contact.",
+        evidence_summary={
+            "company": "Example Industries",
+            "published_name": domain_review_candidate.published_name,
+            "title": domain_review_candidate.title,
+            "profile_url": domain_review_candidate.profile_url,
+        },
+        idempotency_key="demo:sprint20:review:domain-discovery",
+        sla_due_at=now + timedelta(days=1),
+    )
+    await _review_candidate(
+        session,
+        DEMO_SEED_IDS.email_review_candidate_id,
+        now=now,
+        candidate_type="email_verification",
+        target_type="email_candidate",
+        target_id=email_candidate.id,
+        origin_type="security_incident",
+        origin_id=incident.id,
+        source_definition_id=degraded_source.id,
+        reason_code="catch_all_domain",
+        reason="The domain accepts mail broadly, so the generated email needs analyst review.",
+        evidence_summary={
+            "email": email_candidate.email,
+            "contact": contact_candidate.published_name,
+            "domain": "example-industries.test",
+        },
+        idempotency_key="demo:sprint20:review:email-verification",
+        sla_due_at=now + timedelta(days=2),
     )
     await session.flush()
 
@@ -559,6 +703,120 @@ def _apply_incident(
     incident.updated_at = now
 
 
+async def _contact_candidate(
+    session: AsyncSession,
+    record_id: str,
+    *,
+    now: datetime,
+    resolution: EntityResolutionCase,
+    account: Account,
+    contact: Contact | None,
+    incident: SecurityIncident,
+    source_definition_id: str,
+    published_name: str,
+    title: str,
+    role_scope: str,
+    domain: str | None,
+    profile_url: str,
+    status: str,
+    review_reason: str | None,
+    idempotency_key: str,
+) -> ContactEnrichmentCandidate:
+    candidate = await _get_or_create(session, ContactEnrichmentCandidate, record_id)
+    candidate.entity_resolution_case_id = resolution.id
+    candidate.account_id = account.id
+    candidate.contact_id = contact.id if contact else None
+    candidate.origin_type = "security_incident"
+    candidate.origin_id = incident.id
+    candidate.published_name = published_name
+    candidate.organization = account.company_name
+    candidate.title = title
+    candidate.role_scope = role_scope
+    candidate.domain = domain
+    candidate.profile_url = profile_url
+    candidate.source_url = profile_url
+    candidate.status = status
+    candidate.eligibility_reason = review_reason
+    candidate.reuse_state = "allowed"
+    candidate.source_definition_id = source_definition_id
+    candidate.source_item_ids = [f"{idempotency_key}:raw-demo"]
+    candidate.policy_snapshot = {"lawful_basis": "synthetic_demo", "source_policy": "allowed"}
+    candidate.candidate_payload = {
+        "watch_target_id": DEMO_SEED_IDS.watch_target_id,
+        "search_query": (
+            'site:linkedin.com/in ("Head of Cybersecurity" OR "CISO" OR '
+            '"Chief Information Security Officer" OR "CTO" OR "Chief Technology Officer") '
+            f'"{account.company_name}"'
+        ),
+        "domain_discovery": {
+            "query": f"{account.company_name} official website",
+            "selected_domain": domain,
+        },
+    }
+    candidate.review_reason = review_reason
+    candidate.idempotency_key = idempotency_key
+    candidate.version = 1
+    candidate.created_at = now
+    candidate.updated_at = now
+    return candidate
+
+
+async def _email_candidate(
+    session: AsyncSession,
+    *,
+    now: datetime,
+    contact: Contact,
+    incident: SecurityIncident,
+    source_definition_id: str,
+) -> EmailCandidateRecord:
+    candidate = await _get_or_create(
+        session, EmailCandidateRecord, DEMO_SEED_IDS.email_candidate_id
+    )
+    candidate.contact_id = contact.id
+    candidate.email = "avery.patel@example-industries.test"
+    candidate.pattern = "{first}.{last}"
+    candidate.verification_status = "needs_review"
+    candidate.verification_payload = {"catch_all": True, "status": "unknown"}
+    candidate.verification_checked_at = now
+    candidate.source_definition_id = source_definition_id
+    candidate.source_item_ids = [f"{incident.id}:email-demo"]
+    candidate.origin_type = "security_incident"
+    candidate.origin_id = incident.id
+    candidate.policy_snapshot = {"lawful_basis": "synthetic_demo"}
+    candidate.review_status = "needs_review"
+    candidate.review_reason = "catch_all_domain"
+    candidate.idempotency_key = "demo:sprint20:email-candidate:avery-patel"
+    candidate.version = 1
+    candidate.created_at = now
+    return candidate
+
+
+async def _watch_monitoring_run(
+    session: AsyncSession, *, now: datetime, watch: WatchTarget
+) -> WatchTargetMonitoringRun:
+    run = await _get_or_create(
+        session,
+        WatchTargetMonitoringRun,
+        DEMO_SEED_IDS.watch_monitoring_run_id,
+    )
+    run.watch_target_id = watch.id
+    run.provider = "local_demo"
+    run.status = "completed"
+    run.query_summary = {
+        "queries": [
+            '"Example Industries" ("new CISO" OR "appointed CISO" OR '
+            '"Chief Information Security Officer")',
+            '"Example Industries" (cyberattack OR "cyber attack" OR ransomware OR "data breach")',
+        ]
+    }
+    run.result_summary = watch.monitoring_summary
+    run.error = None
+    run.started_at = now - timedelta(hours=1, minutes=1)
+    run.completed_at = now - timedelta(hours=1)
+    run.created_at = now - timedelta(hours=1, minutes=1)
+    return run
+
+
 async def _review_candidate(
     session: AsyncSession,
     record_id: str,
@@ -574,9 +832,10 @@ async def _review_candidate(
     evidence_summary: dict[str, object],
     idempotency_key: str,
     sla_due_at: datetime,
+    candidate_type: str = "incident_corroboration",
 ) -> ReviewCandidate:
     review = await _get_or_create(session, ReviewCandidate, record_id)
-    review.candidate_type = "incident_corroboration"
+    review.candidate_type = candidate_type
     review.target_type = target_type
     review.target_id = target_id
     review.origin_type = origin_type
@@ -688,6 +947,7 @@ async def _sequence(session: AsyncSession, *, now: datetime) -> Sequence:
     sequence.channel = "email"
     sequence.status = "active"
     sequence.rate_limit_policy = {"per_domain_per_day": 10, "per_sender_per_day": 25}
+    sequence.definition_version = 1
     sequence.idempotency_key = "demo:sprint15:sequence:incident-follow-up"
     sequence.created_at = now
     sequence.updated_at = now
@@ -707,9 +967,49 @@ async def _sequence_step(
     step.delay_seconds = 0
     step.subject_template = "Following up on your incident response priorities"
     step.body_template = "Hi {{first_name}}, sharing a concise incident-readiness brief."
+    step.requires_approval = True
+    step.step_metadata = {"display_label": "Approved email follow-up"}
+    step.definition_version = sequence.definition_version
     step.active = True
     step.created_at = now
     step.updated_at = now
+    call_step = await _get_or_create(session, SequenceStep, DEMO_SEED_IDS.sequence_call_step_id)
+    call_step.sequence_id = sequence.id
+    call_step.step_order = 2
+    call_step.channel = "call"
+    call_step.delay_seconds = 86400
+    call_step.subject_template = None
+    call_step.body_template = None
+    call_step.requires_approval = False
+    call_step.step_metadata = {
+        "display_label": "Call security leader",
+        "instructions": "Call Taylor and capture identity-hardening priorities.",
+    }
+    call_step.definition_version = sequence.definition_version
+    call_step.active = True
+    call_step.created_at = now
+    call_step.updated_at = now
+    meeting_step = await _get_or_create(
+        session,
+        SequenceStep,
+        DEMO_SEED_IDS.sequence_meeting_step_id,
+    )
+    meeting_step.sequence_id = sequence.id
+    meeting_step.step_order = 3
+    meeting_step.channel = "google_meet"
+    meeting_step.delay_seconds = 172800
+    meeting_step.subject_template = None
+    meeting_step.body_template = None
+    meeting_step.requires_approval = False
+    meeting_step.step_metadata = {
+        "display_label": "Book Google Meet",
+        "meeting_subject": "Example Industries security discovery",
+        "instructions": "Schedule a discovery meeting when the prospect engages.",
+    }
+    meeting_step.definition_version = sequence.definition_version
+    meeting_step.active = True
+    meeting_step.created_at = now
+    meeting_step.updated_at = now
     return step
 
 
@@ -736,6 +1036,7 @@ async def _sequence_enrollment(
     enrollment.approval_actor = "demo-analyst"
     enrollment.approval_reason = "Synthetic local outreach approval for demo."
     enrollment.current_step_order = 1
+    enrollment.definition_version = sequence.definition_version
     enrollment.next_step_at = next_step_at
     enrollment.pause_reason = pause_reason
     enrollment.policy_snapshot = {"lawful_basis": "synthetic_demo", "suppression": "clear"}
@@ -874,6 +1175,14 @@ async def _seeded_counts(settings: Settings) -> dict[str, int]:
             "event_participants": await _count_seeded(session, EventParticipant),
             "security_incidents": await _count_seeded(session, SecurityIncident),
             "watch_targets": await _count_seeded(session, WatchTarget),
+            "watch_target_monitoring_runs": await _count_seeded(
+                session, WatchTargetMonitoringRun
+            ),
+            "entity_resolution_cases": await _count_seeded(session, EntityResolutionCase),
+            "contact_enrichment_candidates": await _count_seeded(
+                session, ContactEnrichmentCandidate
+            ),
+            "email_candidates": await _count_seeded(session, EmailCandidateRecord),
             "review_candidates": await _count_seeded(session, ReviewCandidate),
             "crm_targets": await _count_seeded(session, CrmTarget),
             "crm_export_batches": await _count_seeded(session, CrmExportBatch),

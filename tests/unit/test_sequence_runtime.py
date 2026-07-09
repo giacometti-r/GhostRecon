@@ -6,9 +6,13 @@ from fastapi.testclient import TestClient
 
 from ghostrecon.common.config import Settings
 from ghostrecon.models.api import (
+    CrmProspectList,
+    CrmProspectOut,
     InboundEmailEventCreate,
     InboundEmailEventOut,
     InboundEmailEventType,
+    SequenceActivityList,
+    SequenceActivityOut,
     SequenceEmailAlertOut,
     SequenceEnrollmentList,
     SequenceEnrollmentOut,
@@ -97,6 +101,44 @@ def _alert(status: str = "pending") -> SequenceEmailAlertOut:
     )
 
 
+def _activity(status: str = "pending_approval", channel: str = "email") -> SequenceActivityOut:
+    return SequenceActivityOut(
+        id="activity-1",
+        enrollment_id="enrollment-1",
+        sequence_step_id="step-1",
+        outbound_email_id="email-1" if channel == "email" else None,
+        meeting_handoff_id="meeting-1" if channel == "google_meet" else None,
+        sequence_id="sequence-1",
+        sequence_name="Incident follow-up",
+        contact_name="Ada Lovelace",
+        contact_email="ada@example.test",
+        account_name="Example Corp",
+        step_order=1,
+        channel=channel,
+        status=status,
+        due_at=NOW,
+        approved_by=None,
+        approved_at=None,
+        completed_by=None,
+        completed_at=None,
+        metadata={"instructions": "Follow up"},
+        created_at=NOW,
+        updated_at=NOW,
+    )
+
+
+def _prospect() -> CrmProspectOut:
+    return CrmProspectOut(
+        provider_record_id="demo-crm-prospect-taylor-ng",
+        provider_object="people",
+        display_name="Taylor Ng",
+        email="taylor.ng@example-industries.com",
+        title="VP Security Operations",
+        company_name="Example Industries",
+        company_domain="example-industries.com",
+    )
+
+
 def _inbound_event() -> InboundEmailEventOut:
     return InboundEmailEventOut(
         id="event-1",
@@ -122,6 +164,12 @@ def test_sprint_10_models_are_registered() -> None:
     assert "inbound_email_events" in tables
     assert "sequence_suppression_events" in tables
     assert "sequence_email_alerts" in tables
+    assert "sequence_step_activities" in tables
+    assert "definition_version" in tables["sequences"].columns
+    assert "definition_version" in tables["sequence_steps"].columns
+    assert "requires_approval" in tables["sequence_steps"].columns
+    assert "step_metadata" in tables["sequence_steps"].columns
+    assert "definition_version" in tables["sequence_enrollments"].columns
     assert "approval_reason" in tables["sequence_enrollments"].columns
     assert "provider_message_id" in tables["outbound_emails"].columns
     assert "recipient_email" in tables["sequence_email_alerts"].columns
@@ -178,6 +226,33 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         seen["alert_actor"] = kwargs["actor"]
         return _alert()
 
+    async def fake_list_activities(**kwargs):
+        seen["activity_status"] = kwargs["status"]
+        seen["activity_channel"] = kwargs["channel"]
+        return SequenceActivityList(activities=[_activity()])
+
+    async def fake_approve_activity(activity_id, request, **kwargs):
+        seen["approved_activity"] = activity_id
+        seen["approved_actor"] = kwargs["actor"]
+        return _activity("completed")
+
+    async def fake_complete_activity(activity_id, request, **kwargs):
+        seen["completed_activity"] = activity_id
+        return _activity("completed", "call")
+
+    async def fake_schedule_activity(activity_id, request, **kwargs):
+        seen["scheduled_activity"] = activity_id
+        return _activity("scheduled", "google_meet")
+
+    async def fake_search_prospects(**kwargs):
+        seen["prospect_query"] = kwargs["query"]
+        return CrmProspectList(prospects=[_prospect()], provider="local-demo")
+
+    async def fake_import_prospect(request, **kwargs):
+        seen["imported_prospect"] = request.provider_record_id
+        seen["import_key"] = kwargs["idempotency_key"]
+        return _enrollment()
+
     monkeypatch.setattr(routers, "create_sequence", fake_create_sequence)
     monkeypatch.setattr(routers, "create_sequence_enrollment", fake_create_enrollment)
     monkeypatch.setattr(routers, "list_sequence_enrollments", fake_list)
@@ -190,6 +265,12 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
     monkeypatch.setattr(routers, "cancel_sequence_enrollment", fake_cancel)
     monkeypatch.setattr(routers, "process_unsubscribe", fake_unsubscribe)
     monkeypatch.setattr(routers, "create_sequence_email_alert", fake_create_alert)
+    monkeypatch.setattr(routers, "list_sequence_activities", fake_list_activities)
+    monkeypatch.setattr(routers, "send_approved_sequence_email", fake_approve_activity)
+    monkeypatch.setattr(routers, "complete_sequence_activity", fake_complete_activity)
+    monkeypatch.setattr(routers, "schedule_sequence_meeting_activity", fake_schedule_activity)
+    monkeypatch.setattr(routers, "search_crm_prospects", fake_search_prospects)
+    monkeypatch.setattr(routers, "import_crm_prospect_to_sequence", fake_import_prospect)
 
     client = TestClient(build_app(Settings(service_name="sequencing-service")))
     headers = {"Idempotency-Key": "idem-sequence", "X-Actor": "analyst@example.com"}
@@ -248,6 +329,34 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
             "body": "Follow up.",
         },
     ).json()
+    activities = client.get("/v1/sequences/activities?status=pending_approval&channel=email").json()
+    prospects = client.get("/v1/sequences/crm-prospects?query=taylor").json()
+    imported = client.post(
+        "/v1/sequences/enrollments/import-crm-prospect",
+        headers=headers,
+        json={
+            "provider_record_id": "demo-crm-prospect-taylor-ng",
+            "sequence_id": "sequence-1",
+            "outreach_approved": True,
+            "approval_reason": "approved outreach",
+        },
+    ).json()
+    approved_activity = client.post(
+        "/v1/sequences/activities/activity-1/approve-email",
+        json={"reason": "approved"},
+    ).json()
+    completed_activity = client.post(
+        "/v1/sequences/activities/activity-1/complete",
+        json={"reason": "called"},
+    ).json()
+    scheduled_activity = client.post(
+        "/v1/sequences/activities/activity-1/schedule-meeting",
+        json={
+            "subject": "Security discovery",
+            "start_at": NOW.isoformat(),
+            "end_at": NOW.replace(hour=1).isoformat(),
+        },
+    ).json()
 
     assert sequence["steps"][0]["id"] == "step-1"
     assert sequences["sequences"][0]["id"] == "sequence-1"
@@ -263,6 +372,12 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
     assert canceled["status"] == "canceled"
     assert unsubscribe["event_type"] == "unsubscribe"
     assert alert["status"] == "pending"
+    assert activities["activities"][0]["id"] == "activity-1"
+    assert prospects["prospects"][0]["provider_record_id"] == "demo-crm-prospect-taylor-ng"
+    assert imported["id"] == "enrollment-1"
+    assert approved_activity["status"] == "completed"
+    assert completed_activity["channel"] == "call"
+    assert scheduled_activity["channel"] == "google_meet"
     assert seen == {
         "sequence_name": "Incident follow-up",
         "sequence_key": "idem-sequence",
@@ -276,7 +391,50 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         "unsubscribe_key": "idem-unsub",
         "alert_enrollment": "enrollment-1",
         "alert_actor": "analyst@example.com",
+        "activity_status": "pending_approval",
+        "activity_channel": "email",
+        "prospect_query": "taylor",
+        "imported_prospect": "demo-crm-prospect-taylor-ng",
+        "import_key": "idem-sequence",
+        "approved_activity": "activity-1",
+        "approved_actor": "system",
+        "completed_activity": "activity-1",
+        "scheduled_activity": "activity-1",
     }
+
+
+def test_sequence_step_validation_allows_non_email_metadata() -> None:
+    sequence = SequenceOut(
+        id="sequence-2",
+        name="Multi-channel",
+        owner_id=None,
+        channel="email",
+        status="active",
+        rate_limit_policy={},
+        definition_version=2,
+        created_at=NOW,
+        updated_at=NOW,
+        steps=[
+            SequenceStepOut(
+                id="step-call",
+                sequence_id="sequence-2",
+                step_order=1,
+                channel="call",
+                delay_seconds=3600,
+                subject_template=None,
+                body_template=None,
+                requires_approval=False,
+                step_metadata={"instructions": "Call security leader."},
+                definition_version=2,
+                active=True,
+                created_at=NOW,
+                updated_at=NOW,
+            )
+        ],
+    )
+
+    assert sequence.steps[0].channel == "call"
+    assert sequence.steps[0].step_metadata["instructions"] == "Call security leader."
 
 
 def test_sendable_contact_requires_verified_email_lawful_basis_and_no_suppression() -> None:

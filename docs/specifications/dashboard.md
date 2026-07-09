@@ -22,8 +22,8 @@ Sprint 12 implements the UI with Python Dash mounted at `/` inside `console-serv
 - `/`: KPI, source, review, CRM target, and meeting summary.
 - `/events` and `/events/{event_id}`: event table, coordinate-backed venue map, create/edit modals, and participant enrichment queue handoff.
 - `/incidents` and `/incidents/{incident_id}`: company-specific incident feed/detail, corroborate/reject/revert controls, manual incident modal, and company watchlist promotion.
-- `/watchlists`: watch target list and enabled-state toggle.
-- `/review` and `/review/enrichment`: analyst review, bounded visible-page bulk review, contact enrichment, and entity resolution queues.
+- `/watchlists` and `/watchlists/{watch_target_id}`: company watch target list/detail, owner, monitoring state, enabled-state toggle, and contact discovery.
+- `/review` and `/review/enrichment`: analyst review, bounded visible-page bulk review, contact enrichment, entity resolution queues, and company-domain discovery.
 - `/crm/exports` and `/crm/exports/{batch_id}`: CRM target selection, export start, batch detail, and retry failed items.
 - `/sequences`: sequence enrollment state and pause/resume/cancel controls.
 - `/meetings` and `/meetings/{meeting_id}`: meeting handoff state, prep packet, outcome, cancel, and CRM-sync retry controls.
@@ -123,12 +123,12 @@ Promotion must retain and display `origin_incident_id`; it creates or returns an
 
 Sections:
 
-- company, domain, incident, event-series, and topic watch targets;
-- owner, created-by, origin incident, query, enabled state, last match, and next check;
+- company watch targets as the default dashboard presentation;
+- owner, created-by, governance-only origin incident, query, enabled state, last monitoring run, and next check;
 - new coverage grouped by canonical event/incident case; and
 - source/query errors and stale checkpoints.
 
-Actions include create, pause/resume, reassign, edit query, and archive. Editing a target does not rewrite existing source evidence.
+Actions include open detail, pause/resume monitoring, find contact, create, reassign, edit query, and archive. Editing a target does not rewrite existing source evidence. `Find Contact` runs the OpenSERP LinkedIn search through the enrichment service and stores source/raw-item lineage before creating contact candidates.
 
 ### 4. Contact-Enrichment Queue
 
@@ -138,6 +138,7 @@ Actions:
 
 - accept or correct company/contact resolution;
 - request/retry permitted enrichment;
+- discover or review company website domains from OpenSERP official-website search results;
 - reject as wrong person/company, prohibited source, insufficient evidence, or out of scope; and
 - move an eligible candidate to analyst review.
 

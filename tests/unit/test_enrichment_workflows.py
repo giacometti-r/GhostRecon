@@ -6,6 +6,7 @@ from ghostrecon.models.db import Base
 from ghostrecon.services.enrichment_workflows import (
     classify_verification_result,
     evaluate_contact_policy,
+    normalize_domain,
 )
 
 
@@ -51,6 +52,11 @@ def test_missing_lineage_fails_closed_before_contact_enrichment() -> None:
     assert evaluate_contact_policy(payload) == ("blocked", "missing_source_lineage")
 
 
+def test_normalize_domain_uses_registrable_public_suffix() -> None:
+    assert normalize_domain("https://www.apple.com/en") == "apple.com"
+    assert normalize_domain("http://security.example.co.uk/path") == "example.co.uk"
+
+
 def test_email_verification_mapping_routes_ambiguous_and_failed_to_review() -> None:
     assert classify_verification_result({"status": "valid"}) == ("verified", None)
     assert classify_verification_result({"catch_all": True}) == (
@@ -71,6 +77,7 @@ def test_sprint_6_models_and_lineage_columns_are_registered() -> None:
     assert "candidate_scores" in tables
     assert "review_decisions" in tables
     assert "crm_targets" in tables
+    assert "watch_target_monitoring_runs" in tables
     assert "crm_export_batches" in tables
     assert "crm_export_items" in tables
     assert "source_definition_id" in tables["contacts"].columns

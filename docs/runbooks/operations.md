@@ -1,6 +1,6 @@
 # Operations Runbook
 
-This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, Sprint 12 Dash console runtime, Sprint 17 event dashboard workflow, Sprint 18 incident governance/watchlist workflow, and the remaining intelligence-first target state for later sprints.
+This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, Sprint 12 Dash console runtime, Sprint 17 event dashboard workflow, Sprint 18 incident governance/watchlist workflow, Sprint 19 watchlist monitoring/contact discovery, Sprint 20 domain discovery/demo data, and the remaining intelligence-first target state for later sprints.
 
 ## Health and Freshness
 
@@ -58,6 +58,8 @@ Do not equate process health with data freshness. A service can be live while it
 
 1. Confirm the incident is `corroborated`, the supplied optimistic version matches, and `primary_affected_company` is populated.
 2. Promotion creates or returns a company watch target owned by the acting user. Do not create incident-level watch targets as a workaround for missing company context.
+3. The scheduler runs `ghostrecon.monitor_watch_targets` on the configured interval and writes `watch_target_monitoring_runs`. If monitoring timestamps stop advancing, check the `scheduler` and `worker` containers or deployments first, then verify Redis queue connectivity.
+4. Contact discovery and domain discovery default to local fake providers. Live OpenSERP/SerpApi usage requires provider mode and API key settings; failed or suspicious domain matches should appear in Analyst Review instead of being accepted.
 3. If a multi-company attack is involved, promote the company-specific incident row for the intended affected company.
 4. Re-run reporting after promotion if the dashboard row does not disappear from the current table view.
 

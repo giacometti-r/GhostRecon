@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 18 global incidents governance and watchlist promotion workflow complete; Sprint 19 watchlist detail, ownership, contact discovery, and monitoring is next. The local Compose stack now has repeatable reset, migration, linked deterministic fake data, dashboard workflow coverage, and health-check commands for validating a ready local demo without manual database commands.
+Stage: Sprint 22 meeting detail readability complete; Sprint 23 end-to-end live demo runbook is next. The local Compose stack now has repeatable reset, migration, linked deterministic fake data, dashboard workflow coverage, watchlist monitoring scheduling, sequence definition/import workflows, and health-check commands for validating a ready local demo without manual database commands.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
@@ -188,6 +188,40 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Updated the Dash incidents workflow with inline company/evidence rendering, hidden confidence/languages, table-only open links, Revert after corroboration, local dismissed rows after reject/promote, governance-reviewer-only metadata, and a manual incident modal.
 - Seeded a multi-company local demo incident group and added focused tests for incident splitting, route contracts, revert routing, company watch promotion, schema registration, and console action payloads.
 
+### Sprint 19 - Watchlist Detail, Ownership, Contact Discovery, and Monitoring
+
+- Made the Watchlist dashboard company-centric with owner, monitoring state, Open actions, and a `Watchlist Item` detail page.
+- Added role-aware watch target reporting/detail projections that hide origin incidents except for governance reviewers.
+- Preserved incident-promotion ownership from the approving actor and kept monitoring toggles optimistic-version aware through the existing watch target patch contract.
+- Added adapter-backed OpenSERP contact discovery with the required LinkedIn CISO/CTO/security-leader Google dork, persisted search lineage as source/raw-item evidence, and exposed `Find Contact` through the dashboard.
+- Added durable watchlist monitoring state and run history plus hourly Celery beat scheduling for local Compose and Helm worker/scheduler deployments.
+- Added fake local demo providers and focused tests for watchlist routes, console actions, role projection, query generation, and monitoring contract surfaces.
+
+### Sprint 20 - Analyst Review Demo Data and Domain Discovery
+
+- Expanded deterministic local demo seed data with realistic linked entity-resolution cases, contact enrichment candidates, email candidates, watch monitoring runs, and review candidates.
+- Added OpenSERP-backed official website discovery for contact enrichment candidates and normalized selected websites to registrable domains with public-suffix-aware parsing.
+- Routed failed, ambiguous, or suspicious domain discovery into analyst review instead of silently confirming a match.
+- Added `Discover Domain` actions to the contact enrichment queue while keeping all mutations routed through gateway/owning-service APIs.
+- Updated local demo checks to verify scheduler, monitoring, domain discovery, contact enrichment, and email candidate seed rows.
+- Added focused tests for domain normalization, provider query construction, route contracts, dashboard rendering, and governance-only watchlist metadata.
+
+### Sprint 21 - Sequence Definitions, Multi-Channel Steps, and CRM Imports
+
+- Added versioned sequence definitions with multi-channel email, call, and Google Meet steps plus optimistic definition-version updates.
+- Added persisted sequence step activities so email approvals, call tasks, and Google Meet scheduling are represented without forcing non-email work through outbound email rows.
+- Changed due email steps to create pending approval activities and `pending_approval` outbound emails; authorized approval performs the final policy checks before sending.
+- Added provider-neutral CRM prospect search/import through the CRM adapter, with Attio record search support and deterministic local fake prospects when no Attio token is configured.
+- Added sequencing APIs for CRM prospect import, activity listing, email approval, activity completion, and meeting scheduling while preserving separate outreach approval.
+- Updated the Dash Sequence State workflow with a Sequence Definitions path, create/edit controls, CRM prospect import, and activity actions.
+
+### Sprint 22 - Meeting Detail Readability and Prep Packet Legibility
+
+- Replaced raw nested prep-packet rendering in Meeting Detail with structured account context, contacts, signals, talk tracks, risks/incidents, and source-context sections.
+- Rendered list-like prep packet values as clean rows/chips instead of bullet artifacts or JSON-like formatting noise.
+- Added prep packet spacing and wrapping styles while preserving existing meeting handoff, prep generation, outcome, cancel, and CRM retry actions.
+- Added focused console coverage for sequence workflow rendering and structured meeting prep packet rendering.
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -197,121 +231,6 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
 ## Future Sprints
-
-### Sprint 19 - Watchlist Detail, Ownership, Contact Discovery, and Monitoring
-
-Goal: make the Watchlist tab company-centric, inspectable, role-aware, and ready for follow-on contact discovery and monitoring workflows.
-
-#### User-facing workflow
-
-- Add an `Open` action on each watchlist row that navigates to a detail page named `Watchlist Item`.
-- Model the watchlist list view around company names. The name column should show the company, and the type and key columns should be removed from the default table.
-- Keep origin incident visible only to governance reviewers.
-- Populate the owner column from the actor who approved the incident-to-watchlist promotion.
-- Add a `Find Contact` button in the Watchlist Item view.
-- Use OpenSERP for contact discovery with the Google dork `site:linkedin.com/in ("Head of Cybersecurity" OR "CISO" OR "Chief Information Security Officer" OR "CTO" OR "Chief Technology Officer") "{company name}"`.
-- Make the row action toggle monitoring for that watchlist company.
-- When monitoring is enabled for a company, run hourly Google News API checks for board-of-directors changes, newly appointed CISO, CTO, CIO, or head of cybersecurity, and cybersecurity attacks.
-
-#### Implementation notes
-
-- Treat company watch targets as the primary watchlist entity for dashboard presentation, even when they originated from an incident.
-- Record the approving actor during watchlist promotion if it is not already available in the watch target projection.
-- Keep contact discovery and monitoring behind service-owned adapters so OpenSERP and Google News API usage remains fakeable in tests and configurable in local demo mode.
-- Store enough monitoring state to show whether monitoring is enabled, when it last ran, and whether the most recent run was degraded or failed.
-- Ensure governance-only origin incident visibility uses the same role-projection pattern as event and incident metadata.
-
-#### Acceptance
-
-- The Watchlist tab shows company name, owner, monitoring state, and action controls without type or key columns.
-- Viewer, analyst, and admin roles do not see origin incident; governance reviewers do.
-- Opening a row lands on a `Watchlist Item` detail page.
-- `Find Contact` issues the intended OpenSERP LinkedIn search for the selected company through a fakeable adapter path.
-- Enabling monitoring schedules or activates hourly Google News API monitoring for the selected company categories.
-- The owner shown for an incident-promoted watchlist item is the actor who approved the promotion.
-
-### Sprint 20 - Analyst Review Demo Data and Domain Discovery
-
-Goal: make Analyst Review demo content realistic enough for live use and add deterministic company-domain discovery for contact enrichment.
-
-#### User-facing workflow
-
-- Replace confusing fake review data with realistic deterministic examples that reflect cyber event participants, affected companies, enrichment candidates, email candidates, and review decisions.
-- Seed the contact enrichment queue with realistic fake records so the Analyst Review tab is not empty after `make demo-reset`.
-- Add domain discovery for contact enrichment by searching OpenSERP for `{company name} official website`.
-- Pick the first suitable search result and normalize it to a registrable company domain, for example converting `https://www.apple.com/en` to `apple.com`.
-
-#### Implementation notes
-
-- Keep deterministic seed data local-only and repeatable across `make demo-reset` runs.
-- Avoid paid enrichment dependencies; OpenSERP should be adapter-backed and fakeable for tests and local demo data.
-- Normalize discovered website domains consistently with existing canonical domain helpers where possible.
-- Route ambiguous, missing, or suspicious domain matches into review rather than silently accepting them.
-- Ensure seeded contact enrichment records link back to realistic companies, events, incidents, or review candidates so the dashboard tells a coherent story.
-
-#### Acceptance
-
-- After `make demo-reset`, Analyst Review shows realistic review records and a populated contact enrichment queue.
-- Demo records use plausible company, contact, incident, event, and evidence relationships instead of placeholder-looking data.
-- Domain discovery searches for the official company website, selects the first suitable result, and stores a normalized domain.
-- The normalization examples cover paths, schemes, and `www` prefixes.
-- Ambiguous or failed domain discovery is visible to the analyst review workflow instead of being treated as a confirmed match.
-
-### Sprint 21 - Sequence Definitions, Multi-Channel Steps, and CRM Imports
-
-Goal: expand Sequence State from a single email-oriented runtime view into an operator workflow for managing multiple sequence definitions, multi-channel steps, and CRM-sourced prospects.
-
-#### User-facing workflow
-
-- Add a `Sequence Definitions` button from Sequence State that opens a dedicated sequence definitions page.
-- Support multiple sequence definitions instead of a single implicit or hard-coded sequence.
-- Make the sequence definitions editor easier to use, with clear editing controls for sequence metadata and step order.
-- Allow users to add more steps to a sequence definition.
-- Support channels beyond email, including at minimum email, call, and demo or Google Meet steps.
-- For email steps, require user approval before the email can be sent.
-- For call or demo steps, coordinate with the Meetings tab so meeting handoff and calendar workflows stay in sync.
-- Allow users to import prospects from the CRM and assign a selected prospect to a selected sequence.
-
-#### Implementation notes
-
-- Keep sequence definition management in the sequencing service boundary and dashboard reads/writes through the gateway-backed console client.
-- Preserve the existing separation between CRM export approval and outreach approval; importing a CRM prospect must not automatically authorize email sends.
-- Represent non-email steps without forcing them through outbound email tables.
-- Connect demo or Google Meet steps to meeting handoff records where scheduling is required.
-- Ensure sequence definition edits are version-aware so active enrollments have predictable behavior when definitions change.
-- Make CRM import fakeable for local demo and test execution while preserving the provider-neutral CRM adapter boundary.
-
-#### Acceptance
-
-- Sequence State exposes a `Sequence Definitions` navigation path.
-- Users can create or edit multiple sequence definitions and add ordered steps.
-- Sequence steps can be email, call, or demo/Google Meet.
-- Email steps do not send until an authorized user approves them.
-- Call or demo steps create or coordinate the expected meeting handoff state.
-- A CRM prospect can be imported and assigned to a selected sequence without bypassing outreach approval checks.
-
-### Sprint 22 - Meeting Detail Readability and Prep Packet Legibility
-
-Goal: improve the Meetings tab detail experience so live operators can read meeting context and prep packets without formatting noise.
-
-#### User-facing workflow
-
-- Remove visible bullet-point artifacts from meeting detail fields.
-- Preserve the same meeting detail content and ordering while rendering list-like values as clean text or structured rows.
-- Add vertical spacing to prep packet sections so account context, contacts, signals, incidents, events, recommended talk tracks, and follow-up guidance are easier to scan.
-
-#### Implementation notes
-
-- Prefer dashboard rendering fixes when the underlying meeting reporting payload already contains the required content.
-- Keep meeting detail reads behind the reporting and gateway-backed console boundaries.
-- Ensure spacing changes work in both seeded local demo data and longer real prep packets.
-- Avoid changing meeting handoff semantics, calendar sync behavior, or CRM sync behavior in this sprint.
-
-#### Acceptance
-
-- Meeting detail pages no longer display bullet formatting artifacts.
-- Prep packet sections have visibly improved vertical spacing and remain readable with both short and long seeded content.
-- Existing meeting actions, prep generation, outcome recording, cancel, and CRM retry behavior remain unchanged.
 
 ### Sprint 23 - End-to-End Live Demo Runbook
 

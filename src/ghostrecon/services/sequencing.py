@@ -11,11 +11,18 @@ from ghostrecon.common.config import Settings, get_settings
 from ghostrecon.common.database import session_scope
 from ghostrecon.events.contracts import EventName, new_event
 from ghostrecon.models.api import (
+    CrmProspectList,
+    CrmProspectOut,
     InboundEmailEventCreate,
     InboundEmailEventOut,
     InboundEmailEventType,
     OutboundEmailOut,
+    SequenceActivityActionRequest,
+    SequenceActivityList,
+    SequenceActivityOut,
+    SequenceActivityScheduleMeetingRequest,
     SequenceCreateRequest,
+    SequenceCrmProspectImportRequest,
     SequenceEligibilityRequest,
     SequenceEligibilityResult,
     SequenceEmailAlertCreate,
@@ -43,9 +50,11 @@ from ghostrecon.models.db import (
     SequenceEmailAlert,
     SequenceEnrollment,
     SequenceStep,
+    SequenceStepActivity,
     SequenceSuppressionEvent,
     Suppression,
 )
+from ghostrecon.services.crm_exports import crm_client_for_settings
 from ghostrecon.services.governance import evaluate_suppression
 from ghostrecon.services.sequence_adapters import (
     ImapPoller,
@@ -112,9 +121,10 @@ async def create_sequence(
         sequence = Sequence(
             name=request.name,
             owner_id=request.owner_id,
-            channel=request.channel.lower(),
+            channel=request.channel.value,
             status="active",
             rate_limit_policy=dict(request.rate_limit_policy),
+            definition_version=1,
             idempotency_key=idempotency_key,
             created_at=now,
             updated_at=now,
@@ -126,10 +136,16 @@ async def create_sequence(
             step = SequenceStep(
                 sequence_id=sequence.id,
                 step_order=step_request.step_order or index,
-                channel=step_request.channel.lower(),
+                channel=step_request.channel.value,
                 delay_seconds=step_request.delay_seconds,
                 subject_template=step_request.subject_template,
                 body_template=step_request.body_template,
+                requires_approval=_requires_approval(
+                    step_request.channel.value,
+                    step_request.requires_approval,
+                ),
+                step_metadata=dict(step_request.step_metadata),
+                definition_version=sequence.definition_version,
                 active=True,
                 created_at=now,
                 updated_at=now,
@@ -188,47 +204,39 @@ async def update_sequence(
         if request.owner_id is not None:
             sequence.owner_id = request.owner_id
         if request.channel is not None:
-            sequence.channel = request.channel.lower()
+            sequence.channel = request.channel.value
         if request.status is not None:
             sequence.status = request.status.value
         if request.rate_limit_policy is not None:
             sequence.rate_limit_policy = dict(request.rate_limit_policy)
         if request.steps is not None:
-            existing_result = await session.execute(
-                select(SequenceStep).where(SequenceStep.sequence_id == sequence.id)
-            )
-            existing_by_order = {
-                step.step_order: step for step in existing_result.scalars()
-            }
-            requested_orders: set[int] = set()
+            if (
+                request.expected_version is not None
+                and request.expected_version != sequence.definition_version
+            ):
+                raise ValueError("sequence definition version conflict")
+            sequence.definition_version += 1
             for index, step_request in enumerate(request.steps, start=1):
                 order = step_request.step_order or index
-                requested_orders.add(order)
-                step = existing_by_order.get(order)
-                if step is None:
-                    step = SequenceStep(
+                session.add(
+                    SequenceStep(
                         sequence_id=sequence.id,
                         step_order=order,
-                        channel=step_request.channel.lower(),
+                        channel=step_request.channel.value,
                         delay_seconds=step_request.delay_seconds,
                         subject_template=step_request.subject_template,
                         body_template=step_request.body_template,
+                        requires_approval=_requires_approval(
+                            step_request.channel.value,
+                            step_request.requires_approval,
+                        ),
+                        step_metadata=dict(step_request.step_metadata),
+                        definition_version=sequence.definition_version,
                         active=True,
                         created_at=now,
                         updated_at=now,
                     )
-                    session.add(step)
-                    continue
-                step.channel = step_request.channel.lower()
-                step.delay_seconds = step_request.delay_seconds
-                step.subject_template = step_request.subject_template
-                step.body_template = step_request.body_template
-                step.active = True
-                step.updated_at = now
-            for order, step in existing_by_order.items():
-                if order not in requested_orders:
-                    step.active = False
-                    step.updated_at = now
+                )
         sequence.updated_at = now
         await session.flush()
         return sequence_to_model(sequence, await _sequence_steps(session, sequence.id))
@@ -292,6 +300,7 @@ async def create_sequence_enrollment(
             approval_actor=actor,
             approval_reason=request.approval_reason,
             current_step_order=steps[0].step_order,
+            definition_version=sequence.definition_version,
             next_step_at=request.start_at or now,
             pause_reason=None,
             policy_snapshot=policy_snapshot,
@@ -345,6 +354,307 @@ async def list_sequence_enrollments(
             for enrollment in result.scalars()
         ]
         return SequenceEnrollmentList(enrollments=enrollments)
+
+
+async def list_sequence_activities(
+    *,
+    status: str | None = None,
+    channel: str | None = None,
+    limit: int = 100,
+    settings: Settings | None = None,
+) -> SequenceActivityList:
+    async with session_scope(settings) as session:
+        query = (
+            select(SequenceStepActivity)
+            .order_by(SequenceStepActivity.created_at.desc())
+            .limit(limit)
+        )
+        if status:
+            query = query.where(SequenceStepActivity.status == status)
+        if channel:
+            query = query.where(SequenceStepActivity.channel == channel)
+        result = await session.execute(query)
+        activities = [
+            await _activity_to_model_with_display(session, activity)
+            for activity in result.scalars()
+        ]
+        return SequenceActivityList(activities=activities)
+
+
+async def complete_sequence_activity(
+    activity_id: str,
+    request: SequenceActivityActionRequest,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+) -> SequenceActivityOut | None:
+    async with session_scope(settings) as session:
+        activity = await session.get(SequenceStepActivity, activity_id)
+        if activity is None:
+            return None
+        if activity.status not in {"pending", "scheduled"}:
+            raise ValueError(f"cannot complete {activity.status} activity")
+        enrollment = await session.get(SequenceEnrollment, activity.enrollment_id)
+        step = await session.get(SequenceStep, activity.sequence_step_id)
+        if enrollment is None or step is None:
+            raise ValueError("activity is missing sequence context")
+        now = utcnow()
+        activity.status = "completed"
+        activity.completed_by = actor
+        activity.completed_at = now
+        activity.metadata_payload = {
+            **dict(activity.metadata_payload or {}),
+            **dict(request.metadata),
+            "completion_reason": request.reason,
+        }
+        activity.updated_at = now
+        await _advance_enrollment(session, enrollment, step)
+        return await _activity_to_model_with_display(session, activity)
+
+
+async def schedule_sequence_meeting_activity(
+    activity_id: str,
+    request: SequenceActivityScheduleMeetingRequest,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+) -> SequenceActivityOut | None:
+    async with session_scope(settings) as session:
+        activity = await session.get(SequenceStepActivity, activity_id)
+        if activity is None:
+            return None
+        if activity.channel != "google_meet":
+            raise ValueError("activity is not a Google Meet step")
+        if activity.status not in {"pending", "scheduled"}:
+            raise ValueError(f"cannot schedule {activity.status} activity")
+        enrollment = await session.get(SequenceEnrollment, activity.enrollment_id)
+        if enrollment is None:
+            raise ValueError("activity is missing enrollment")
+        metadata = dict(activity.metadata_payload or {})
+        meeting_context = {
+            "crm_target_id": enrollment.crm_target_id,
+            "sequence_enrollment_id": enrollment.id,
+            "account_id": enrollment.account_id,
+            "contact_id": enrollment.contact_id,
+            "policy_snapshot": dict(enrollment.policy_snapshot or {}),
+        }
+
+    from ghostrecon.models.api import MeetingCreateRequest
+    from ghostrecon.services.meeting import create_meeting
+
+    meeting = await create_meeting(
+        MeetingCreateRequest(
+            crm_target_id=str(meeting_context["crm_target_id"]),
+            sequence_enrollment_id=str(meeting_context["sequence_enrollment_id"]),
+            account_id=meeting_context["account_id"],
+            contact_id=meeting_context["contact_id"],
+            subject=request.subject or str(metadata.get("meeting_subject") or "Security discovery"),
+            description=request.description or str(metadata.get("meeting_description") or ""),
+            location=request.location,
+            start_at=request.start_at,
+            end_at=request.end_at,
+            timezone=request.timezone,
+            attendees=request.attendees,
+            policy_snapshot=dict(meeting_context["policy_snapshot"]),
+            send_updates=request.send_updates,
+        ),
+        actor=actor,
+        idempotency_key=f"sequence-meeting:{activity_id}",
+        settings=settings,
+    )
+    async with session_scope(settings) as session:
+        activity = await session.get(SequenceStepActivity, activity_id)
+        if activity is None:
+            raise ValueError("activity disappeared during meeting scheduling")
+        enrollment = await session.get(SequenceEnrollment, activity.enrollment_id)
+        step = await session.get(SequenceStep, activity.sequence_step_id)
+        if enrollment is None or step is None:
+            raise ValueError("activity disappeared during meeting scheduling")
+        now = utcnow()
+        activity.meeting_handoff_id = meeting.id
+        activity.status = "scheduled"
+        activity.completed_by = actor
+        activity.completed_at = now
+        activity.updated_at = now
+        await _advance_enrollment(session, enrollment, step)
+        return await _activity_to_model_with_display(session, activity)
+
+
+async def search_crm_prospects(
+    *,
+    query: str,
+    limit: int = 25,
+    settings: Settings | None = None,
+) -> CrmProspectList:
+    resolved = settings or get_settings()
+    client = crm_client_for_settings(resolved)
+    prospects = await client.search_prospects(query, limit=limit)
+    return CrmProspectList(
+        prospects=[
+            CrmProspectOut(
+                provider_record_id=prospect.provider_record_id,
+                provider_object=prospect.provider_object,
+                display_name=prospect.display_name,
+                email=prospect.email,
+                title=prospect.title,
+                company_name=prospect.company_name,
+                company_domain=prospect.company_domain,
+                source_payload=dict(prospect.source_payload),
+            )
+            for prospect in prospects
+            if prospect.provider_record_id
+        ],
+        provider="attio" if resolved.attio_access_token else "local-demo",
+    )
+
+
+async def import_crm_prospect_to_sequence(
+    request: SequenceCrmProspectImportRequest,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+) -> SequenceEnrollmentOut:
+    if not request.outreach_approved:
+        raise ValueError("separate outreach approval is required")
+    resolved = settings or get_settings()
+    client = crm_client_for_settings(resolved)
+    prospect = await client.get_prospect(request.provider_record_id)
+    if prospect is None:
+        matches = await client.search_prospects(request.provider_record_id, limit=25)
+        prospect = next(
+            (
+                candidate
+                for candidate in matches
+                if candidate.provider_record_id == request.provider_record_id
+            ),
+            None,
+        )
+    if prospect is None:
+        raise ValueError("CRM prospect not found")
+    if not prospect.email:
+        raise ValueError("CRM prospect requires an email before sequence assignment")
+    domain = (
+        prospect.company_domain
+        or _domain_from_email(prospect.email)
+        or "unknown.local"
+    ).lower()
+    now = utcnow()
+    async with session_scope(resolved) as session:
+        account = await session.scalar(select(Account).where(Account.domain == domain).limit(1))
+        if account is None:
+            account = Account(
+                crm_account_id=f"crm-account:{domain}",
+                domain=domain,
+                company_name=prospect.company_name or domain,
+                hq_country=None,
+                employee_count=None,
+                revenue_band=None,
+                industry=None,
+                sub_industry=None,
+                tech_stack={},
+                security_stack={},
+                intent_topics=[],
+                territory=None,
+                owner_id=actor,
+                named_account_flag=False,
+                priority_tier=None,
+                fit_score=0,
+                intent_score=0,
+                composite_score=0,
+                last_signal_at=None,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(account)
+            await session.flush()
+        contact = await session.scalar(
+            select(Contact)
+            .where(Contact.account_id == account.id)
+            .where(Contact.email == prospect.email.lower())
+            .limit(1)
+        )
+        if contact is None:
+            contact = Contact(
+                crm_contact_id=prospect.provider_record_id,
+                account_id=account.id,
+                full_name=prospect.display_name,
+                title=prospect.title,
+                seniority=None,
+                function="security",
+                email=prospect.email.lower(),
+                email_status="verified",
+                phone=None,
+                linkedin_url=None,
+                timezone=None,
+                persona_type="security_leader",
+                buying_role=None,
+                last_enriched_at=now,
+                do_not_contact_flag=False,
+                lawful_basis="legitimate_interest",
+                source_vendor="attio" if resolved.attio_access_token else "local-demo-crm",
+                source_confidence=80,
+                source_url=None,
+                source_definition_id=None,
+                source_item_ids=[],
+                origin_type="manual",
+                origin_id=prospect.provider_record_id,
+                source_policy_snapshot={"source": "crm_import"},
+                review_status="not_required",
+                review_reason=None,
+                idempotency_key=f"crm-import-contact:{prospect.provider_record_id}",
+                version=1,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(contact)
+            await session.flush()
+        target_key = f"crm-import-target:{prospect.provider_record_id}"
+        target = await session.scalar(
+            select(CrmTarget).where(CrmTarget.idempotency_key == target_key)
+        )
+        if target is None:
+            target = CrmTarget(
+                review_candidate_id=None,
+                review_decision_id=None,
+                target_type="contact",
+                target_id=contact.id,
+                origin_type="manual",
+                origin_id=prospect.provider_record_id,
+                source_definition_id=None,
+                source_item_ids=[],
+                status="exported",
+                export_status="exported",
+                policy_snapshot={"source": "crm_import", **dict(request.policy_snapshot)},
+                approval_snapshot={
+                    "approved_by": actor,
+                    "approval_reason": request.approval_reason,
+                },
+                idempotency_key=target_key,
+                version=1,
+                created_at=now,
+                updated_at=now,
+            )
+            session.add(target)
+            await session.flush()
+        account_id = account.id
+        contact_id = contact.id
+        target_id = target.id
+    return await create_sequence_enrollment(
+        SequenceEnrollmentCreateRequest(
+            sequence_id=request.sequence_id,
+            crm_target_id=target_id,
+            contact_id=contact_id,
+            account_id=account_id,
+            start_at=request.start_at,
+            outreach_approved=True,
+            approval_reason=request.approval_reason,
+            policy_snapshot=request.policy_snapshot,
+        ),
+        actor=actor,
+        idempotency_key=idempotency_key,
+        settings=resolved,
+    )
 
 
 async def pause_sequence_enrollment(
@@ -524,7 +834,7 @@ async def send_next_sequence_step(
     sender: SmtpSender | None = None,
 ) -> dict[str, object]:
     resolved = settings or get_settings()
-    smtp_sender = sender or StdlibSmtpSender(resolved)
+    _ = sender
     async with session_scope(resolved) as session:
         enrollment = await session.get(SequenceEnrollment, enrollment_id)
         if enrollment is None:
@@ -537,7 +847,12 @@ async def send_next_sequence_step(
             await _pause_for_policy(session, enrollment, "sequence is not active")
             return {"enrollment_id": enrollment.id, "status": "paused"}
 
-        step = await _step_for_order(session, enrollment.sequence_id, enrollment.current_step_order)
+        step = await _step_for_order(
+            session,
+            enrollment.sequence_id,
+            enrollment.current_step_order,
+            enrollment.definition_version,
+        )
         if step is None:
             _complete_enrollment(session, enrollment)
             return {"enrollment_id": enrollment.id, "status": "completed"}
@@ -568,6 +883,17 @@ async def send_next_sequence_step(
                 "reason": suppression.reason,
             }
 
+        if step.channel != "email":
+            activity = await _activity_for_step(session, enrollment, step, status="pending")
+            enrollment.next_step_at = None
+            enrollment.updated_at = utcnow()
+            return {
+                "enrollment_id": enrollment.id,
+                "activity_id": activity.id,
+                "status": activity.status,
+                "channel": activity.channel,
+            }
+
         from_email = resolved.smtp_from_address.lower()
         rate_limit_reason = await _rate_limit_blocker(
             session,
@@ -593,6 +919,94 @@ async def send_next_sequence_step(
             await session.get(Account, enrollment.account_id) if enrollment.account_id else None
         )
         outbound = await _outbound_for_step(session, enrollment, step, contact, account, from_email)
+        outbound.status = "pending_approval"
+        outbound.updated_at = utcnow()
+        activity = await _activity_for_step(
+            session,
+            enrollment,
+            step,
+            status="pending_approval",
+            outbound_email_id=outbound.id,
+        )
+        enrollment.next_step_at = None
+        enrollment.updated_at = utcnow()
+        return {
+            "enrollment_id": enrollment.id,
+            "outbound_email_id": outbound.id,
+            "activity_id": activity.id,
+            "status": activity.status,
+        }
+
+
+async def send_approved_sequence_email(
+    activity_id: str,
+    request: SequenceActivityActionRequest,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+    sender: SmtpSender | None = None,
+) -> SequenceActivityOut | None:
+    _ = request
+    resolved = settings or get_settings()
+    smtp_sender = sender or StdlibSmtpSender(resolved)
+    async with session_scope(resolved) as session:
+        activity = await session.get(SequenceStepActivity, activity_id)
+        if activity is None:
+            return None
+        if activity.channel != "email":
+            raise ValueError("activity is not an email approval")
+        if activity.status not in {"pending_approval", "approved"}:
+            raise ValueError(f"cannot approve {activity.status} activity")
+        enrollment = await session.get(SequenceEnrollment, activity.enrollment_id)
+        step = await session.get(SequenceStep, activity.sequence_step_id)
+        if enrollment is None or step is None:
+            raise ValueError("activity is missing sequence context")
+        if enrollment.status != "active":
+            raise ValueError("sequence enrollment is not active")
+        sequence = await session.get(Sequence, enrollment.sequence_id)
+        contact = await session.get(Contact, enrollment.contact_id)
+        if sequence is None or sequence.status != "active":
+            await _pause_for_policy(session, enrollment, "sequence is not active")
+            raise ValueError("sequence is not active")
+        if contact is None:
+            await _pause_for_policy(session, enrollment, "contact no longer exists")
+            raise ValueError("contact no longer exists")
+        _require_sendable_contact(contact)
+        domain = _domain_from_email(contact.email)
+        suppression = await _suppression_allowed(
+            session,
+            email=contact.email,
+            domain=domain,
+            contact_id=contact.id,
+            channel=step.channel,
+        )
+        if not suppression.allowed:
+            await _suppress_enrollment(session, enrollment, contact, suppression.reason)
+            raise ValueError(suppression.reason or "suppression blocks outreach")
+        from_email = resolved.smtp_from_address.lower()
+        rate_limit_reason = await _rate_limit_blocker(
+            session,
+            to_email=contact.email,
+            from_email=from_email,
+            channel=step.channel,
+            sequence=sequence,
+            settings=resolved,
+        )
+        if rate_limit_reason:
+            enrollment.next_step_at = utcnow() + timedelta(
+                seconds=resolved.sequence_retry_after_seconds
+            )
+            enrollment.pause_reason = rate_limit_reason
+            enrollment.updated_at = utcnow()
+            raise ValueError(rate_limit_reason)
+        account = (
+            await session.get(Account, enrollment.account_id) if enrollment.account_id else None
+        )
+        outbound = (
+            await session.get(OutboundEmail, activity.outbound_email_id)
+            if activity.outbound_email_id
+            else await _outbound_for_step(session, enrollment, step, contact, account, from_email)
+        )
         outbound.attempt_count += 1
         outbound.status = "pending"
         outbound.last_error = None
@@ -615,16 +1029,17 @@ async def send_next_sequence_step(
             outbound.last_error = str(exc)
             outbound.retry_after_seconds = resolved.sequence_retry_after_seconds
             outbound.updated_at = utcnow()
+            activity.status = "failed"
+            activity.metadata_payload = {
+                **dict(activity.metadata_payload or {}),
+                "last_error": str(exc),
+            }
+            activity.updated_at = utcnow()
             enrollment.next_step_at = utcnow() + timedelta(
                 seconds=resolved.sequence_retry_after_seconds
             )
             enrollment.updated_at = utcnow()
-            return {
-                "enrollment_id": enrollment.id,
-                "outbound_email_id": outbound.id,
-                "status": "failed_retryable",
-                "reason": str(exc),
-            }
+            return await _activity_to_model_with_display(session, activity)
 
         outbound.status = "sent"
         outbound.provider_message_id = result.provider_message_id
@@ -639,11 +1054,13 @@ async def send_next_sequence_step(
             f"email.sent:{outbound.id}:{outbound.attempt_count}",
         )
         await _advance_enrollment(session, enrollment, step)
-        return {
-            "enrollment_id": enrollment.id,
-            "outbound_email_id": outbound.id,
-            "status": outbound.status,
-        }
+        activity.status = "completed"
+        activity.approved_by = actor
+        activity.approved_at = utcnow()
+        activity.completed_by = actor
+        activity.completed_at = utcnow()
+        activity.updated_at = utcnow()
+        return await _activity_to_model_with_display(session, activity)
 
 
 async def process_inbound_email_event(
@@ -787,6 +1204,9 @@ def sequence_step_to_model(step: SequenceStep) -> SequenceStepOut:
         delay_seconds=step.delay_seconds,
         subject_template=step.subject_template,
         body_template=step.body_template,
+        requires_approval=step.requires_approval,
+        step_metadata=step.step_metadata or {},
+        definition_version=step.definition_version,
         active=step.active,
         created_at=step.created_at,
         updated_at=step.updated_at,
@@ -801,6 +1221,7 @@ def sequence_to_model(sequence: Sequence, steps: list[SequenceStep]) -> Sequence
         channel=sequence.channel,
         status=sequence.status,
         rate_limit_policy=sequence.rate_limit_policy or {},
+        definition_version=sequence.definition_version,
         created_at=sequence.created_at,
         updated_at=sequence.updated_at,
         steps=[sequence_step_to_model(step) for step in steps],
@@ -844,6 +1265,7 @@ def sequence_enrollment_to_api(enrollment: SequenceEnrollment) -> dict[str, obje
         "approval_actor": enrollment.approval_actor,
         "approval_reason": enrollment.approval_reason,
         "current_step_order": enrollment.current_step_order,
+        "definition_version": enrollment.definition_version,
         "next_step_at": enrollment.next_step_at,
         "pause_reason": enrollment.pause_reason,
         "policy_snapshot": enrollment.policy_snapshot or {},
@@ -889,6 +1311,52 @@ def sequence_email_alert_to_model(alert: SequenceEmailAlert) -> SequenceEmailAle
     return SequenceEmailAlertOut.model_validate(sequence_email_alert_to_api(alert))
 
 
+def sequence_activity_to_api(activity: SequenceStepActivity) -> dict[str, object]:
+    return {
+        "id": activity.id,
+        "enrollment_id": activity.enrollment_id,
+        "sequence_step_id": activity.sequence_step_id,
+        "outbound_email_id": activity.outbound_email_id,
+        "meeting_handoff_id": activity.meeting_handoff_id,
+        "step_order": activity.step_order,
+        "channel": activity.channel,
+        "status": activity.status,
+        "due_at": activity.due_at,
+        "approved_by": activity.approved_by,
+        "approved_at": activity.approved_at,
+        "completed_by": activity.completed_by,
+        "completed_at": activity.completed_at,
+        "metadata": activity.metadata_payload or {},
+        "created_at": activity.created_at,
+        "updated_at": activity.updated_at,
+    }
+
+
+async def _activity_to_model_with_display(
+    session: Any,
+    activity: SequenceStepActivity,
+) -> SequenceActivityOut:
+    payload = sequence_activity_to_api(activity)
+    enrollment = await session.get(SequenceEnrollment, activity.enrollment_id)
+    sequence = await session.get(Sequence, enrollment.sequence_id) if enrollment else None
+    contact = await session.get(Contact, enrollment.contact_id) if enrollment else None
+    account = (
+        await session.get(Account, enrollment.account_id)
+        if enrollment and enrollment.account_id
+        else None
+    )
+    payload.update(
+        {
+            "sequence_id": sequence.id if sequence else None,
+            "sequence_name": sequence.name if sequence else None,
+            "contact_name": contact.full_name if contact else None,
+            "contact_email": contact.email if contact else None,
+            "account_name": account.company_name if account else None,
+        }
+    )
+    return SequenceActivityOut.model_validate(payload)
+
+
 def inbound_event_to_api(event: InboundEmailEvent) -> dict[str, object]:
     return {
         "id": event.id,
@@ -908,14 +1376,68 @@ def inbound_event_to_model(event: InboundEmailEvent) -> InboundEmailEventOut:
     return InboundEmailEventOut.model_validate(inbound_event_to_api(event))
 
 
-async def _sequence_steps(session: Any, sequence_id: str) -> list[SequenceStep]:
+async def _sequence_steps(
+    session: Any,
+    sequence_id: str,
+    definition_version: int | None = None,
+) -> list[SequenceStep]:
+    if definition_version is None:
+        sequence = await session.get(Sequence, sequence_id)
+        definition_version = sequence.definition_version if sequence else 1
     result = await session.execute(
         select(SequenceStep)
         .where(SequenceStep.sequence_id == sequence_id)
+        .where(SequenceStep.definition_version == definition_version)
         .where(SequenceStep.active.is_(True))
         .order_by(SequenceStep.step_order)
     )
     return list(result.scalars())
+
+
+def _requires_approval(channel: str, explicit: bool | None) -> bool:
+    if explicit is not None:
+        return explicit
+    return channel == "email"
+
+
+async def _activity_for_step(
+    session: Any,
+    enrollment: SequenceEnrollment,
+    step: SequenceStep,
+    *,
+    status: str,
+    outbound_email_id: str | None = None,
+) -> SequenceStepActivity:
+    key = f"sequence_activity:{enrollment.id}:{step.id}"
+    existing = await session.scalar(
+        select(SequenceStepActivity).where(SequenceStepActivity.idempotency_key == key)
+    )
+    if existing is not None:
+        if outbound_email_id and not existing.outbound_email_id:
+            existing.outbound_email_id = outbound_email_id
+        return existing
+    now = utcnow()
+    activity = SequenceStepActivity(
+        enrollment_id=enrollment.id,
+        sequence_step_id=step.id,
+        outbound_email_id=outbound_email_id,
+        meeting_handoff_id=None,
+        step_order=step.step_order,
+        channel=step.channel,
+        status=status,
+        due_at=now,
+        approved_by=None,
+        approved_at=None,
+        completed_by=None,
+        completed_at=None,
+        metadata_payload=dict(step.step_metadata or {}),
+        idempotency_key=key,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(activity)
+    await session.flush()
+    return activity
 
 
 async def _enrollment_to_model_with_emails(
@@ -1052,13 +1574,19 @@ async def _step_for_order(
     session: Any,
     sequence_id: str,
     step_order: int,
+    definition_version: int | None = None,
 ) -> SequenceStep | None:
-    return await session.scalar(
+    query = (
         select(SequenceStep)
         .where(SequenceStep.sequence_id == sequence_id)
         .where(SequenceStep.step_order == step_order)
         .where(SequenceStep.active.is_(True))
     )
+    if definition_version is not None:
+        query = query.where(SequenceStep.definition_version == definition_version)
+    else:
+        query = query.order_by(SequenceStep.definition_version.desc())
+    return await session.scalar(query.limit(1))
 
 
 async def _outbound_for_step(
@@ -1083,8 +1611,8 @@ async def _outbound_for_step(
         channel=step.channel,
         to_email=contact.email.lower(),
         from_email=from_email,
-        subject=_render_template(step.subject_template, contact, account),
-        body=_render_template(step.body_template, contact, account),
+        subject=_render_template(step.subject_template or "", contact, account),
+        body=_render_template(step.body_template or "", contact, account),
         status="pending",
         idempotency_key=key,
         attempt_count=0,
@@ -1102,7 +1630,11 @@ async def _advance_enrollment(
     enrollment: SequenceEnrollment,
     current_step: SequenceStep,
 ) -> None:
-    steps = await _sequence_steps(session, enrollment.sequence_id)
+    steps = await _sequence_steps(
+        session,
+        enrollment.sequence_id,
+        enrollment.definition_version,
+    )
     next_steps = [step for step in steps if step.step_order > current_step.step_order]
     now = utcnow()
     if not next_steps:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -538,11 +539,116 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         Output("mutation-status", "children", allow_duplicate=True),
         Output("mutation-refresh-token", "data", allow_duplicate=True),
         Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input("sequence-create-submit", "n_clicks"),
+        State("sequence-create-name", "value"),
+        State("sequence-create-owner", "value"),
+        State("sequence-create-steps", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def create_sequence_definition(
+        clicks: int | None,
+        name: str | None,
+        owner: str | None,
+        steps_json: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        if (clicks or 0) < 1:
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot create sequences"),
+                no_update,
+                False,
+            )
+        try:
+            parsed_steps = json.loads(steps_json or "[]")
+        except json.JSONDecodeError as exc:
+            return error_notice("Invalid steps JSON", str(exc)), no_update, False
+        steps = [_sequence_step_payload(step) for step in parsed_steps if isinstance(step, dict)]
+        if not name or not steps:
+            return error_notice("Sequence name and steps are required"), no_update, False
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        try:
+            api.post(
+                "/v1/sequences",
+                payload={
+                    "name": name.strip(),
+                    "owner_id": (owner or "").strip() or None,
+                    "steps": steps,
+                },
+                idempotency_key=idempotency_key("sequence-create", name.strip()),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice("Sequence definition created."), (token or 0) + 1, False
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input({"type": "crm-prospect-import", "provider_record_id": ALL}, "n_clicks"),
+        State("crm-prospect-sequence", "value"),
+        State("crm-prospect-approval-reason", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def import_crm_prospect(
+        clicks: list[int] | None,
+        sequence_id: str | None,
+        approval_reason: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        action_id = ctx.triggered_id
+        if not isinstance(action_id, dict) or not any(clicks or []):
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot import prospects"),
+                no_update,
+                False,
+            )
+        provider_record_id = str(action_id.get("provider_record_id") or "")
+        if not provider_record_id or not sequence_id:
+            return error_notice("Prospect and sequence are required"), no_update, False
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        try:
+            api.post(
+                "/v1/sequences/enrollments/import-crm-prospect",
+                payload={
+                    "provider_record_id": provider_record_id,
+                    "sequence_id": sequence_id,
+                    "outreach_approved": True,
+                    "approval_reason": approval_reason or "Approved from dashboard CRM import.",
+                },
+                idempotency_key=idempotency_key("crm-prospect-import", provider_record_id),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice("CRM prospect imported and assigned."), (token or 0) + 1, False
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
         Input({"type": "sequence-edit-submit", "sequence_id": ALL}, "n_clicks"),
         State("sequence-edit-name", "value"),
         State("sequence-edit-owner", "value"),
         State("sequence-edit-status", "value"),
         State("sequence-edit-steps", "value"),
+        State("sequence-edit-version", "data"),
         State("operator-actor", "value"),
         State("operator-role", "value"),
         State("mutation-refresh-token", "data"),
@@ -554,6 +660,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         owner: str | None,
         status: str | None,
         steps_json: str | None,
+        version: int | None,
         actor: str | None,
         role: str | None,
         token: int | None,
@@ -584,6 +691,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
                     "owner_id": (owner or "").strip() or None,
                     "status": status,
                     "steps": steps,
+                    "expected_version": version,
                 },
             )
         except ConsoleApiError as exc:
@@ -678,6 +786,16 @@ def perform_dashboard_action(
         return _perform_incident_action(api, action, target_id, action_id)
 
     if kind == "watch":
+        if action == "find-contact":
+            result = api.post(
+                f"/v1/enrichment/watch-targets/{target_id}/find-contact",
+                payload={},
+                idempotency_key=idempotency_key("watch-find-contact", target_id),
+            )
+            count = len(result.get("contact_candidates") or [])
+            return f"Watch target {target_id} contact discovery returned {count} candidate(s)."
+        if action != "toggle":
+            raise ConsoleApiError(f"unsupported watch action {action}", status_code=400)
         api.patch(
             f"/v1/intelligence/watch-targets/{target_id}",
             payload={
@@ -689,6 +807,21 @@ def perform_dashboard_action(
         state = "enabled" if action_id.get("enabled") else "paused"
         return f"Watch target {target_id} {state}."
 
+    if kind == "contact-candidate":
+        if action != "discover-domain":
+            raise ConsoleApiError(f"unsupported contact candidate action {action}", status_code=400)
+        result = api.post(
+            f"/v1/enrichment/contact-candidates/{target_id}/discover-domain",
+            payload={},
+            idempotency_key=idempotency_key("contact-domain", target_id),
+        )
+        domain = result.get("discovered_domain")
+        return (
+            f"Contact candidate {target_id} domain discovered: {domain}."
+            if domain
+            else f"Contact candidate {target_id} routed to review for domain discovery."
+        )
+
     if kind == "sequence":
         if action not in {"pause", "resume", "cancel"}:
             raise ConsoleApiError(f"unsupported sequence action {action}", status_code=400)
@@ -697,6 +830,37 @@ def perform_dashboard_action(
             payload={"reason": _action_reason(action, extra_payload)},
         )
         return f"Sequence enrollment {target_id} {action} requested."
+
+    if kind == "sequence-activity":
+        if action == "approve-email":
+            api.post(
+                f"/v1/sequences/activities/{target_id}/approve-email",
+                payload={"reason": _action_reason(action, extra_payload)},
+            )
+            return f"Sequence email activity {target_id} approved."
+        if action == "complete":
+            api.post(
+                f"/v1/sequences/activities/{target_id}/complete",
+                payload={"reason": _action_reason(action, extra_payload)},
+            )
+            return f"Sequence call activity {target_id} completed."
+        if action == "schedule-meeting":
+            start = datetime.now(UTC) + timedelta(days=1)
+            end = start + timedelta(minutes=30)
+            api.post(
+                f"/v1/sequences/activities/{target_id}/schedule-meeting",
+                payload={
+                    "subject": "Security discovery",
+                    "location": "Google Meet",
+                    "start_at": start.isoformat(),
+                    "end_at": end.isoformat(),
+                    "timezone": "UTC",
+                    "attendees": [],
+                },
+                idempotency_key=idempotency_key("sequence-meeting", target_id),
+            )
+            return f"Sequence meeting activity {target_id} scheduled."
+        raise ConsoleApiError(f"unsupported sequence activity action {action}", status_code=400)
 
     if kind == "event-participant":
         domain = str((extra_payload or {}).get("domain") or "").strip()
@@ -840,13 +1004,23 @@ def _action_reason(action: str, extra_payload: dict[str, Any] | None) -> str:
 
 
 def _sequence_step_payload(step: dict[str, Any]) -> dict[str, Any]:
-    return {
+    channel = step.get("channel") or "email"
+    payload = {
         "step_order": step.get("step_order"),
         "delay_seconds": step.get("delay_seconds") or 0,
-        "subject_template": step.get("subject_template") or "Follow up",
-        "body_template": step.get("body_template") or "Checking in.",
-        "channel": step.get("channel") or "email",
+        "channel": channel,
+        "requires_approval": step.get("requires_approval"),
+        "step_metadata": step.get("step_metadata") or {},
     }
+    if step.get("subject_template") is not None:
+        payload["subject_template"] = step.get("subject_template")
+    elif channel == "email":
+        payload["subject_template"] = "Follow up"
+    if step.get("body_template") is not None:
+        payload["body_template"] = step.get("body_template")
+    elif channel == "email":
+        payload["body_template"] = "Checking in."
+    return payload
 
 
 def _int(value: Any) -> int:

@@ -50,7 +50,12 @@ def _watch_target():
         display_name="Example Corp",
         query_config={"incident_id": "incident-1", "domains": ["example.com"]},
         enabled=True,
-        owner=None,
+        monitoring_status="not_run",
+        last_monitored_at=None,
+        next_monitoring_at=None,
+        monitoring_error=None,
+        monitoring_summary={},
+        owner="analyst@example.com",
         origin_incident_id="incident-1",
         created_by="analyst@example.com",
         version=1,
@@ -68,10 +73,20 @@ def test_incident_routes_return_incidents_and_promoted_watch_targets(monkeypatch
 
     async def fake_promote_incident_to_watchlist(incident_id, **kwargs):
         assert kwargs["version"] == 1
+        assert kwargs["actor"] == "analyst@example.com"
         return _watch_target()
+
+    async def fake_get_watch_target(watch_target_id, **kwargs):
+        assert watch_target_id == "watch-1"
+        return _watch_target()
+
+    async def fake_monitor_watch_targets(**kwargs):
+        return {"checked": 1, "failed": 0, "provider": "local_demo"}
 
     monkeypatch.setattr(routers, "list_incidents", fake_list_incidents)
     monkeypatch.setattr(routers, "get_incident", fake_get_incident)
+    monkeypatch.setattr(routers, "get_watch_target", fake_get_watch_target)
+    monkeypatch.setattr(routers, "monitor_watch_targets", fake_monitor_watch_targets)
     monkeypatch.setattr(
         routers, "promote_incident_to_watchlist", fake_promote_incident_to_watchlist
     )
@@ -85,6 +100,8 @@ def test_incident_routes_return_incidents_and_promoted_watch_targets(monkeypatch
         headers={"Idempotency-Key": "idem-1", "X-Actor": "analyst@example.com"},
         json={"version": 1},
     ).json()
+    watch_detail = client.get("/v1/intelligence/watch-targets/watch-1").json()
+    monitoring = client.post("/v1/intelligence/watch-targets/monitor").json()
 
     assert incidents[0]["status"] == "corroborated"
     assert incidents[0]["affected_companies"] == ["Example Corp"]
@@ -93,6 +110,9 @@ def test_incident_routes_return_incidents_and_promoted_watch_targets(monkeypatch
     assert incidents[0]["version"] == 1
     assert watch["origin_incident_id"] == "incident-1"
     assert watch["target_type"] == "company"
+    assert watch["owner"] == "analyst@example.com"
+    assert watch_detail["monitoring_status"] == "not_run"
+    assert monitoring["checked"] == 1
 
 
 def test_manual_incident_route_exposes_version(monkeypatch) -> None:

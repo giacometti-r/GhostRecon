@@ -230,10 +230,14 @@ Search APIs support cursor pagination, explicit sort, UTC date ranges, geography
 
 - `POST /v1/intelligence/watch-targets`
 - `GET /v1/intelligence/watch-targets`
+- `GET /v1/intelligence/watch-targets/{watch_target_id}`
 - `PATCH /v1/intelligence/watch-targets/{watch_target_id}`
+- `POST /v1/intelligence/watch-targets/monitor`
 - `POST /v1/intelligence/incidents/{incident_id}/promote-to-watchlist`
+- `POST /v1/enrichment/watch-targets/{watch_target_id}/find-contact`
+- `POST /v1/enrichment/contact-candidates/{candidate_id}/discover-domain`
 
-Incident promotion accepts a body with the current optimistic `version`, requires the incident to be corroborated, promotes only the primary affected company, and returns the existing company watch target on an idempotent retry with `origin_incident_id`.
+Incident promotion accepts a body with the current optimistic `version`, requires the incident to be corroborated, promotes only the primary affected company, and returns the existing company watch target on an idempotent retry with `origin_incident_id`. Company watch targets expose owner, enabled/monitoring state, last/next monitoring timestamps, and role-projected origin incident metadata. Contact discovery uses the configured OpenSERP provider or local-demo fake and stores raw search result lineage before creating contact enrichment candidates. Domain discovery searches for the official company website, normalizes the first suitable result to a registrable domain, and routes failed or suspicious matches to analyst review.
 
 ### Scoring, Governance, Review, and CRM Targets
 

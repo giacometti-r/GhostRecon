@@ -70,7 +70,7 @@ wait_for_http() {
 require_command docker
 require_command curl
 
-for service in postgres redis gateway-service console-service worker email-verifier; do
+for service in postgres redis gateway-service console-service worker scheduler email-verifier; do
   require_running_container "$service"
 done
 
@@ -84,7 +84,7 @@ docker exec "$postgres_id" psql -U ghostrecon -d ghostrecon -tAc \
   || fail "PostgreSQL alembic_version check failed"
 pass "PostgreSQL alembic_version exists"
 
-expected_tables="source_definitions cyber_events event_participants security_incidents watch_targets review_candidates crm_targets crm_export_batches crm_export_items accounts contacts sequences sequence_steps sequence_enrollments meeting_handoffs meeting_prep_packets meeting_follow_up_tasks"
+expected_tables="source_definitions cyber_events event_participants security_incidents watch_targets watch_target_monitoring_runs entity_resolution_cases contact_enrichment_candidates email_candidates review_candidates crm_targets crm_export_batches crm_export_items accounts contacts sequences sequence_steps sequence_enrollments sequence_step_activities meeting_handoffs meeting_prep_packets meeting_follow_up_tasks"
 for table_name in $expected_tables; do
   exists=$(docker exec "$postgres_id" psql -U ghostrecon -d ghostrecon -tAc \
     "select to_regclass('public.$table_name') is not null")
@@ -118,6 +118,7 @@ http_get "gateway reporting events" "$GATEWAY_URL/v1/reporting/events"
 http_get "gateway reporting incidents" "$GATEWAY_URL/v1/reporting/incidents"
 http_get "gateway reporting watch targets" "$GATEWAY_URL/v1/reporting/watch-targets"
 http_get "gateway reporting review queue" "$GATEWAY_URL/v1/reporting/review-queue"
+http_get "gateway contact enrichment queue" "$GATEWAY_URL/v1/enrichment/contact-candidates"
 http_get "gateway reporting CRM targets" "$GATEWAY_URL/v1/reporting/crm-targets"
 http_get "gateway reporting meetings" "$GATEWAY_URL/v1/reporting/meetings"
 http_get "gateway reporting meeting detail" "$GATEWAY_URL/v1/reporting/meetings/$demo_meeting_id"

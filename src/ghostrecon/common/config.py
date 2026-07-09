@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     geocoder_provider: Literal["nominatim", "local_demo", "disabled"] = "local_demo"
     nominatim_base_url: AnyHttpUrl = Field(default="https://nominatim.openstreetmap.org")
     nominatim_user_agent: str = "GhostRecon/0.1 (+https://example.com/ghostrecon)"
+    search_provider: Literal["local_demo", "openserp", "disabled"] = "local_demo"
+    openserp_base_url: AnyHttpUrl = Field(default="http://openserp:7000")
+    openserp_api_key: str | None = None
+    search_result_limit: int = Field(default=5, ge=1, le=25)
+    news_provider: Literal["local_demo", "serpapi", "disabled"] = "local_demo"
+    serpapi_base_url: AnyHttpUrl = Field(default="https://serpapi.com/search")
+    serpapi_api_key: str | None = None
+    watch_monitoring_interval_seconds: int = Field(default=3600, ge=300)
     google_calendar_id: str | None = None
     google_client_email: str | None = None
     google_private_key: str | None = None

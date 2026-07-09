@@ -287,6 +287,69 @@ def test_event_participant_enrich_target_route(monkeypatch) -> None:
     assert response.json()["verified_email"] == "ada.lovelace@example.com"
 
 
+def test_watch_target_contact_and_domain_discovery_routes(monkeypatch) -> None:
+    now = datetime(2026, 7, 6, tzinfo=UTC)
+
+    async def fake_find_contacts(watch_target_id, **kwargs):
+        assert watch_target_id == "watch-1"
+        assert kwargs["actor"] == "analyst@example.com"
+        return {
+            "watch_target": {
+                "id": "watch-1",
+                "target_type": "company",
+                "canonical_target_key": "example-corp",
+                "display_name": "Example Corp",
+                "query_config": {},
+                "enabled": True,
+                "monitoring_enabled": True,
+                "monitoring_status": "completed",
+                "owner": "analyst@example.com",
+                "created_by": "analyst@example.com",
+                "version": 1,
+                "created_at": now,
+                "updated_at": now,
+            },
+            "query": (
+                'site:linkedin.com/in ("Head of Cybersecurity" OR "CISO" OR '
+                '"Chief Information Security Officer" OR "CTO" OR "Chief Technology Officer") '
+                '"Example Corp"'
+            ),
+            "provider": "local_demo",
+            "contact_candidates": [_contact_candidate().__dict__],
+        }
+
+    async def fake_discover_domain(candidate_id, **kwargs):
+        assert candidate_id == "contact-candidate-1"
+        assert kwargs["actor"] == "analyst@example.com"
+        return {
+            "contact_candidate": _contact_candidate().__dict__,
+            "query": "Example Corp official website",
+            "provider": "local_demo",
+            "selected_url": "https://www.example.com/en",
+            "discovered_domain": "example.com",
+            "status": "eligible",
+            "review_reason": None,
+        }
+
+    monkeypatch.setattr(routers, "discover_watch_target_contacts", fake_find_contacts)
+    monkeypatch.setattr(routers, "discover_contact_candidate_domain", fake_discover_domain)
+
+    client = TestClient(build_app(Settings(service_name="enrichment-service")))
+    contacts = client.post(
+        "/v1/enrichment/watch-targets/watch-1/find-contact",
+        headers={"X-Actor": "analyst@example.com"},
+    )
+    domain = client.post(
+        "/v1/enrichment/contact-candidates/contact-candidate-1/discover-domain",
+        headers={"X-Actor": "analyst@example.com"},
+    )
+
+    assert contacts.status_code == 200
+    assert contacts.json()["provider"] == "local_demo"
+    assert "site:linkedin.com/in" in contacts.json()["query"]
+    assert domain.json()["discovered_domain"] == "example.com"
+
+
 def test_review_candidates_route_is_read_only_queue(monkeypatch) -> None:
     async def fake_list_review_candidates(**kwargs):
         return [_review_candidate()]

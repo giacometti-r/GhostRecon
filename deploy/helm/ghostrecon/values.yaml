@@ -103,6 +103,14 @@ services:
   - console-service
   - reporting-service
 
+workers:
+  enabled: true
+  replicaCount: 1
+
+scheduler:
+  enabled: true
+  replicaCount: 1
+
 resources:
   requests:
     cpu: 100m

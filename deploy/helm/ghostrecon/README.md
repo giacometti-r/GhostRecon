@@ -16,6 +16,8 @@ On the first `helm secrets upgrade --install`:
    `alembic upgrade head`.
 5. Application workloads receive generated database and Redis URLs from
    `ghostrecon-secrets`.
+6. Dedicated Celery worker and scheduler Deployments run background jobs,
+   including hourly company watchlist monitoring.
 
 Subsequent upgrades reconcile the same release-owned resources and reuse their
 PVCs. Helm will not adopt unrelated objects that happen to use the same names.

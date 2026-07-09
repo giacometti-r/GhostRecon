@@ -10,6 +10,7 @@ from ghostrecon.common.config import Settings
 from ghostrecon.common.database import session_scope
 from ghostrecon.events.contracts import EventName, new_event
 from ghostrecon.models.api import (
+    ContactDomainDiscoveryResult,
     ContactEnrichmentCreate,
     ContactEnrichmentOut,
     EmailCandidatePersistRequest,
@@ -20,6 +21,8 @@ from ghostrecon.models.api import (
     EventParticipantEnrichRequest,
     EventParticipantEnrichResult,
     ReviewCandidateOut,
+    WatchTargetContactDiscoveryResult,
+    WatchTargetOut,
 )
 from ghostrecon.models.db import (
     Account,
@@ -30,10 +33,27 @@ from ghostrecon.models.db import (
     EventParticipant,
     OrganizationEmailPattern,
     OutboxEvent,
+    RawSourceItem,
     ReviewCandidate,
+    SourceDefinition,
+    WatchTarget,
 )
 from ghostrecon.services.email_candidates import generate_email_candidates
 from ghostrecon.services.email_verifier import EmailVerifierClient
+from ghostrecon.services.search_adapters import (
+    SearchResult,
+    is_suspicious_domain,
+    linkedin_contact_query,
+    official_website_query,
+    registrable_domain_from_url,
+    search_provider_for_settings,
+)
+from ghostrecon.services.source_registry import (
+    build_raw_item_idempotency_key,
+    content_hash,
+    normalize_url,
+    permitted_excerpt,
+)
 
 ENRICHMENT_SERVICE_NAME = "enrichment-service"
 EMAIL_SERVICE_NAME = "email-intelligence-service"
@@ -48,8 +68,11 @@ def utcnow() -> datetime:
 def normalize_domain(domain: str | None) -> str | None:
     if not domain:
         return None
+    resolved = registrable_domain_from_url(domain)
+    if resolved:
+        return resolved
     cleaned = domain.lower().strip().removeprefix("https://").removeprefix("http://")
-    return cleaned.split("/", 1)[0].strip(".") or None
+    return cleaned.split("/", 1)[0].removeprefix("www.").strip(".") or None
 
 
 def evaluate_contact_policy(payload: ContactEnrichmentCreate) -> tuple[str, str | None]:
@@ -137,6 +160,70 @@ async def list_contact_enrichment_candidates(
     async with session_scope(settings) as session:
         return await EnrichmentWorkflowRepository(session).list_contact_candidates(
             status=status, origin_type=origin_type, origin_id=origin_id, limit=limit
+        )
+
+
+async def discover_watch_target_contacts(
+    watch_target_id: str,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+) -> WatchTargetContactDiscoveryResult | None:
+    resolved = settings or Settings()
+    provider = search_provider_for_settings(resolved)
+    async with session_scope(resolved) as session:
+        repository = EnrichmentWorkflowRepository(session)
+        target = await session.get(WatchTarget, watch_target_id)
+        if target is None:
+            return None
+        query = linkedin_contact_query(target.display_name)
+        results = await provider.search(query, limit=resolved.search_result_limit)
+        candidates = await repository.create_contact_candidates_from_search(
+            target,
+            results,
+            query=query,
+            provider_name=provider.provider_name,
+            actor=actor,
+        )
+        return WatchTargetContactDiscoveryResult(
+            watch_target=WatchTargetOut.model_validate(_watch_target_api(target)),
+            query=query,
+            provider=provider.provider_name,
+            degraded=provider.provider_name == "disabled",
+            contact_candidates=[contact_candidate_to_model(candidate) for candidate in candidates],
+        )
+
+
+async def discover_contact_candidate_domain(
+    candidate_id: str,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+) -> ContactDomainDiscoveryResult | None:
+    resolved = settings or Settings()
+    provider = search_provider_for_settings(resolved)
+    async with session_scope(resolved) as session:
+        repository = EnrichmentWorkflowRepository(session)
+        candidate = await session.get(ContactEnrichmentCandidate, candidate_id)
+        if candidate is None:
+            return None
+        query = official_website_query(candidate.organization or candidate.published_name)
+        results = await provider.search(query, limit=resolved.search_result_limit)
+        selected = await repository.apply_domain_discovery(
+            candidate,
+            results,
+            query=query,
+            provider_name=provider.provider_name,
+            actor=actor,
+        )
+        return ContactDomainDiscoveryResult(
+            contact_candidate=contact_candidate_to_model(candidate),
+            query=query,
+            provider=provider.provider_name,
+            selected_url=selected.url if selected else None,
+            discovered_domain=candidate.domain,
+            status=candidate.status,
+            review_reason=candidate.review_reason,
         )
 
 
@@ -472,6 +559,214 @@ class EnrichmentWorkflowRepository:
             stmt = stmt.where(ContactEnrichmentCandidate.origin_id == origin_id)
         result = await self.session.execute(stmt)
         return list(result.scalars())
+
+    async def create_contact_candidates_from_search(
+        self,
+        target: WatchTarget,
+        results: list[SearchResult],
+        *,
+        query: str,
+        provider_name: str,
+        actor: str,
+    ) -> list[ContactEnrichmentCandidate]:
+        candidates: list[ContactEnrichmentCandidate] = []
+        source = await self._search_source_definition(provider_name, actor)
+        for result in results:
+            if not result.url:
+                continue
+            raw_item = await self._persist_search_raw_item(source, result, query=query)
+            name, title, role_scope = _contact_fields_from_result(result)
+            payload = ContactEnrichmentCreate(
+                origin_type="security_incident" if target.origin_incident_id else "manual",
+                origin_id=target.origin_incident_id or target.id,
+                published_name=name,
+                organization=target.display_name,
+                title=title,
+                role_scope=role_scope,
+                domain=_first_domain(target.query_config),
+                profile_url=result.url,
+                source_url=result.url,
+                source_definition_id=source.id,
+                source_item_ids=[raw_item.id],
+                policy_snapshot={
+                    "source": provider_name,
+                    "search_query": query,
+                    "created_by": actor,
+                },
+                candidate_payload={
+                    "search_result": _search_result_payload(result),
+                    "watch_target_id": target.id,
+                },
+            )
+            candidate = await self.create_contact_candidate(
+                payload,
+                f"watch-contact:{target.id}:{normalize_url(result.url)}",
+            )
+            candidates.append(candidate)
+        if not candidates:
+            target.monitoring_summary = {
+                **(target.monitoring_summary or {}),
+                "contact_discovery": {"query": query, "result_count": 0, "provider": provider_name},
+            }
+        return candidates
+
+    async def apply_domain_discovery(
+        self,
+        candidate: ContactEnrichmentCandidate,
+        results: list[SearchResult],
+        *,
+        query: str,
+        provider_name: str,
+        actor: str,
+    ) -> SearchResult | None:
+        source = await self._search_source_definition(provider_name, actor)
+        selected: SearchResult | None = None
+        selected_domain: str | None = None
+        for result in results:
+            domain = registrable_domain_from_url(result.url)
+            if is_suspicious_domain(domain):
+                continue
+            selected = result
+            selected_domain = domain
+            break
+
+        evidence_result = selected or (results[0] if results else None)
+        raw_item = (
+            await self._persist_search_raw_item(source, evidence_result, query=query)
+            if evidence_result
+            else None
+        )
+        discovery_payload = {
+            "query": query,
+            "provider": provider_name,
+            "actor": actor,
+            "results": [_search_result_payload(result) for result in results],
+            "selected_url": selected.url if selected else None,
+            "selected_domain": selected_domain,
+        }
+        candidate.candidate_payload = {
+            **(candidate.candidate_payload or {}),
+            "domain_discovery": discovery_payload,
+        }
+        if selected_domain and raw_item is not None:
+            candidate.domain = selected_domain
+            candidate.source_definition_id = candidate.source_definition_id or source.id
+            candidate.source_item_ids = _append_unique(candidate.source_item_ids, raw_item.id)
+            if candidate.role_scope in INCIDENT_CONTACT_ROLE_SCOPES:
+                candidate.status = "eligible"
+                candidate.review_reason = None
+                candidate.eligibility_reason = None
+                if candidate.contact_id is None:
+                    contact = await self._upsert_contact(candidate)
+                    candidate.contact_id = contact.id
+            else:
+                candidate.status = "needs_review"
+                candidate.review_reason = "domain_discovery_role_review_required"
+                candidate.eligibility_reason = "domain_discovery_role_review_required"
+        else:
+            if raw_item is not None:
+                candidate.source_definition_id = candidate.source_definition_id or source.id
+                candidate.source_item_ids = _append_unique(candidate.source_item_ids, raw_item.id)
+            candidate.status = "needs_review"
+            candidate.review_reason = "domain_discovery_failed"
+            candidate.eligibility_reason = "domain_discovery_failed"
+            await self._request_review(
+                candidate_type="contact_enrichment",
+                target_type="contact_enrichment_candidate",
+                target_id=candidate.id,
+                origin_type=candidate.origin_type,
+                origin_id=candidate.origin_id,
+                source_definition_id=source.id,
+                source_item_ids=[str(item) for item in candidate.source_item_ids or []],
+                reason_code="domain_discovery_failed",
+                reason="Company domain discovery returned no suitable official website.",
+                evidence_summary=contact_candidate_to_api(candidate),
+                policy_snapshot=candidate.policy_snapshot,
+            )
+        candidate.version += 1
+        await self.session.flush()
+        return selected
+
+    async def _search_source_definition(
+        self, provider_name: str, actor: str
+    ) -> SourceDefinition:
+        name = f"GhostRecon {provider_name} enrichment search"
+        existing = await self.session.scalar(
+            select(SourceDefinition).where(SourceDefinition.name == name)
+        )
+        now = utcnow()
+        if existing is not None:
+            return existing
+        source = SourceDefinition(
+            name=name,
+            source_kind="enrichment",
+            adapter_type=provider_name,
+            base_url=provider_name,
+            owner=actor,
+            query_scope={"purpose": "contact_domain_discovery"},
+            credentials_ref=None,
+            rate_limit_policy={},
+            polling_interval_seconds=None,
+            freshness_slo_seconds=86400,
+            checkpoint_strategy=None,
+            checkpoint_state={},
+            policy_state="allowed",
+            policy_evidence={"local_policy": "public_search_results_only"},
+            policy_reviewed_at=now,
+            participant_reuse_state="allowed",
+            participant_reuse_evidence={"reason": "public search result snippets"},
+            content_storage_policy="metadata_excerpt",
+            default_language="en",
+            expected_timezone=None,
+            enabled=True,
+            operating_state="enabled",
+            last_fetch_at=now,
+            last_success_at=now,
+            consecutive_failures=0,
+        )
+        self.session.add(source)
+        await self.session.flush()
+        return source
+
+    async def _persist_search_raw_item(
+        self, source: SourceDefinition, result: SearchResult, *, query: str
+    ) -> RawSourceItem:
+        canonical_url = normalize_url(result.url)
+        body = "\n".join(part for part in (result.title, result.snippet) if part)
+        item_hash = content_hash(body or canonical_url)
+        idempotency_key = build_raw_item_idempotency_key(
+            source.id,
+            canonical_url,
+            canonical_url,
+            item_hash,
+        )
+        existing = await self.session.scalar(
+            select(RawSourceItem).where(RawSourceItem.idempotency_key == idempotency_key)
+        )
+        if existing is not None:
+            return existing
+        raw_item = RawSourceItem(
+            source_definition_id=source.id,
+            external_id=None,
+            original_url=result.url,
+            canonical_url=canonical_url,
+            content_hash=item_hash,
+            retrieved_at=utcnow(),
+            published_at=None,
+            original_language="en",
+            source_timezone=None,
+            raw_metadata={
+                "search_query": query,
+                "search_result": _search_result_payload(result),
+            },
+            permitted_excerpt=permitted_excerpt(body, source.content_storage_policy),
+            parse_status="parsed",
+            duplicate_state="canonical",
+            idempotency_key=idempotency_key,
+        )
+        self.session.add(raw_item)
+        await self.session.flush()
+        return raw_item
 
     async def persist_email_candidates(
         self, payload: EmailCandidatePersistRequest, idempotency_key: str
@@ -835,6 +1130,74 @@ def entity_resolution_to_api(case: EntityResolutionCase) -> dict[str, object]:
         "created_at": case.created_at,
         "updated_at": case.updated_at,
     }
+
+
+def _watch_target_api(target: WatchTarget) -> dict[str, object]:
+    return {
+        "id": target.id,
+        "target_type": target.target_type,
+        "canonical_target_key": target.canonical_target_key,
+        "display_name": target.display_name,
+        "query_config": target.query_config or {},
+        "enabled": target.enabled,
+        "monitoring_enabled": target.enabled,
+        "monitoring_status": target.monitoring_status,
+        "last_monitored_at": target.last_monitored_at,
+        "next_monitoring_at": target.next_monitoring_at,
+        "monitoring_error": target.monitoring_error,
+        "monitoring_summary": target.monitoring_summary or {},
+        "owner": target.owner,
+        "origin_incident_id": target.origin_incident_id,
+        "created_by": target.created_by,
+        "version": target.version,
+        "created_at": target.created_at,
+        "updated_at": target.updated_at,
+    }
+
+
+def _contact_fields_from_result(result: SearchResult) -> tuple[str, str | None, str]:
+    title = result.title.replace(" | LinkedIn", "").replace(" - LinkedIn", "").strip()
+    name = title.split("|", 1)[0].split("-", 1)[0].strip() or "Unknown Contact"
+    text = f"{result.title} {result.snippet or ''}".lower()
+    if "ciso" in text or "cybersecurity" in text or "information security" in text:
+        role_scope = "security"
+        job_title = "CISO" if "ciso" in text else "Head of Cybersecurity"
+    elif "cio" in text:
+        role_scope = "it"
+        job_title = "CIO"
+    elif "cto" in text:
+        role_scope = "it"
+        job_title = "CTO"
+    else:
+        role_scope = "unknown"
+        job_title = None
+    return name, job_title, role_scope
+
+
+def _first_domain(query_config: dict[str, object] | None) -> str | None:
+    domains = (query_config or {}).get("domains")
+    if isinstance(domains, list) and domains:
+        return normalize_domain(str(domains[0]))
+    return None
+
+
+def _search_result_payload(result: SearchResult) -> dict[str, object]:
+    return {
+        "title": result.title,
+        "url": result.url,
+        "snippet": result.snippet,
+        "rank": result.rank,
+        "source": result.source,
+        "published_at": result.published_at,
+        "raw": result.raw or {},
+    }
+
+
+def _append_unique(values: list[object] | None, value: object) -> list[object]:
+    resolved = list(values or [])
+    if value not in resolved:
+        resolved.append(value)
+    return resolved
 
 
 def contact_candidate_to_api(candidate: ContactEnrichmentCandidate) -> dict[str, object]:

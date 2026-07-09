@@ -11,12 +11,14 @@ from ghostrecon.models.api import (
     CalendarAvailabilityResult,
     CandidateScoreOut,
     CandidateScoreRequest,
+    ContactDomainDiscoveryResult,
     ContactEnrichmentCreate,
     ContactEnrichmentList,
     ContactEnrichmentOut,
     CrmExportBatchOut,
     CrmExportCreateRequest,
     CrmExportRetryRequest,
+    CrmProspectList,
     CrmTargetList,
     CyberEventList,
     CyberEventOut,
@@ -56,6 +58,7 @@ from ghostrecon.models.api import (
     ReportingOperatorContext,
     ReportingReviewQueue,
     ReportingSourceHealthList,
+    ReportingWatchTargetDetail,
     ReportingWatchTargetList,
     ReviewCandidateList,
     ReviewDecisionOut,
@@ -63,7 +66,12 @@ from ghostrecon.models.api import (
     ScoreRequest,
     SecurityIncidentList,
     SecurityIncidentOut,
+    SequenceActivityActionRequest,
+    SequenceActivityList,
+    SequenceActivityOut,
+    SequenceActivityScheduleMeetingRequest,
     SequenceCreateRequest,
+    SequenceCrmProspectImportRequest,
     SequenceEligibilityRequest,
     SequenceEmailAlertCreate,
     SequenceEmailAlertOut,
@@ -79,6 +87,7 @@ from ghostrecon.models.api import (
     SuppressionCreate,
     SuppressionOut,
     UnsubscribeRequest,
+    WatchTargetContactDiscoveryResult,
     WatchTargetCreate,
     WatchTargetList,
     WatchTargetOut,
@@ -96,6 +105,8 @@ from ghostrecon.services.enrichment_workflows import (
     contact_candidate_to_model,
     create_contact_enrichment_candidate,
     create_entity_resolution,
+    discover_contact_candidate_domain,
+    discover_watch_target_contacts,
     email_candidate_to_model,
     enrich_event_participant_target,
     entity_resolution_to_model,
@@ -133,9 +144,11 @@ from ghostrecon.services.incident_intelligence import (
     create_manual_incident,
     create_watch_target,
     get_incident,
+    get_watch_target,
     incident_to_api,
     list_incidents,
     list_watch_targets,
+    monitor_watch_targets,
     patch_watch_target,
     promote_incident_to_watchlist,
     watch_target_to_api,
@@ -162,6 +175,7 @@ from ghostrecon.services.reporting import (
     get_reporting_meetings,
     get_reporting_review_queue,
     get_reporting_source_health,
+    get_reporting_watch_target_detail,
     get_reporting_watch_targets,
 )
 from ghostrecon.services.scoring import (
@@ -171,17 +185,23 @@ from ghostrecon.services.scoring import (
 )
 from ghostrecon.services.sequencing import (
     cancel_sequence_enrollment,
+    complete_sequence_activity,
     create_sequence,
     create_sequence_email_alert,
     create_sequence_enrollment,
     evaluate_sequence_eligibility,
     get_sequence,
     get_sequence_enrollment,
+    import_crm_prospect_to_sequence,
+    list_sequence_activities,
     list_sequence_enrollments,
     list_sequences,
     pause_sequence_enrollment,
     process_unsubscribe,
     resume_sequence_enrollment,
+    schedule_sequence_meeting_activity,
+    search_crm_prospects,
+    send_approved_sequence_email,
     update_sequence,
 )
 from ghostrecon.services.source_registry import list_source_health
@@ -348,6 +368,28 @@ async def reporting_watch_targets(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@gateway_router.get(
+    "/v1/reporting/watch-targets/{watch_target_id}",
+    response_model=ReportingWatchTargetDetail,
+)
+@reporting_router.get(
+    "/v1/reporting/watch-targets/{watch_target_id}",
+    response_model=ReportingWatchTargetDetail,
+)
+async def reporting_watch_target_detail(
+    watch_target_id: str,
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingWatchTargetDetail:
+    detail = await get_reporting_watch_target_detail(
+        watch_target_id,
+        operator=operator,
+        settings=get_settings(),
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="watch target not found")
+    return detail
 
 
 @gateway_router.get("/v1/reporting/review-queue", response_model=ReportingReviewQueue)
@@ -650,6 +692,19 @@ async def intelligence_watch_targets(
     )
 
 
+@gateway_router.get(
+    "/v1/intelligence/watch-targets/{watch_target_id}", response_model=WatchTargetOut
+)
+@incident_intelligence_router.get(
+    "/v1/intelligence/watch-targets/{watch_target_id}", response_model=WatchTargetOut
+)
+async def intelligence_watch_target_detail(watch_target_id: str) -> WatchTargetOut:
+    target = await get_watch_target(watch_target_id, settings=get_settings())
+    if target is None:
+        raise HTTPException(status_code=404, detail="watch target not found")
+    return WatchTargetOut.model_validate(watch_target_to_api(target))
+
+
 @gateway_router.post("/v1/intelligence/watch-targets", response_model=WatchTargetOut)
 @incident_intelligence_router.post("/v1/intelligence/watch-targets", response_model=WatchTargetOut)
 async def intelligence_create_watch_target(
@@ -688,6 +743,12 @@ async def intelligence_patch_watch_target(
     if target is None:
         raise HTTPException(status_code=404, detail="watch target not found")
     return WatchTargetOut.model_validate(watch_target_to_api(target))
+
+
+@gateway_router.post("/v1/intelligence/watch-targets/monitor", response_model=dict)
+@incident_intelligence_router.post("/v1/intelligence/watch-targets/monitor", response_model=dict)
+async def intelligence_monitor_watch_targets() -> dict[str, object]:
+    return await monitor_watch_targets(settings=get_settings())
 
 
 @gateway_router.post(
@@ -782,6 +843,50 @@ async def crm_export_retry_failed(
 @enrichment_router.post("/v1/enrichment/domain")
 async def domain_enrichment(request: DomainEnrichmentRequest):
     return await enrich_domain(request.domain)
+
+
+@gateway_router.post(
+    "/v1/enrichment/watch-targets/{watch_target_id}/find-contact",
+    response_model=WatchTargetContactDiscoveryResult,
+)
+@enrichment_router.post(
+    "/v1/enrichment/watch-targets/{watch_target_id}/find-contact",
+    response_model=WatchTargetContactDiscoveryResult,
+)
+async def enrichment_watch_target_find_contact(
+    watch_target_id: str,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> WatchTargetContactDiscoveryResult:
+    result = await discover_watch_target_contacts(
+        watch_target_id,
+        actor=actor,
+        settings=get_settings(),
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="watch target not found")
+    return result
+
+
+@gateway_router.post(
+    "/v1/enrichment/contact-candidates/{candidate_id}/discover-domain",
+    response_model=ContactDomainDiscoveryResult,
+)
+@enrichment_router.post(
+    "/v1/enrichment/contact-candidates/{candidate_id}/discover-domain",
+    response_model=ContactDomainDiscoveryResult,
+)
+async def enrichment_contact_candidate_discover_domain(
+    candidate_id: str,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> ContactDomainDiscoveryResult:
+    result = await discover_contact_candidate_domain(
+        candidate_id,
+        actor=actor,
+        settings=get_settings(),
+    )
+    if result is None:
+        raise HTTPException(status_code=404, detail="contact candidate not found")
+    return result
 
 
 @gateway_router.post("/v1/enrichment/entity-resolutions", response_model=EntityResolutionOut)
@@ -960,6 +1065,30 @@ async def sequence_list(
     return await list_sequences(status=status, limit=limit, settings=get_settings())
 
 
+@gateway_router.get("/v1/sequences/crm-prospects", response_model=CrmProspectList)
+@sequencing_router.get("/v1/sequences/crm-prospects", response_model=CrmProspectList)
+async def sequence_crm_prospect_list(
+    query: str = Query(default=""),
+    limit: int = Query(default=25, ge=1, le=25),
+) -> CrmProspectList:
+    return await search_crm_prospects(query=query, limit=limit, settings=get_settings())
+
+
+@gateway_router.get("/v1/sequences/activities", response_model=SequenceActivityList)
+@sequencing_router.get("/v1/sequences/activities", response_model=SequenceActivityList)
+async def sequence_activity_list(
+    status: str | None = Query(default=None),
+    channel: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> SequenceActivityList:
+    return await list_sequence_activities(
+        status=status,
+        channel=channel,
+        limit=limit,
+        settings=get_settings(),
+    )
+
+
 @gateway_router.post("/v1/sequences/enrollments", response_model=SequenceEnrollmentOut)
 @sequencing_router.post("/v1/sequences/enrollments", response_model=SequenceEnrollmentOut)
 async def sequence_enrollment_create(
@@ -969,6 +1098,30 @@ async def sequence_enrollment_create(
 ) -> SequenceEnrollmentOut:
     try:
         return await create_sequence_enrollment(
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@gateway_router.post(
+    "/v1/sequences/enrollments/import-crm-prospect",
+    response_model=SequenceEnrollmentOut,
+)
+@sequencing_router.post(
+    "/v1/sequences/enrollments/import-crm-prospect",
+    response_model=SequenceEnrollmentOut,
+)
+async def sequence_enrollment_import_crm_prospect(
+    request: SequenceCrmProspectImportRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceEnrollmentOut:
+    try:
+        return await import_crm_prospect_to_sequence(
             request,
             actor=actor,
             idempotency_key=idempotency_key,
@@ -1092,6 +1245,87 @@ async def sequence_enrollment_alert_create(
     return alert
 
 
+@gateway_router.post(
+    "/v1/sequences/activities/{activity_id}/approve-email",
+    response_model=SequenceActivityOut,
+)
+@sequencing_router.post(
+    "/v1/sequences/activities/{activity_id}/approve-email",
+    response_model=SequenceActivityOut,
+)
+async def sequence_activity_approve_email(
+    activity_id: str,
+    request: SequenceActivityActionRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceActivityOut:
+    try:
+        activity = await send_approved_sequence_email(
+            activity_id,
+            request,
+            actor=actor,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if activity is None:
+        raise HTTPException(status_code=404, detail="sequence activity not found")
+    return activity
+
+
+@gateway_router.post(
+    "/v1/sequences/activities/{activity_id}/complete",
+    response_model=SequenceActivityOut,
+)
+@sequencing_router.post(
+    "/v1/sequences/activities/{activity_id}/complete",
+    response_model=SequenceActivityOut,
+)
+async def sequence_activity_complete(
+    activity_id: str,
+    request: SequenceActivityActionRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceActivityOut:
+    try:
+        activity = await complete_sequence_activity(
+            activity_id,
+            request,
+            actor=actor,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if activity is None:
+        raise HTTPException(status_code=404, detail="sequence activity not found")
+    return activity
+
+
+@gateway_router.post(
+    "/v1/sequences/activities/{activity_id}/schedule-meeting",
+    response_model=SequenceActivityOut,
+)
+@sequencing_router.post(
+    "/v1/sequences/activities/{activity_id}/schedule-meeting",
+    response_model=SequenceActivityOut,
+)
+async def sequence_activity_schedule_meeting(
+    activity_id: str,
+    request: SequenceActivityScheduleMeetingRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceActivityOut:
+    try:
+        activity = await schedule_sequence_meeting_activity(
+            activity_id,
+            request,
+            actor=actor,
+            settings=get_settings(),
+        )
+    except (CalendarProviderError, ValueError) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if activity is None:
+        raise HTTPException(status_code=404, detail="sequence activity not found")
+    return activity
+
+
 @gateway_router.post("/v1/sequences/unsubscribe")
 @sequencing_router.post("/v1/sequences/unsubscribe")
 async def sequence_unsubscribe(
@@ -1121,12 +1355,15 @@ async def sequence_update(
     request: SequenceUpdateRequest,
     actor: str = Header(default="system", alias="X-Actor"),
 ) -> SequenceOut:
-    sequence = await update_sequence(
-        sequence_id,
-        request,
-        actor=actor,
-        settings=get_settings(),
-    )
+    try:
+        sequence = await update_sequence(
+            sequence_id,
+            request,
+            actor=actor,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if sequence is None:
         raise HTTPException(status_code=404, detail="sequence not found")
     return sequence

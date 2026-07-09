@@ -483,6 +483,47 @@ a:hover {
   overflow-wrap: anywhere;
 }
 
+.link-button {
+  text-decoration: none;
+}
+
+.prep-packet {
+  display: grid;
+  gap: 18px;
+}
+
+.prep-section {
+  display: grid;
+  gap: 8px;
+  padding-top: 4px;
+}
+
+.prep-section h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.prep-section-body {
+  display: grid;
+  gap: 8px;
+}
+
+.prep-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.prep-chip {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 7px;
+  background: var(--surface-muted);
+}
+
 .pagination {
   display: flex;
   justify-content: flex-end;

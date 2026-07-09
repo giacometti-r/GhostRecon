@@ -26,6 +26,7 @@ from ghostrecon.services.event_intelligence import fetch_event_source, parse_pen
 from ghostrecon.services.governance import evaluate_suppression
 from ghostrecon.services.incident_intelligence import (
     fetch_incident_source,
+    monitor_watch_targets,
     parse_pending_incident_items,
 )
 from ghostrecon.services.meeting import retry_meeting_crm_sync
@@ -48,6 +49,13 @@ celery_app.conf.update(
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
     task_default_queue=settings.service_name,
+    beat_schedule={
+        "monitor-watch-targets-hourly": {
+            "task": "ghostrecon.monitor_watch_targets",
+            "schedule": settings.watch_monitoring_interval_seconds,
+            "options": {"queue": "worker"},
+        }
+    },
 )
 
 
@@ -142,6 +150,11 @@ def fetch_incident_source_task(source_definition_id: str) -> dict[str, object]:
 @celery_app.task(name="ghostrecon.parse_pending_incident_items")
 def parse_pending_incident_items_task(source_definition_id: str | None = None) -> dict[str, object]:
     return asyncio.run(parse_pending_incident_items(source_definition_id, settings))
+
+
+@celery_app.task(name="ghostrecon.monitor_watch_targets")
+def monitor_watch_targets_task() -> dict[str, object]:
+    return asyncio.run(monitor_watch_targets(settings=settings))
 
 
 @celery_app.task(name="ghostrecon.process_crm_export_batch")

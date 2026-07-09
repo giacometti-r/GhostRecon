@@ -97,6 +97,28 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  scheduler:
+    build: .
+    command:
+      [
+        "celery",
+        "-A",
+        "ghostrecon.worker_runtime:celery_app",
+        "beat",
+        "--loglevel=INFO",
+        "--schedule=/tmp/celerybeat-schedule",
+      ]
+    environment:
+      <<: *service-env
+      GHOSTRECON_SERVICE_NAME: scheduler
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   email-verifier:
     image: umutert/emailvalidator:latest
     environment:

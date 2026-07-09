@@ -221,6 +221,39 @@ def test_render_page_humanizes_todo_views() -> None:
                 "incidents": [{"id": "incident-1", "version": 1, "status": "candidate"}],
             },
         ),
+        ("GET", "/v1/reporting/watch-targets"): (
+            200,
+            {
+                "metadata": _metadata(),
+                "watch_targets": [
+                    {
+                        "id": "watch-1",
+                        "display_name": "Example Corp",
+                        "owner": "analyst@example.com",
+                        "enabled": True,
+                        "monitoring_enabled": True,
+                        "monitoring_status": "completed",
+                        "version": 1,
+                    }
+                ],
+            },
+        ),
+        ("GET", "/v1/reporting/watch-targets/watch-1"): (
+            200,
+            {
+                "metadata": _metadata(),
+                "watch_target": {
+                    "id": "watch-1",
+                    "display_name": "Example Corp",
+                    "owner": "analyst@example.com",
+                    "enabled": True,
+                    "monitoring_enabled": True,
+                    "monitoring_status": "completed",
+                    "monitoring_summary": {"result_count": 1},
+                    "version": 1,
+                },
+            },
+        ),
     }
 
     overview = str(
@@ -262,6 +295,19 @@ def test_render_page_humanizes_todo_views() -> None:
     incidents = str(
         render_page("/incidents", "", "analyst@example.com", "analyst", Settings(), client=client)
     )
+    watchlists = str(
+        render_page("/watchlists", "", "analyst@example.com", "analyst", Settings(), client=client)
+    )
+    watchlist_detail = str(
+        render_page(
+            "/watchlists/watch-1",
+            "",
+            "analyst@example.com",
+            "analyst",
+            Settings(),
+            client=client,
+        )
+    )
 
     assert "Source Freshness" in overview
     assert "Parse Yield" in overview
@@ -274,6 +320,11 @@ def test_render_page_humanizes_todo_views() -> None:
     assert "Projection" not in event_detail_admin
     assert "Incident Status" not in incidents
     assert "Add incident" in incidents
+    assert "Example Corp" in watchlists
+    assert "Target Type" not in watchlists
+    assert "Canonical Target Key" not in watchlists
+    assert "Watchlist Item" in watchlist_detail
+    assert "Find Contact" in watchlist_detail
 
 
 def test_render_navigation_marks_active_parent_route() -> None:
@@ -284,6 +335,137 @@ def test_render_navigation_marks_active_parent_route() -> None:
     active = next(rendered for rendered in rendered_links if "nav-link active" in rendered)
     assert "Meetings" in active
     assert "aria-current" in active
+
+
+def test_render_page_shows_sequence_workflow_and_structured_meeting_prep() -> None:
+    client = _client()
+    FakeHttpClient.responses = {
+        ("GET", "/v1/sequences/enrollments"): (
+            200,
+            {"enrollments": [{"id": "enroll-1", "sequence_id": "sequence-1"}]},
+        ),
+        ("GET", "/v1/sequences"): (
+            200,
+            {
+                "sequences": [
+                    {
+                        "id": "sequence-1",
+                        "name": "Multi-channel",
+                        "owner_id": "demo-ae",
+                        "channel": "email",
+                        "status": "active",
+                        "definition_version": 2,
+                        "rate_limit_policy": {},
+                        "steps": [
+                            {
+                                "id": "step-1",
+                                "step_order": 1,
+                                "channel": "email",
+                                "delay_seconds": 0,
+                                "subject_template": "Hi",
+                                "requires_approval": True,
+                            },
+                            {
+                                "id": "step-2",
+                                "step_order": 2,
+                                "channel": "call",
+                                "delay_seconds": 86400,
+                                "step_metadata": {"instructions": "Call security leader"},
+                            },
+                        ],
+                    }
+                ]
+            },
+        ),
+        ("GET", "/v1/sequences/activities"): (
+            200,
+            {
+                "activities": [
+                    {
+                        "id": "activity-1",
+                        "contact_name": "Taylor Ng",
+                        "account_name": "Example Industries",
+                        "channel": "email",
+                        "status": "pending_approval",
+                        "step_order": 1,
+                    }
+                ]
+            },
+        ),
+        ("GET", "/v1/sequences/crm-prospects"): (
+            200,
+            {
+                "prospects": [
+                    {
+                        "provider_record_id": "demo-crm-prospect-taylor-ng",
+                        "display_name": "Taylor Ng",
+                        "email": "taylor.ng@example-industries.com",
+                        "company_name": "Example Industries",
+                    }
+                ]
+            },
+        ),
+        ("GET", "/v1/reporting/meetings/meeting-1"): (
+            200,
+            {
+                "metadata": _metadata(),
+                "meeting": {
+                    "id": "meeting-1",
+                    "subject": "Security discovery",
+                    "status": "scheduled",
+                    "prep_packet": {
+                        "account_summary": "Example Industries has active incident intent.",
+                        "stakeholder_map": [{"name": "Taylor Ng", "role": "VP Security"}],
+                        "likely_security_priorities": ["identity response"],
+                        "suggested_questions": ["Where does reporting slow down?"],
+                        "risks": ["Validate current priorities."],
+                        "source_snapshot": {"account_id": "account-1"},
+                    },
+                    "follow_up_tasks": [],
+                },
+            },
+        ),
+    }
+
+    sequences = str(
+        render_page(
+            "/sequences",
+            "",
+            "analyst@example.com",
+            "analyst",
+            Settings(),
+            client=client,
+        )
+    )
+    definitions = str(
+        render_page(
+            "/sequences/definitions",
+            "",
+            "analyst@example.com",
+            "analyst",
+            Settings(),
+            client=client,
+        )
+    )
+    meeting = str(
+        render_page(
+            "/meetings/meeting-1",
+            "",
+            "analyst@example.com",
+            "analyst",
+            Settings(),
+            client=client,
+        )
+    )
+
+    assert "Sequence Definitions" in sequences
+    assert "CRM prospect import" in sequences
+    assert "Sequence activities" in sequences
+    assert "Create sequence" in definitions
+    assert "Multi-channel" in definitions
+    assert "Account context" in meeting
+    assert "Recommended talk tracks" in meeting
+    assert "Taylor Ng" in meeting
 
 
 def test_render_page_surfaces_gateway_error_path_and_status() -> None:
@@ -326,7 +508,27 @@ def test_dashboard_actions_send_expected_gateway_mutations() -> None:
             {"id": "decision-2"},
         ),
         ("PATCH", "/v1/intelligence/watch-targets/watch-1"): (200, {"id": "watch-1"}),
+        ("POST", "/v1/enrichment/watch-targets/watch-1/find-contact"): (
+            200,
+            {"contact_candidates": [{"id": "candidate-1"}]},
+        ),
+        ("POST", "/v1/enrichment/contact-candidates/candidate-1/discover-domain"): (
+            200,
+            {"discovered_domain": "example.com"},
+        ),
         ("POST", "/v1/sequences/enrollments/enroll-1/pause"): (200, {"id": "enroll-1"}),
+        ("POST", "/v1/sequences/activities/activity-1/approve-email"): (
+            200,
+            {"id": "activity-1"},
+        ),
+        ("POST", "/v1/sequences/activities/activity-2/complete"): (
+            200,
+            {"id": "activity-2"},
+        ),
+        ("POST", "/v1/sequences/activities/activity-3/schedule-meeting"): (
+            200,
+            {"id": "activity-3"},
+        ),
         ("POST", "/v1/enrichment/event-participants/participant-1/enrich-target"): (
             200,
             {"verified_email": "ada@example.com"},
@@ -396,9 +598,49 @@ def test_dashboard_actions_send_expected_gateway_mutations() -> None:
             "enabled": False,
         },
         {
+            "kind": "watch",
+            "action": "find-contact",
+            "target_id": "watch-1",
+            "version": None,
+            "policy_hash": None,
+            "enabled": None,
+        },
+        {
+            "kind": "contact-candidate",
+            "action": "discover-domain",
+            "target_id": "candidate-1",
+            "version": None,
+            "policy_hash": None,
+            "enabled": None,
+        },
+        {
             "kind": "sequence",
             "action": "pause",
             "target_id": "enroll-1",
+            "version": None,
+            "policy_hash": None,
+            "enabled": None,
+        },
+        {
+            "kind": "sequence-activity",
+            "action": "approve-email",
+            "target_id": "activity-1",
+            "version": None,
+            "policy_hash": None,
+            "enabled": None,
+        },
+        {
+            "kind": "sequence-activity",
+            "action": "complete",
+            "target_id": "activity-2",
+            "version": None,
+            "policy_hash": None,
+            "enabled": None,
+        },
+        {
+            "kind": "sequence-activity",
+            "action": "schedule-meeting",
+            "target_id": "activity-3",
             "version": None,
             "policy_hash": None,
             "enabled": None,
@@ -481,6 +723,11 @@ def test_dashboard_actions_send_expected_gateway_mutations() -> None:
     assert "/v1/crm/exports" in paths
     assert "/v1/review/candidates/bulk-decision" in paths
     assert "/v1/sequences/enrollments/enroll-1/pause" in paths
+    assert "/v1/sequences/activities/activity-1/approve-email" in paths
+    assert "/v1/sequences/activities/activity-2/complete" in paths
+    assert "/v1/sequences/activities/activity-3/schedule-meeting" in paths
+    assert "/v1/enrichment/watch-targets/watch-1/find-contact" in paths
+    assert "/v1/enrichment/contact-candidates/candidate-1/discover-domain" in paths
     assert "/v1/enrichment/event-participants/participant-1/enrich-target" in paths
     assert "/v1/governance/incidents/incident-1/revert" in paths
     promote_payloads = [

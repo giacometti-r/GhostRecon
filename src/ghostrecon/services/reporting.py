@@ -24,6 +24,7 @@ from ghostrecon.models.api import (
     ReportingOperatorContext,
     ReportingReviewQueue,
     ReportingSourceHealthList,
+    ReportingWatchTargetDetail,
     ReportingWatchTargetList,
     ReviewCandidateOut,
     SecurityIncidentOut,
@@ -298,12 +299,17 @@ async def get_reporting_watch_targets(
     operator: ReportingOperatorContext | None = None,
     settings: Settings | None = None,
 ) -> ReportingWatchTargetList:
-    _ = operator
+    context = operator or ReportingOperatorContext()
     offset = parse_cursor(cursor)
     async with session_scope(settings) as session:
-        stmt = select(WatchTarget).order_by(WatchTarget.created_at.desc(), WatchTarget.id.asc())
+        stmt = (
+            select(WatchTarget)
+            .order_by(WatchTarget.created_at.desc(), WatchTarget.id.asc())
+        )
         if target_type:
             stmt = stmt.where(WatchTarget.target_type == target_type)
+        else:
+            stmt = stmt.where(WatchTarget.target_type == "company")
         if enabled is not None:
             stmt = stmt.where(WatchTarget.enabled == enabled)
         if owner:
@@ -320,10 +326,31 @@ async def get_reporting_watch_targets(
     )
     return ReportingWatchTargetList(
         metadata=metadata,
-        watch_targets=[
-            WatchTargetOut.model_validate(watch_target_to_api(target)) for target in targets
-        ],
+        watch_targets=[project_watch_target(target, context) for target in targets],
         next_cursor=next_cursor(rows, limit, offset),
+    )
+
+
+async def get_reporting_watch_target_detail(
+    watch_target_id: str,
+    *,
+    operator: ReportingOperatorContext | None = None,
+    settings: Settings | None = None,
+) -> ReportingWatchTargetDetail | None:
+    context = operator or ReportingOperatorContext()
+    async with session_scope(settings) as session:
+        target = await session.get(WatchTarget, watch_target_id)
+    if target is None:
+        return None
+    metadata = await reporting_metadata(
+        None,
+        settings=settings,
+        record_watermark_name="watch_target_updated_at",
+        record_watermark=target.updated_at,
+    )
+    return ReportingWatchTargetDetail(
+        metadata=metadata,
+        watch_target=project_watch_target(target, context),
     )
 
 
@@ -535,6 +562,16 @@ def project_review_candidate(
         payload["policy_snapshot"] = {}
         payload["policy_snapshot_hash"] = None
     return ReviewCandidateOut.model_validate(payload)
+
+
+def project_watch_target(
+    target: WatchTarget,
+    context: ReportingOperatorContext,
+) -> WatchTargetOut:
+    payload = watch_target_to_api(target)
+    if context.role != DashboardRole.GOVERNANCE_REVIEWER:
+        payload["origin_incident_id"] = None
+    return WatchTargetOut.model_validate(payload)
 
 
 def project_crm_target(

@@ -40,9 +40,9 @@ The pipeline is external sources → normalization and deduplication → contact
 | --- | --- |
 | `gateway-service` | Authenticated API entrypoint and route map for intelligence, review, reporting, and export APIs. |
 | `event-intelligence-service` | Global cybersecurity event, series, geocoded venue, and permitted published-participant discovery on top of the implemented shared source registry. |
-| `incident-intelligence-service` | Global cyber-incident news discovery, company-specific affected-party identification, corroboration evidence, and watchlists on top of the shared source registry. |
+| `incident-intelligence-service` | Global cyber-incident news discovery, company-specific affected-party identification, corroboration evidence, company watchlists, and scheduled watchlist monitoring on top of the shared source registry. |
 | `ingestion-service` | Source registry, duplicate detection, source adapter parsing, and idempotent inbound event intake; not the primary acquisition path. |
-| `enrichment-service` | Entity resolution and public company/contact enrichment from approved sources. |
+| `enrichment-service` | Entity resolution, public company/contact enrichment, OpenSERP-backed contact discovery, and company-domain discovery from approved sources. |
 | `email-intelligence-service` | Eligible business-email candidate generation and verification. |
 | `scoring-routing-service` | Versioned fit, relevance, recency, evidence, confidence, and review-routing rules. |
 | `governance-service` | Source permissions, incident corroboration/rejection, suppression, retention, review decisions, audit, and inert CRM-target controls. |
@@ -52,7 +52,7 @@ The pipeline is external sources → normalization and deduplication → contact
 | `sequencing-service` | In-house sequence enrollment, SMTP/IMAP execution, reply/bounce/unsubscribe handling, and rate-limit enforcement after separate approval. |
 | `meeting-handoff-service` | Google Calendar booking, AE/SE prep packets, meeting outcomes, follow-up tasks, and CRM handoff sync. |
 
-The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, email-intelligence, scoring, governance, CRM export, sequencing, meeting-handoff, reporting, and console dashboard runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, and watch targets; enrichment stores entity-resolution cases, eligible contact candidates, email candidates, verification payloads, and review-required records; governance stores score records, review decisions, suppressions, and CRM targets; CRM export stores provider batch/item state; sequencing stores templates, enrollments, outbound attempts, inbound reply/bounce/unsubscribe events, and suppression linkage; meeting handoff stores Google Calendar event state, prep packets, outcomes, follow-up tasks, and CRM sync status.
+The shared `SourceDefinition` / `RawSourceItem` runtime foundation is implemented in the common package and exposed through gateway/reporting source-health APIs. Event, incident, enrichment, email-intelligence, scoring, governance, CRM export, sequencing, meeting-handoff, reporting, and console dashboard runtimes are implemented and included in Helm. Incident discovery stores article metadata, permitted excerpts, candidate incidents, evidence lineage, watch targets, and watch monitoring runs; enrichment stores entity-resolution cases, eligible contact candidates, domain-discovery evidence, email candidates, verification payloads, and review-required records; governance stores score records, review decisions, suppressions, and CRM targets; CRM export stores provider batch/item state; sequencing stores templates, enrollments, outbound attempts, inbound reply/bounce/unsubscribe events, and suppression linkage; meeting handoff stores Google Calendar event state, prep packets, outcomes, follow-up tasks, and CRM sync status.
 
 ## Implemented Source Registry Foundation
 
@@ -116,7 +116,7 @@ Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 
 - Dash is mounted at `/` while FastAPI keeps `/healthz`, `/readyz`, `/metrics`, `/docs`, and existing `/v1/*` review APIs.
 - Dashboard reads use `gateway-service`/`reporting-service` APIs with `X-Actor` and `X-Operator-Role` context; callbacks never query canonical tables.
-- Mutating controls call owning feature-service APIs through the gateway for review decisions, bounded bulk review, event create/edit, participant enrichment queueing, incident corroborate/reject/revert, CRM export/retry, company watchlist promotion/toggle, sequence pause/resume/cancel, and meeting handoff actions.
+- Mutating controls call owning feature-service APIs through the gateway for review decisions, bounded bulk review, event create/edit, participant enrichment queueing, incident corroborate/reject/revert, CRM export/retry, company watchlist promotion/toggle/contact discovery, contact-domain discovery, sequence pause/resume/cancel, and meeting handoff actions.
 - Event routes use coordinate-backed maps from structured venue address fields, and detail metadata is limited to governance reviewers.
 - Incident routes use company-specific rows, inline evidence/company rendering, corroborated-only watch promotion, and governance-reviewer-only metadata.
 - Every route surfaces freshness/degraded metadata where reporting provides it and preserves table alternatives when source data is unavailable.
@@ -152,7 +152,7 @@ make dev
 ```
 
 The local stack starts PostgreSQL, Redis, a one-shot migration container,
-`gateway-service`, `console-service`, a Celery worker, and the email verifier sidecar.
+`gateway-service`, `console-service`, a Celery worker, a Celery beat scheduler for hourly watchlist monitoring, and the email verifier sidecar.
 Compose runs `alembic upgrade head` before the API and dashboard services are treated as
 ready, so fresh local volumes get the public schema before reporting traffic reaches the
 gateway.

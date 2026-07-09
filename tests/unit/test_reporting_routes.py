@@ -21,6 +21,7 @@ from ghostrecon.models.api import (
     ReportingOperatorContext,
     ReportingReviewQueue,
     ReportingSourceHealthList,
+    ReportingWatchTargetDetail,
     ReportingWatchTargetList,
     ReviewCandidateOut,
     SecurityIncidentOut,
@@ -36,6 +37,7 @@ from ghostrecon.services.reporting import (
     project_crm_target,
     project_review_candidate,
     project_source_health,
+    project_watch_target,
     reporting_metadata_from_sources,
 )
 
@@ -81,7 +83,13 @@ def _watch_target() -> WatchTargetOut:
         canonical_target_key="example-corp",
         display_name="Example Corp",
         enabled=True,
+        monitoring_status="completed",
+        last_monitored_at=NOW,
+        next_monitoring_at=NOW,
+        monitoring_summary={"result_count": 1},
         created_by="analyst@example.com",
+        owner="reviewer@example.com",
+        origin_incident_id="incident-1",
         version=1,
         created_at=NOW,
         updated_at=NOW,
@@ -179,6 +187,9 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     async def fake_watch_targets(**kwargs):
         return ReportingWatchTargetList(metadata=_metadata(), watch_targets=[_watch_target()])
 
+    async def fake_watch_target_detail(*args, **kwargs):
+        return ReportingWatchTargetDetail(metadata=_metadata(), watch_target=_watch_target())
+
     async def fake_review_queue(**kwargs):
         return ReportingReviewQueue(metadata=_metadata(), candidates=[_review_candidate()])
 
@@ -205,6 +216,7 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     monkeypatch.setattr(routers, "get_reporting_incidents", fake_incidents)
     monkeypatch.setattr(routers, "get_reporting_incident_detail", fake_incident_detail)
     monkeypatch.setattr(routers, "get_reporting_watch_targets", fake_watch_targets)
+    monkeypatch.setattr(routers, "get_reporting_watch_target_detail", fake_watch_target_detail)
     monkeypatch.setattr(routers, "get_reporting_review_queue", fake_review_queue)
     monkeypatch.setattr(routers, "get_reporting_crm_targets", fake_crm_targets)
     monkeypatch.setattr(routers, "get_reporting_meetings", fake_meetings)
@@ -220,6 +232,9 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     incidents = client.get("/v1/reporting/incidents", headers=headers).json()
     incident_detail = client.get("/v1/reporting/incidents/incident-1", headers=headers).json()
     watch_targets = client.get("/v1/reporting/watch-targets", headers=headers).json()
+    watch_target_detail = client.get(
+        "/v1/reporting/watch-targets/watch-1", headers=headers
+    ).json()
     review_queue = client.get("/v1/reporting/review-queue", headers=headers).json()
     crm_targets = client.get("/v1/reporting/crm-targets", headers=headers).json()
     meetings = client.get("/v1/reporting/meetings", headers=headers).json()
@@ -233,7 +248,8 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     assert event_detail["event"]["id"] == "event-1"
     assert incidents["incidents"][0]["id"] == "incident-1"
     assert incident_detail["incident"]["id"] == "incident-1"
-    assert watch_targets["watch_targets"][0]["origin_incident_id"] is None
+    assert watch_targets["watch_targets"][0]["monitoring_status"] == "completed"
+    assert watch_target_detail["watch_target"]["id"] == "watch-1"
     assert review_queue["candidates"][0]["evidence_summary"] == {"score": 60}
     assert crm_targets["crm_targets"][0]["export_status"] == "not_exported"
     assert meetings["meetings"][0]["provider_event_id"] == "fake-meeting-1"
@@ -313,10 +329,42 @@ def test_reporting_role_projection_redacts_viewer_policy_detail() -> None:
         created_at=NOW,
         updated_at=NOW,
     )
+    watch = SimpleNamespace(
+        id="watch-1",
+        target_type="company",
+        canonical_target_key="example-corp",
+        display_name="Example Corp",
+        query_config={},
+        enabled=True,
+        monitoring_status="completed",
+        last_monitored_at=NOW,
+        next_monitoring_at=NOW,
+        monitoring_error=None,
+        monitoring_summary={"result_count": 1},
+        owner="reviewer@example.com",
+        origin_incident_id="incident-1",
+        created_by="reviewer@example.com",
+        version=1,
+        created_at=NOW,
+        updated_at=NOW,
+    )
     source = _source_health(SourceHealthStatus.DEGRADED)
 
     assert project_review_candidate(review, viewer).policy_snapshot == {}
     assert project_review_candidate(review, viewer).evidence_summary == {}
+    assert project_watch_target(watch, viewer).origin_incident_id is None
+    analyst_watch = project_watch_target(
+        watch,
+        ReportingOperatorContext(role=DashboardRole.ANALYST),
+    )
+    assert analyst_watch.origin_incident_id is None
+    assert (
+        project_watch_target(
+            watch,
+            ReportingOperatorContext(role=DashboardRole.GOVERNANCE_REVIEWER),
+        ).origin_incident_id
+        == "incident-1"
+    )
     assert project_crm_target(target, viewer).approval_snapshot == {}
     assert project_source_health(source, viewer).last_error is None
     assert project_review_candidate(review, admin).policy_snapshot == {

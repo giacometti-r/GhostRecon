@@ -1,0 +1,96 @@
+{{- if .Values.workers.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghostrecon-worker
+  labels:
+    {{- include "ghostrecon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.workers.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ghostrecon.name" . }}
+      app.kubernetes.io/component: worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "ghostrecon.name" . }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery"]
+          args: ["-A", "ghostrecon.worker_runtime:celery_app", "worker", "--loglevel=INFO"]
+          env:
+            - name: GHOSTRECON_SERVICE_NAME
+              value: "worker"
+          envFrom:
+            - configMapRef:
+                name: ghostrecon-config
+            - secretRef:
+                name: ghostrecon-secrets
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+---
+{{- end }}
+{{- if .Values.scheduler.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ghostrecon-scheduler
+  labels:
+    {{- include "ghostrecon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scheduler
+spec:
+  replicas: {{ .Values.scheduler.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ghostrecon.name" . }}
+      app.kubernetes.io/component: scheduler
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "ghostrecon.name" . }}
+        app.kubernetes.io/component: scheduler
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: scheduler
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery"]
+          args:
+            - "-A"
+            - "ghostrecon.worker_runtime:celery_app"
+            - "beat"
+            - "--loglevel=INFO"
+            - "--schedule=/tmp/celerybeat-schedule"
+          env:
+            - name: GHOSTRECON_SERVICE_NAME
+              value: "scheduler"
+          envFrom:
+            - configMapRef:
+                name: ghostrecon-config
+            - secretRef:
+                name: ghostrecon-secrets
+          volumeMounts:
+            - name: beat-state
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+      volumes:
+        - name: beat-state
+          emptyDir: {}
+{{- end }}

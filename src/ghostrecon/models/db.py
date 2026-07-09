@@ -348,6 +348,11 @@ class WatchTarget(Base):
     query_config: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     owner: Mapped[str | None] = mapped_column(String(128))
+    monitoring_status: Mapped[str] = mapped_column(String(64), default="not_run")
+    last_monitored_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    next_monitoring_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    monitoring_error: Mapped[str | None] = mapped_column(Text)
+    monitoring_summary: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
     origin_incident_id: Mapped[str | None] = mapped_column(
         ForeignKey("security_incidents.id", ondelete="SET NULL")
     )
@@ -357,6 +362,29 @@ class WatchTarget(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utcnow, onupdate=utcnow
     )
+
+
+class WatchTargetMonitoringRun(Base):
+    __tablename__ = "watch_target_monitoring_runs"
+    __table_args__ = (
+        Index("ix_watch_target_monitoring_runs_target", "watch_target_id", "started_at"),
+        Index("ix_watch_target_monitoring_runs_status", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    watch_target_id: Mapped[str] = mapped_column(
+        ForeignKey("watch_targets.id", ondelete="CASCADE")
+    )
+    provider: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(64), default="completed")
+    query_summary: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    result_summary: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    error: Mapped[str | None] = mapped_column(Text)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class EntityResolutionCase(Base):
@@ -795,6 +823,7 @@ class Sequence(Base):
     channel: Mapped[str] = mapped_column(String(64), default="email")
     status: Mapped[str] = mapped_column(String(64), default="active")
     rate_limit_policy: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    definition_version: Mapped[int] = mapped_column(Integer, default=1)
     idempotency_key: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -808,7 +837,12 @@ class Sequence(Base):
 class SequenceStep(Base):
     __tablename__ = "sequence_steps"
     __table_args__ = (
-        UniqueConstraint("sequence_id", "step_order", name="uq_sequence_steps_order"),
+        UniqueConstraint(
+            "sequence_id",
+            "definition_version",
+            "step_order",
+            name="uq_sequence_steps_version_order",
+        ),
         Index("ix_sequence_steps_sequence_order", "sequence_id", "step_order"),
     )
 
@@ -819,8 +853,11 @@ class SequenceStep(Base):
     step_order: Mapped[int] = mapped_column(Integer)
     channel: Mapped[str] = mapped_column(String(64), default="email")
     delay_seconds: Mapped[int] = mapped_column(Integer, default=0)
-    subject_template: Mapped[str] = mapped_column(String(512))
-    body_template: Mapped[str] = mapped_column(Text)
+    subject_template: Mapped[str | None] = mapped_column(String(512))
+    body_template: Mapped[str | None] = mapped_column(Text)
+    requires_approval: Mapped[bool] = mapped_column(Boolean, default=False)
+    step_metadata: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
+    definition_version: Mapped[int] = mapped_column(Integer, default=1)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -849,6 +886,7 @@ class SequenceEnrollment(Base):
     approval_actor: Mapped[str] = mapped_column(String(128))
     approval_reason: Mapped[str] = mapped_column(Text)
     current_step_order: Mapped[int] = mapped_column(Integer, default=1)
+    definition_version: Mapped[int] = mapped_column(Integer, default=1)
     next_step_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     pause_reason: Mapped[str | None] = mapped_column(Text)
     policy_snapshot: Mapped[dict[str, object]] = mapped_column(JSONB, default=dict)
@@ -861,6 +899,44 @@ class SequenceEnrollment(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     sequence: Mapped[Sequence] = relationship(back_populates="enrollments")
+
+
+class SequenceStepActivity(Base):
+    __tablename__ = "sequence_step_activities"
+    __table_args__ = (
+        UniqueConstraint("idempotency_key", name="uq_sequence_step_activities_idempotency_key"),
+        Index("ix_sequence_step_activities_status_due", "status", "due_at"),
+        Index("ix_sequence_step_activities_enrollment", "enrollment_id"),
+        Index("ix_sequence_step_activities_step", "sequence_step_id"),
+    )
+
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
+    )
+    enrollment_id: Mapped[str] = mapped_column(
+        ForeignKey("sequence_enrollments.id", ondelete="CASCADE")
+    )
+    sequence_step_id: Mapped[str] = mapped_column(ForeignKey("sequence_steps.id"))
+    outbound_email_id: Mapped[str | None] = mapped_column(
+        ForeignKey("outbound_emails.id", ondelete="SET NULL")
+    )
+    meeting_handoff_id: Mapped[str | None] = mapped_column(
+        ForeignKey("meeting_handoffs.id", ondelete="SET NULL")
+    )
+    step_order: Mapped[int] = mapped_column(Integer)
+    channel: Mapped[str] = mapped_column(String(64), default="email")
+    status: Mapped[str] = mapped_column(String(64), default="pending")
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    approved_by: Mapped[str | None] = mapped_column(String(128))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    completed_by: Mapped[str | None] = mapped_column(String(128))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    metadata_payload: Mapped[dict[str, object]] = mapped_column("metadata", JSONB, default=dict)
+    idempotency_key: Mapped[str] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
 
 
 class OutboundEmail(Base):

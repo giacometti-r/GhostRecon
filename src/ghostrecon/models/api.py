@@ -2,7 +2,15 @@ from datetime import datetime
 from enum import StrEnum
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    HttpUrl,
+    field_validator,
+    model_validator,
+)
 
 
 class LeadSourceType(StrEnum):
@@ -117,6 +125,12 @@ class SequenceStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class SequenceChannel(StrEnum):
+    EMAIL = "email"
+    CALL = "call"
+    GOOGLE_MEET = "google_meet"
+
+
 class SequenceEnrollmentStatus(StrEnum):
     ACTIVE = "active"
     PAUSED = "paused"
@@ -128,10 +142,21 @@ class SequenceEnrollmentStatus(StrEnum):
 
 class OutboundEmailStatus(StrEnum):
     PENDING = "pending"
+    PENDING_APPROVAL = "pending_approval"
     SENT = "sent"
     FAILED_RETRYABLE = "failed_retryable"
     FAILED_TERMINAL = "failed_terminal"
     SKIPPED_POLICY = "skipped_policy"
+
+
+class SequenceActivityStatus(StrEnum):
+    PENDING_APPROVAL = "pending_approval"
+    PENDING = "pending"
+    APPROVED = "approved"
+    COMPLETED = "completed"
+    SCHEDULED = "scheduled"
+    CANCELED = "canceled"
+    FAILED = "failed"
 
 
 class InboundEmailEventType(StrEnum):
@@ -513,6 +538,12 @@ class WatchTargetOut(BaseModel):
     display_name: str
     query_config: dict[str, object] = {}
     enabled: bool
+    monitoring_enabled: bool = True
+    monitoring_status: str = "not_run"
+    last_monitored_at: datetime | None = None
+    next_monitoring_at: datetime | None = None
+    monitoring_error: str | None = None
+    monitoring_summary: dict[str, object] = {}
     owner: str | None = None
     origin_incident_id: str | None = None
     created_by: str
@@ -636,6 +667,24 @@ class ContactEnrichmentOut(BaseModel):
 
 class ContactEnrichmentList(BaseModel):
     candidates: list[ContactEnrichmentOut]
+
+
+class ContactDomainDiscoveryResult(BaseModel):
+    contact_candidate: ContactEnrichmentOut
+    query: str
+    provider: str
+    selected_url: str | None = None
+    discovered_domain: str | None = None
+    status: ContactEnrichmentStatus
+    review_reason: str | None = None
+
+
+class WatchTargetContactDiscoveryResult(BaseModel):
+    watch_target: WatchTargetOut
+    query: str
+    provider: str
+    degraded: bool = False
+    contact_candidates: list[ContactEnrichmentOut] = []
 
 
 class EmailCandidatePersistRequest(BaseModel):
@@ -1062,6 +1111,11 @@ class ReportingWatchTargetList(BaseModel):
     next_cursor: str | None = None
 
 
+class ReportingWatchTargetDetail(BaseModel):
+    metadata: ReportingMetadata
+    watch_target: WatchTargetOut
+
+
 class ReportingReviewQueue(BaseModel):
     metadata: ReportingMetadata
     candidates: list[ReviewCandidateOut]
@@ -1322,9 +1376,20 @@ class SequenceStepCreate(BaseModel):
 
     step_order: int | None = Field(default=None, ge=1)
     delay_seconds: int = Field(default=0, ge=0)
-    subject_template: str = Field(min_length=1, max_length=512)
-    body_template: str = Field(min_length=1)
-    channel: str = "email"
+    subject_template: str | None = Field(default=None, max_length=512)
+    body_template: str | None = None
+    channel: SequenceChannel = SequenceChannel.EMAIL
+    requires_approval: bool | None = None
+    step_metadata: dict[str, object] = {}
+
+    @model_validator(mode="after")
+    def validate_channel_content(self) -> "SequenceStepCreate":
+        if self.channel == SequenceChannel.EMAIL:
+            if not self.subject_template or not self.subject_template.strip():
+                raise ValueError("email sequence steps require a subject template")
+            if not self.body_template or not self.body_template.strip():
+                raise ValueError("email sequence steps require a body template")
+        return self
 
 
 class SequenceCreateRequest(BaseModel):
@@ -1332,7 +1397,7 @@ class SequenceCreateRequest(BaseModel):
 
     name: str = Field(min_length=1, max_length=255)
     owner_id: str | None = None
-    channel: str = "email"
+    channel: SequenceChannel = SequenceChannel.EMAIL
     rate_limit_policy: dict[str, object] = {}
     steps: list[SequenceStepCreate] = Field(min_length=1, max_length=20)
 
@@ -1342,20 +1407,24 @@ class SequenceUpdateRequest(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     owner_id: str | None = None
-    channel: str | None = None
+    channel: SequenceChannel | None = None
     status: SequenceStatus | None = None
     rate_limit_policy: dict[str, object] | None = None
     steps: list[SequenceStepCreate] | None = Field(default=None, max_length=20)
+    expected_version: int | None = Field(default=None, ge=1)
 
 
 class SequenceStepOut(BaseModel):
     id: str
     sequence_id: str
     step_order: int
-    channel: str
+    channel: SequenceChannel
     delay_seconds: int
-    subject_template: str
-    body_template: str
+    subject_template: str | None = None
+    body_template: str | None = None
+    requires_approval: bool = False
+    step_metadata: dict[str, object] = {}
+    definition_version: int = 1
     active: bool
     created_at: datetime
     updated_at: datetime
@@ -1365,9 +1434,10 @@ class SequenceOut(BaseModel):
     id: str
     name: str
     owner_id: str | None = None
-    channel: str
+    channel: SequenceChannel
     status: SequenceStatus
     rate_limit_policy: dict[str, object] = {}
+    definition_version: int = 1
     created_at: datetime
     updated_at: datetime
     steps: list[SequenceStepOut] = []
@@ -1432,6 +1502,7 @@ class SequenceEnrollmentOut(BaseModel):
     approval_actor: str
     approval_reason: str
     current_step_order: int
+    definition_version: int = 1
     next_step_at: datetime | None = None
     pause_reason: str | None = None
     policy_snapshot: dict[str, object] = {}
@@ -1444,6 +1515,82 @@ class SequenceEnrollmentOut(BaseModel):
 
 class SequenceEnrollmentList(BaseModel):
     enrollments: list[SequenceEnrollmentOut]
+
+
+class SequenceActivityOut(BaseModel):
+    id: str
+    enrollment_id: str
+    sequence_step_id: str
+    outbound_email_id: str | None = None
+    meeting_handoff_id: str | None = None
+    sequence_id: str | None = None
+    sequence_name: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    account_name: str | None = None
+    step_order: int
+    channel: SequenceChannel
+    status: SequenceActivityStatus
+    due_at: datetime | None = None
+    approved_by: str | None = None
+    approved_at: datetime | None = None
+    completed_by: str | None = None
+    completed_at: datetime | None = None
+    metadata: dict[str, object] = {}
+    created_at: datetime
+    updated_at: datetime
+
+
+class SequenceActivityList(BaseModel):
+    activities: list[SequenceActivityOut]
+
+
+class SequenceActivityActionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=500)
+    metadata: dict[str, object] = {}
+
+
+class SequenceActivityScheduleMeetingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str | None = Field(default=None, max_length=512)
+    description: str | None = None
+    location: str | None = Field(default="Google Meet", max_length=512)
+    start_at: datetime
+    end_at: datetime
+    timezone: str = "UTC"
+    attendees: list[MeetingAttendee] = []
+    send_updates: bool | None = None
+
+
+class CrmProspectOut(BaseModel):
+    provider: str = "attio"
+    provider_record_id: str
+    provider_object: str = "people"
+    display_name: str
+    email: EmailStr | None = None
+    title: str | None = None
+    company_name: str | None = None
+    company_domain: str | None = None
+    source_payload: dict[str, object] = {}
+
+
+class CrmProspectList(BaseModel):
+    prospects: list[CrmProspectOut]
+    provider: str = "attio"
+
+
+class SequenceCrmProspectImportRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider_record_id: str
+    sequence_id: str
+    outreach_approved: bool
+    approval_reason: str = Field(min_length=1, max_length=500)
+    start_at: datetime | None = None
+    policy_snapshot: dict[str, object] = {}
 
 
 class SequenceEmailAlertCreate(BaseModel):
