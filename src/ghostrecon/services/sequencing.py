@@ -5,7 +5,7 @@ from string import Formatter
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import or_, select
+from sqlalchemy import String, cast, or_, select
 
 from ghostrecon.common.config import Settings, get_settings
 from ghostrecon.common.database import session_scope
@@ -67,6 +67,11 @@ from ghostrecon.services.sequence_adapters import (
 SEQUENCING_SERVICE_NAME = "sequencing-service"
 ACTIVE_ENROLLMENT_STATUSES = {"active"}
 TERMINAL_ENROLLMENT_STATUSES = {"completed", "canceled", "suppressed", "failed"}
+
+
+def _fuzzy(column: Any, value: str | None) -> Any:
+    text = str(value or "").strip()
+    return cast(column, String).ilike(f"%{text}%")
 
 
 def evaluate_sequence_eligibility(request: SequenceEligibilityRequest) -> SequenceEligibilityResult:
@@ -165,7 +170,7 @@ async def list_sequences(
     async with session_scope(settings) as session:
         query = select(Sequence).order_by(Sequence.created_at.desc()).limit(limit)
         if status:
-            query = query.where(Sequence.status == status)
+            query = query.where(_fuzzy(Sequence.status, status))
         result = await session.execute(query)
         sequences = [
             sequence_to_model(sequence, await _sequence_steps(session, sequence.id))
@@ -183,6 +188,22 @@ async def get_sequence(
         sequence = await session.get(Sequence, sequence_id)
         if sequence is None:
             return None
+        return sequence_to_model(sequence, await _sequence_steps(session, sequence.id))
+
+
+async def archive_sequence(
+    sequence_id: str,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+) -> SequenceOut | None:
+    _ = actor
+    async with session_scope(settings) as session:
+        sequence = await session.get(Sequence, sequence_id)
+        if sequence is None:
+            return None
+        sequence.status = "archived"
+        sequence.updated_at = utcnow()
         return sequence_to_model(sequence, await _sequence_steps(session, sequence.id))
 
 
@@ -254,9 +275,7 @@ async def create_sequence_enrollment(
 
     async with session_scope(settings) as session:
         existing = await session.scalar(
-            select(SequenceEnrollment).where(
-                SequenceEnrollment.idempotency_key == idempotency_key
-            )
+            select(SequenceEnrollment).where(SequenceEnrollment.idempotency_key == idempotency_key)
         )
         if existing is not None:
             return await _enrollment_to_model_with_emails(session, existing)
@@ -342,12 +361,10 @@ async def list_sequence_enrollments(
 ) -> SequenceEnrollmentList:
     async with session_scope(settings) as session:
         query = (
-            select(SequenceEnrollment)
-            .order_by(SequenceEnrollment.created_at.desc())
-            .limit(limit)
+            select(SequenceEnrollment).order_by(SequenceEnrollment.created_at.desc()).limit(limit)
         )
         if status:
-            query = query.where(SequenceEnrollment.status == status)
+            query = query.where(_fuzzy(SequenceEnrollment.status, status))
         result = await session.execute(query)
         enrollments = [
             await _enrollment_to_model_with_emails(session, enrollment)
@@ -370,15 +387,27 @@ async def list_sequence_activities(
             .limit(limit)
         )
         if status:
-            query = query.where(SequenceStepActivity.status == status)
+            query = query.where(_fuzzy(SequenceStepActivity.status, status))
         if channel:
-            query = query.where(SequenceStepActivity.channel == channel)
+            query = query.where(_fuzzy(SequenceStepActivity.channel, channel))
         result = await session.execute(query)
         activities = [
             await _activity_to_model_with_display(session, activity)
             for activity in result.scalars()
         ]
         return SequenceActivityList(activities=activities)
+
+
+async def get_sequence_activity(
+    activity_id: str,
+    *,
+    settings: Settings | None = None,
+) -> SequenceActivityOut | None:
+    async with session_scope(settings) as session:
+        activity = await session.get(SequenceStepActivity, activity_id)
+        if activity is None:
+            return None
+        return await _activity_to_model_with_display(session, activity)
 
 
 async def complete_sequence_activity(
@@ -535,9 +564,7 @@ async def import_crm_prospect_to_sequence(
     if not prospect.email:
         raise ValueError("CRM prospect requires an email before sequence assignment")
     domain = (
-        prospect.company_domain
-        or _domain_from_email(prospect.email)
-        or "unknown.local"
+        prospect.company_domain or _domain_from_email(prospect.email) or "unknown.local"
     ).lower()
     now = utcnow()
     async with session_scope(resolved) as session:
@@ -726,9 +753,7 @@ async def create_sequence_email_alert(
         if enrollment is None:
             return None
         existing = await session.scalar(
-            select(SequenceEmailAlert).where(
-                SequenceEmailAlert.idempotency_key == idempotency_key
-            )
+            select(SequenceEmailAlert).where(SequenceEmailAlert.idempotency_key == idempotency_key)
         )
         if existing is not None:
             return sequence_email_alert_to_model(existing)
@@ -784,9 +809,7 @@ async def process_due_sequence_email_alerts(
                 alert.status = "failed_retryable"
                 alert.last_error = str(exc)
                 alert.updated_at = utcnow()
-                outcomes.append(
-                    {"alert_id": alert.id, "status": alert.status, "reason": str(exc)}
-                )
+                outcomes.append({"alert_id": alert.id, "status": alert.status, "reason": str(exc)})
                 continue
             alert.status = "sent"
             alert.provider_message_id = sent.provider_message_id

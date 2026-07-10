@@ -121,6 +121,15 @@ class ConsoleApiClient:
     ) -> dict[str, Any]:
         return self.request("PATCH", path, payload=payload, idempotency_key=idempotency_key)
 
+    def delete(
+        self,
+        path: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        return self.request("DELETE", path, payload=payload, idempotency_key=idempotency_key)
+
     def request(
         self,
         method: str,

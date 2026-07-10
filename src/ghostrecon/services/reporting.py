@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import String, cast, or_, select
 
 from ghostrecon.common.config import Settings
 from ghostrecon.common.database import session_scope
@@ -12,6 +12,7 @@ from ghostrecon.models.api import (
     CyberEventOut,
     DashboardRole,
     MeetingHandoffOut,
+    ReportingCrmTargetDetail,
     ReportingCrmTargetList,
     ReportingEventDetail,
     ReportingEventList,
@@ -34,8 +35,11 @@ from ghostrecon.models.api import (
     normalize_event_format_value,
 )
 from ghostrecon.models.db import (
+    Account,
+    Contact,
     CrmTarget,
     CyberEvent,
+    EmailCandidateRecord,
     MeetingFollowUpTask,
     MeetingHandoff,
     MeetingPrepPacket,
@@ -56,6 +60,22 @@ STALE_SOURCE_STATUSES = {
     SourceHealthStatus.DEGRADED,
     SourceHealthStatus.UNKNOWN,
 }
+
+
+def _like(value: str | None) -> str | None:
+    text = str(value or "").strip()
+    return f"%{text}%" if text else None
+
+
+def _fuzzy(column: Any, value: str | None) -> Any:
+    return cast(column, String).ilike(_like(value) or "")
+
+
+def _text_matches(value: object, needle: str | None) -> bool:
+    text = str(needle or "").strip().lower()
+    if not text:
+        return True
+    return text in str(value or "").lower()
 
 KPI_CATALOG = {
     "discovery_coverage": [
@@ -163,16 +183,24 @@ async def get_reporting_events(
             CyberEvent.id.asc(),
         )
         if series:
-            stmt = stmt.where(CyberEvent.event_series_key == series)
+            stmt = stmt.where(
+                or_(
+                    _fuzzy(CyberEvent.event_series_key, series),
+                    _fuzzy(CyberEvent.name, series),
+                )
+            )
         if source:
-            stmt = stmt.where(CyberEvent.source_definition_id == source)
+            stmt = stmt.where(_fuzzy(CyberEvent.source_definition_id, source))
         if country:
-            stmt = stmt.where(CyberEvent.country == country.upper())
+            stmt = stmt.where(_fuzzy(CyberEvent.country, country))
         if event_format:
-            normalized_format = normalize_event_format_value(event_format)
-            stmt = stmt.where(CyberEvent.event_format == str(normalized_format))
+            try:
+                normalized_format = str(normalize_event_format_value(event_format))
+            except ValueError:
+                normalized_format = event_format
+            stmt = stmt.where(_fuzzy(CyberEvent.event_format, normalized_format))
         if topic:
-            stmt = stmt.where(CyberEvent.topics.contains([topic]))
+            stmt = stmt.where(_fuzzy(CyberEvent.topics, topic))
         result = await session.execute(stmt.offset(offset).limit(limit + 1))
         rows = list(result.scalars())
 
@@ -233,20 +261,22 @@ async def get_reporting_incidents(
             SecurityIncident.id.asc(),
         )
         if status:
-            stmt = stmt.where(SecurityIncident.status == status)
+            stmt = stmt.where(_fuzzy(SecurityIncident.status, status))
         if source:
-            stmt = stmt.where(SecurityIncident.source_definition_id == source)
+            stmt = stmt.where(_fuzzy(SecurityIncident.source_definition_id, source))
         if company:
             stmt = stmt.where(
                 or_(
-                    SecurityIncident.primary_affected_company == company,
-                    SecurityIncident.affected_companies.contains([company]),
+                    _fuzzy(SecurityIncident.primary_affected_company, company),
+                    _fuzzy(SecurityIncident.affected_companies, company),
+                    _fuzzy(SecurityIncident.primary_affected_domain, company),
+                    _fuzzy(SecurityIncident.affected_domains, company),
                 )
             )
         if attack_vector:
-            stmt = stmt.where(SecurityIncident.attack_vector == attack_vector)
+            stmt = stmt.where(_fuzzy(SecurityIncident.attack_vector, attack_vector))
         if incident_type:
-            stmt = stmt.where(SecurityIncident.incident_type == incident_type)
+            stmt = stmt.where(_fuzzy(SecurityIncident.incident_type, incident_type))
         result = await session.execute(stmt.offset(offset).limit(limit + 1))
         rows = list(result.scalars())
 
@@ -302,18 +332,22 @@ async def get_reporting_watch_targets(
     context = operator or ReportingOperatorContext()
     offset = parse_cursor(cursor)
     async with session_scope(settings) as session:
-        stmt = (
-            select(WatchTarget)
-            .order_by(WatchTarget.created_at.desc(), WatchTarget.id.asc())
-        )
+        stmt = select(WatchTarget).order_by(WatchTarget.created_at.desc(), WatchTarget.id.asc())
         if target_type:
-            stmt = stmt.where(WatchTarget.target_type == target_type)
+            stmt = stmt.where(_fuzzy(WatchTarget.target_type, target_type))
         else:
             stmt = stmt.where(WatchTarget.target_type == "company")
         if enabled is not None:
             stmt = stmt.where(WatchTarget.enabled == enabled)
         if owner:
-            stmt = stmt.where(WatchTarget.owner == owner)
+            stmt = stmt.where(
+                or_(
+                    _fuzzy(WatchTarget.owner, owner),
+                    _fuzzy(WatchTarget.display_name, owner),
+                    _fuzzy(WatchTarget.canonical_target_key, owner),
+                    _fuzzy(WatchTarget.monitoring_status, owner),
+                )
+            )
         result = await session.execute(stmt.offset(offset).limit(limit + 1))
         rows = list(result.scalars())
 
@@ -372,11 +406,11 @@ async def get_reporting_review_queue(
             ReviewCandidate.id.asc(),
         )
         if status:
-            stmt = stmt.where(ReviewCandidate.status == status)
+            stmt = stmt.where(_fuzzy(ReviewCandidate.status, status))
         if candidate_type:
-            stmt = stmt.where(ReviewCandidate.candidate_type == candidate_type)
+            stmt = stmt.where(_fuzzy(ReviewCandidate.candidate_type, candidate_type))
         if target_type:
-            stmt = stmt.where(ReviewCandidate.target_type == target_type)
+            stmt = stmt.where(_fuzzy(ReviewCandidate.target_type, target_type))
         result = await session.execute(stmt.offset(offset).limit(limit + 1))
         rows = list(result.scalars())
 
@@ -409,15 +443,23 @@ async def get_reporting_crm_targets(
     async with session_scope(settings) as session:
         stmt = select(CrmTarget).order_by(CrmTarget.created_at.desc(), CrmTarget.id.asc())
         if status:
-            stmt = stmt.where(CrmTarget.status == status)
+            stmt = stmt.where(_fuzzy(CrmTarget.status, status))
         if target_type:
-            stmt = stmt.where(CrmTarget.target_type == target_type)
+            stmt = stmt.where(_fuzzy(CrmTarget.target_type, target_type))
         if export_status:
-            stmt = stmt.where(CrmTarget.export_status == export_status)
+            stmt = stmt.where(_fuzzy(CrmTarget.export_status, export_status))
         result = await session.execute(stmt.offset(offset).limit(limit + 1))
         rows = list(result.scalars())
+        targets = rows[:limit]
+        projected_targets = [
+            project_crm_target(
+                target,
+                context,
+                display_fields=await _crm_target_display_fields(session, target),
+            )
+            for target in targets
+        ]
 
-    targets = rows[:limit]
     metadata = await reporting_metadata(
         None,
         settings=settings,
@@ -426,8 +468,34 @@ async def get_reporting_crm_targets(
     )
     return ReportingCrmTargetList(
         metadata=metadata,
-        crm_targets=[project_crm_target(target, context) for target in targets],
+        crm_targets=projected_targets,
         next_cursor=next_cursor(rows, limit, offset),
+    )
+
+
+async def get_reporting_crm_target_detail(
+    crm_target_id: str,
+    *,
+    operator: ReportingOperatorContext | None = None,
+    settings: Settings | None = None,
+) -> ReportingCrmTargetDetail | None:
+    context = operator or ReportingOperatorContext()
+    async with session_scope(settings) as session:
+        target = await session.get(CrmTarget, crm_target_id)
+        display_fields = (
+            await _crm_target_display_fields(session, target) if target is not None else {}
+        )
+    if target is None:
+        return None
+    metadata = await reporting_metadata(
+        None,
+        settings=settings,
+        record_watermark_name="crm_target_updated_at",
+        record_watermark=target.updated_at,
+    )
+    return ReportingCrmTargetDetail(
+        metadata=metadata,
+        crm_target=project_crm_target(target, context, display_fields=display_fields),
     )
 
 
@@ -443,9 +511,14 @@ async def get_reporting_source_health(
     context = operator or ReportingOperatorContext()
     offset = parse_cursor(cursor)
     sources = await list_source_health(kind, settings)
+    if kind:
+        sources = [source for source in sources if _text_matches(source.source_kind, kind)]
     if freshness_status:
         sources = [
-            source for source in sources if source.freshness_status.value == freshness_status
+            source
+            for source in sources
+            if _text_matches(source.freshness_status.value, freshness_status)
+            or _text_matches(source.name, freshness_status)
         ]
     sources = sorted(sources, key=lambda source: (source.source_kind, source.name))
     rows = sources[offset : offset + limit + 1]
@@ -479,9 +552,9 @@ async def get_reporting_meetings(
             MeetingHandoff.id.asc(),
         )
         if status:
-            stmt = stmt.where(MeetingHandoff.status == status)
+            stmt = stmt.where(_fuzzy(MeetingHandoff.status, status))
         if crm_sync_status:
-            stmt = stmt.where(MeetingHandoff.crm_sync_status == crm_sync_status)
+            stmt = stmt.where(_fuzzy(MeetingHandoff.crm_sync_status, crm_sync_status))
         result = await session.execute(stmt.offset(offset).limit(limit + 1))
         rows = list(result.scalars())
         meetings = [
@@ -577,8 +650,11 @@ def project_watch_target(
 def project_crm_target(
     target: CrmTarget,
     context: ReportingOperatorContext,
+    *,
+    display_fields: dict[str, object] | None = None,
 ) -> CrmTargetOut:
     payload = crm_target_to_api(target)
+    payload.update({key: value for key, value in (display_fields or {}).items() if value})
     if context.role == DashboardRole.VIEWER:
         payload["policy_snapshot"] = {}
         payload["approval_snapshot"] = {}
@@ -618,6 +694,50 @@ async def _project_meeting_with_children(
     if context.role == DashboardRole.VIEWER:
         model = model.model_copy(update={"policy_snapshot": {}})
     return model
+
+
+async def _crm_target_display_fields(session: Any, target: CrmTarget) -> dict[str, object]:
+    fields: dict[str, object] = {
+        "display_name": target.approval_snapshot.get("name")
+        if isinstance(target.approval_snapshot, dict)
+        else None,
+        "company_name": target.approval_snapshot.get("company")
+        if isinstance(target.approval_snapshot, dict)
+        else None,
+        "email": target.approval_snapshot.get("email")
+        if isinstance(target.approval_snapshot, dict)
+        else None,
+    }
+    policy = target.policy_snapshot if isinstance(target.policy_snapshot, dict) else {}
+    fields["display_name"] = fields.get("display_name") or policy.get("name")
+    fields["company_name"] = fields.get("company_name") or policy.get("company")
+    fields["email"] = fields.get("email") or policy.get("email")
+
+    if target.target_type == "contact":
+        contact = await session.get(Contact, target.target_id)
+        if contact is not None:
+            fields["display_name"] = fields.get("display_name") or contact.full_name
+            fields["email"] = fields.get("email") or contact.email
+            if not fields.get("company_name") and contact.account_id:
+                account = await session.get(Account, contact.account_id)
+                if account is not None:
+                    fields["company_name"] = account.company_name
+    elif target.target_type == "email_candidate":
+        email_candidate = await session.get(EmailCandidateRecord, target.target_id)
+        if email_candidate is not None:
+            fields["email"] = fields.get("email") or email_candidate.email
+            if email_candidate.contact_id:
+                contact = await session.get(Contact, email_candidate.contact_id)
+                if contact is not None:
+                    fields["display_name"] = fields.get("display_name") or contact.full_name
+                    if not fields.get("company_name") and contact.account_id:
+                        account = await session.get(Account, contact.account_id)
+                        if account is not None:
+                            fields["company_name"] = account.company_name
+
+    if not fields.get("display_name"):
+        fields["display_name"] = fields.get("email") or target.target_id
+    return fields
 
 
 def _latest_datetime(values: Any) -> datetime | None:

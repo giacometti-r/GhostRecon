@@ -385,6 +385,25 @@ class EventParticipantList(BaseModel):
     participants: list[EventParticipantOut]
 
 
+class EventParticipantCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    published_name: str = Field(min_length=1, max_length=255)
+    organization: str | None = Field(default=None, max_length=255)
+    published_role: str | None = Field(default=None, max_length=255)
+    participant_type: EventParticipantType = EventParticipantType.UNKNOWN
+    profile_url: str | None = Field(default=None, max_length=2048)
+    reuse_state: ParticipantReuseState = ParticipantReuseState.ALLOWED
+    contact_extraction_allowed: bool = True
+    crm_export_allowed: bool = False
+    resolution_confidence: int = Field(default=70, ge=0, le=100)
+
+    @field_validator("profile_url")
+    @classmethod
+    def validate_profile_url(cls, value: str | None) -> str | None:
+        return _validate_absolute_http_url(value)
+
+
 class ManualEventCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -563,6 +582,24 @@ class ManualIncidentCreate(BaseModel):
     source_item_ids: list[str] = []
     evidence_urls: list[str] = []
     confidence: int = Field(default=70, ge=0, le=100)
+
+
+class IncidentUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    version: int
+    title: str | None = Field(default=None, min_length=1, max_length=512)
+    affected_companies: list[str] | None = None
+    affected_domains: list[str] | None = None
+    incident_type: str | None = None
+    attack_vector: str | None = None
+    first_observed_at: datetime | None = None
+    last_observed_at: datetime | None = None
+    geography: list[str] | None = None
+    languages: list[str] | None = None
+    source_item_ids: list[str] | None = None
+    evidence_urls: list[str] | None = None
+    confidence: int | None = Field(default=None, ge=0, le=100)
 
 
 class IncidentWatchPromotionRequest(BaseModel):
@@ -779,7 +816,7 @@ class EmailVerifyBatchResult(BaseModel):
 class EventParticipantEnrichRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    domain: str = Field(min_length=1, max_length=255)
+    domain: str | None = Field(default=None, max_length=255)
     role_scope: ContactRoleScope = ContactRoleScope.UNKNOWN
 
 
@@ -813,6 +850,15 @@ class ReviewCandidateOut(BaseModel):
 
 class ReviewCandidateList(BaseModel):
     candidates: list[ReviewCandidateOut]
+
+
+class ReviewCandidateUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, max_length=255)
+    company: str | None = Field(default=None, max_length=255)
+    domain: str | None = Field(default=None, max_length=255)
+    email: str | None = Field(default=None, max_length=320)
 
 
 class SourceDefinitionIn(BaseModel):
@@ -1031,6 +1077,9 @@ class CrmTargetOut(BaseModel):
     review_decision_id: str | None = None
     target_type: str
     target_id: str
+    display_name: str | None = None
+    company_name: str | None = None
+    email: str | None = None
     origin_type: OriginType | None = None
     origin_id: str | None = None
     source_definition_id: str | None = None
@@ -1046,6 +1095,16 @@ class CrmTargetOut(BaseModel):
 
 class CrmTargetList(BaseModel):
     crm_targets: list[CrmTargetOut]
+
+
+class CrmTargetUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = Field(default=None, max_length=255)
+    company: str | None = Field(default=None, max_length=255)
+    email: str | None = Field(default=None, max_length=320)
+    status: CrmTargetStatus | None = None
+    export_status: str | None = Field(default=None, max_length=64)
 
 
 class CrmExportCreateRequest(BaseModel):
@@ -1166,6 +1225,11 @@ class ReportingCrmTargetList(BaseModel):
     metadata: ReportingMetadata
     crm_targets: list[CrmTargetOut]
     next_cursor: str | None = None
+
+
+class ReportingCrmTargetDetail(BaseModel):
+    metadata: ReportingMetadata
+    crm_target: CrmTargetOut
 
 
 class ReportingSourceHealthList(BaseModel):

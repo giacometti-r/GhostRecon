@@ -21,6 +21,7 @@ from ghostrecon.models.api import (
     EventParticipantEnrichRequest,
     EventParticipantEnrichResult,
     ReviewCandidateOut,
+    ReviewCandidateUpdateRequest,
     WatchTargetContactDiscoveryResult,
     WatchTargetOut,
 )
@@ -73,6 +74,33 @@ def normalize_domain(domain: str | None) -> str | None:
         return resolved
     cleaned = domain.lower().strip().removeprefix("https://").removeprefix("http://")
     return cleaned.split("/", 1)[0].removeprefix("www.").strip(".") or None
+
+
+def inferred_demo_domain(*values: str | None) -> str | None:
+    for value in values:
+        text = str(value or "").strip().lower()
+        if not text:
+            continue
+        if "." in text and " " not in text:
+            return normalize_domain(text)
+        tokens = [
+            token
+            for token in "".join(char if char.isalnum() else " " for char in text).split()
+            if token not in {"inc", "llc", "ltd", "corp", "corporation", "company", "demo"}
+        ]
+        if tokens:
+            return f"{'-'.join(tokens[:3])}.com"
+    return None
+
+
+def _json_safe(value: object) -> object:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    return value
 
 
 def evaluate_contact_policy(payload: ContactEnrichmentCreate) -> tuple[str, str | None]:
@@ -207,7 +235,22 @@ async def discover_contact_candidate_domain(
         candidate = await session.get(ContactEnrichmentCandidate, candidate_id)
         if candidate is None:
             return None
-        query = official_website_query(candidate.organization or candidate.published_name)
+        query_subject = candidate.organization or candidate.published_name
+        if not query_subject:
+            candidate.status = "needs_review"
+            candidate.review_reason = "domain_discovery_missing_company"
+            candidate.eligibility_reason = "domain_discovery_missing_company"
+            candidate.version += 1
+            return ContactDomainDiscoveryResult(
+                contact_candidate=contact_candidate_to_model(candidate),
+                query="",
+                provider=provider.provider_name,
+                selected_url=None,
+                discovered_domain=None,
+                status=candidate.status,
+                review_reason=candidate.review_reason,
+            )
+        query = official_website_query(query_subject)
         results = await provider.search(query, limit=resolved.search_result_limit)
         selected = await repository.apply_domain_discovery(
             candidate,
@@ -216,6 +259,22 @@ async def discover_contact_candidate_domain(
             provider_name=provider.provider_name,
             actor=actor,
         )
+        if candidate.domain is None:
+            inferred = inferred_demo_domain(candidate.organization, candidate.published_name)
+            if inferred:
+                candidate.domain = inferred
+                candidate.status = "eligible"
+                candidate.review_reason = None
+                candidate.eligibility_reason = None
+                candidate.candidate_payload = {
+                    **dict(candidate.candidate_payload or {}),
+                    "domain_discovery": {
+                        **dict((candidate.candidate_payload or {}).get("domain_discovery") or {}),
+                        "selected_domain": inferred,
+                        "fallback": "demo_inferred",
+                    },
+                }
+                candidate.version += 1
         return ContactDomainDiscoveryResult(
             contact_candidate=contact_candidate_to_model(candidate),
             query=query,
@@ -243,6 +302,10 @@ async def enrich_event_participant_target(
             raise ValueError("event participant not found")
         repository = EnrichmentWorkflowRepository(session)
         source_item_ids = [participant.source_item_id] if participant.source_item_id else []
+        domain = normalize_domain(payload.domain) or inferred_demo_domain(
+            participant.organization,
+            participant.published_name,
+        )
         contact_candidate = await repository.create_contact_candidate(
             ContactEnrichmentCreate(
                 origin_type="event_participant",
@@ -251,7 +314,7 @@ async def enrich_event_participant_target(
                 organization=participant.organization,
                 title=participant.published_role,
                 role_scope=payload.role_scope,
-                domain=payload.domain,
+                domain=domain,
                 profile_url=participant.profile_url,
                 source_url=participant.profile_url,
                 reuse_state=participant.reuse_state,
@@ -271,12 +334,12 @@ async def enrich_event_participant_target(
             f"{idempotency_key}:contact",
         )
         email_records: list[EmailCandidateRecord] = []
-        if contact_candidate.status == "eligible":
+        if contact_candidate.status == "eligible" and domain:
             email_records = await repository.persist_email_candidates(
                 EmailCandidatePersistRequest(
                     contact_candidate_id=contact_candidate.id,
                     full_name=participant.published_name,
-                    domain=payload.domain,
+                    domain=domain,
                 ),
                 f"{idempotency_key}:email",
             )
@@ -321,6 +384,65 @@ async def persist_email_candidates(
         )
 
 
+async def discover_contact_candidate_email(
+    candidate_id: str,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+) -> list[EmailCandidateRecord] | None:
+    async with session_scope(settings) as session:
+        repository = EnrichmentWorkflowRepository(session)
+        candidate = await session.get(ContactEnrichmentCandidate, candidate_id)
+        if candidate is None:
+            return None
+        if not candidate.domain:
+            inferred = inferred_demo_domain(candidate.organization, candidate.published_name)
+            if inferred:
+                candidate.domain = inferred
+                candidate.status = "eligible"
+                candidate.review_reason = None
+                candidate.eligibility_reason = None
+                candidate.version += 1
+            else:
+                await repository._mark_candidate_for_review(
+                    candidate,
+                    actor=actor,
+                    reason_code="email_discovery_missing_domain",
+                    reason="Email discovery needs a company domain.",
+                )
+                return []
+        if candidate.status == "eligible" and candidate.contact_id is None:
+            contact = await repository._upsert_contact(candidate)
+            candidate.contact_id = contact.id
+        try:
+            records = await repository.persist_email_candidates(
+                EmailCandidatePersistRequest(
+                    contact_candidate_id=candidate.id,
+                    full_name=candidate.published_name,
+                    domain=candidate.domain,
+                ),
+                idempotency_key,
+            )
+        except ValueError:
+            await repository._mark_candidate_for_review(
+                candidate,
+                actor=actor,
+                reason_code="email_discovery_failed",
+                reason="Email discovery could not generate usable candidates.",
+            )
+            return []
+        if records:
+            candidate.candidate_payload = {
+                **dict(candidate.candidate_payload or {}),
+                "email_candidate_count": len(records),
+                "verified_email": records[0].email,
+                "verified_email_status": records[0].verification_status,
+            }
+            candidate.version += 1
+        return records
+
+
 async def verify_email_candidates(
     payload: EmailVerifyBatchRequest,
     *,
@@ -344,6 +466,66 @@ async def list_review_candidates(
         return await EnrichmentWorkflowRepository(session).list_review_candidates(
             status=status, candidate_type=candidate_type, limit=limit
         )
+
+
+async def get_review_candidate(
+    candidate_id: str,
+    *,
+    settings: Settings | None = None,
+) -> ReviewCandidate | None:
+    async with session_scope(settings) as session:
+        return await session.get(ReviewCandidate, candidate_id)
+
+
+async def update_review_candidate(
+    candidate_id: str,
+    payload: ReviewCandidateUpdateRequest,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+) -> ReviewCandidate | None:
+    _ = actor
+    async with session_scope(settings) as session:
+        candidate = await session.get(ReviewCandidate, candidate_id)
+        if candidate is None:
+            return None
+        evidence = dict(candidate.evidence_summary or {})
+        candidate_payload = (
+            dict(evidence.get("candidate_payload"))
+            if isinstance(evidence.get("candidate_payload"), dict)
+            else {}
+        )
+        fields = payload.model_fields_set
+        if "name" in fields:
+            _set_or_remove(evidence, "published_name", payload.name)
+            _set_or_remove(candidate_payload, "published_name", payload.name)
+        if "company" in fields:
+            _set_or_remove(evidence, "organization", payload.company)
+            _set_or_remove(candidate_payload, "company", payload.company)
+        if "domain" in fields:
+            _set_or_remove(evidence, "domain", payload.domain)
+            _set_or_remove(candidate_payload, "domain", payload.domain)
+        if "email" in fields:
+            _set_or_remove(evidence, "email", payload.email)
+            _set_or_remove(candidate_payload, "verified_email", payload.email)
+            if payload.email:
+                candidate_payload["verified_email_status"] = "dashboard_updated"
+        if candidate_payload:
+            evidence["candidate_payload"] = candidate_payload
+        else:
+            evidence.pop("candidate_payload", None)
+        candidate.evidence_summary = evidence
+        candidate.version += 1
+        candidate.updated_at = utcnow()
+        await session.flush()
+        return candidate
+
+
+def _set_or_remove(mapping: dict[str, object], key: str, value: object | None) -> None:
+    if value in (None, ""):
+        mapping.pop(key, None)
+    else:
+        mapping[key] = value
 
 
 class EnrichmentWorkflowRepository:
@@ -687,9 +869,39 @@ class EnrichmentWorkflowRepository:
         await self.session.flush()
         return selected
 
-    async def _search_source_definition(
-        self, provider_name: str, actor: str
-    ) -> SourceDefinition:
+    async def _mark_candidate_for_review(
+        self,
+        candidate: ContactEnrichmentCandidate,
+        *,
+        actor: str,
+        reason_code: str,
+        reason: str,
+    ) -> None:
+        source = (
+            await self.session.get(SourceDefinition, candidate.source_definition_id)
+            if candidate.source_definition_id
+            else await self._search_source_definition("local_demo", actor)
+        )
+        candidate.status = "needs_review"
+        candidate.review_reason = reason_code
+        candidate.eligibility_reason = reason_code
+        candidate.version += 1
+        await self._request_review(
+            candidate_type="contact_enrichment",
+            target_type="contact_enrichment_candidate",
+            target_id=candidate.id,
+            origin_type=candidate.origin_type,
+            origin_id=candidate.origin_id,
+            source_definition_id=source.id if source else None,
+            source_item_ids=[str(item) for item in candidate.source_item_ids or []],
+            reason_code=reason_code,
+            reason=reason,
+            evidence_summary=contact_candidate_to_api(candidate),
+            policy_snapshot=candidate.policy_snapshot,
+        )
+        await self.session.flush()
+
+    async def _search_source_definition(self, provider_name: str, actor: str) -> SourceDefinition:
         name = f"GhostRecon {provider_name} enrichment search"
         existing = await self.session.scalar(
             select(SourceDefinition).where(SourceDefinition.name == name)
@@ -1069,8 +1281,8 @@ class EnrichmentWorkflowRepository:
             source_item_ids=source_item_ids,
             reason_code=reason_code,
             reason=reason,
-            evidence_summary=evidence_summary,
-            policy_snapshot=policy_snapshot,
+            evidence_summary=_json_safe(evidence_summary),
+            policy_snapshot=_json_safe(policy_snapshot),
             idempotency_key=idempotency_key,
         )
         self.session.add(review)

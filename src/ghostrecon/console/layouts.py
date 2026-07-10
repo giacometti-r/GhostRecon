@@ -46,6 +46,7 @@ NAV_ITEMS = [
 ]
 
 REPORTING_LIMIT = 50
+SEQUENCE_LAYER_COUNT = 20
 
 
 def build_shell(settings: Settings) -> html.Div:
@@ -170,8 +171,12 @@ def render_page(
             return enrichment_review_page(api, params, role=context_role)
         if path == "/review":
             return review_page(api, params, role=context_role)
+        if path.startswith("/review/"):
+            return review_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/crm/exports":
             return crm_exports_page(api, params, role=context_role)
+        if path.startswith("/crm/exports/targets/"):
+            return crm_target_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path.startswith("/crm/exports/"):
             return crm_export_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/sequences":
@@ -180,6 +185,8 @@ def render_page(
             return sequence_definitions_page(api, params, role=context_role)
         if path.startswith("/sequences/enrollments/"):
             return sequence_enrollment_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
+        if path.startswith("/sequences/activities/"):
+            return sequence_activity_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path.startswith("/sequences/definitions/"):
             return sequence_definition_detail_page(api, path.rsplit("/", 1)[-1], role=context_role)
         if path == "/meetings":
@@ -261,6 +268,17 @@ def events_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) 
     events = payload.get("events", [])
     children = [
         query_badges(params),
+        _filter_panel(
+            "/events",
+            params,
+            [
+                ("series", "Series"),
+                ("source", "Source"),
+                ("country", "Country"),
+                ("event_format", "Format"),
+                ("topic", "Topic"),
+            ],
+        ),
         _event_map(events),
         _manual_event_form(role),
         records_table(
@@ -312,6 +330,7 @@ def event_detail_page(client: ConsoleApiClient, event_id: str, *, role: str) -> 
                 ("Source items", _inline_list(event.get("source_item_ids"))),
             ],
         ),
+        _event_participant_form(event.get("id") or event_id, role),
         records_table(
             participant_rows,
             [
@@ -361,6 +380,17 @@ def incidents_page(
     incident_rows = [_incident_table_row(incident) for incident in incidents]
     children = [
         query_badges(params),
+        _filter_panel(
+            "/incidents",
+            params,
+            [
+                ("status", "Status"),
+                ("source", "Source"),
+                ("company", "Company"),
+                ("attack_vector", "Attack vector"),
+                ("incident_type", "Incident type"),
+            ],
+        ),
         _manual_incident_form(role),
         records_table(
             incident_rows,
@@ -382,6 +412,7 @@ def incident_detail_page(client: ConsoleApiClient, incident_id: str, *, role: st
     payload = _safe_get(client, f"/v1/reporting/incidents/{incident_id}")
     incident = payload.get("incident", {})
     children = [
+        _incident_edit_modal(incident, role),
         detail_panel(
             "Incident detail",
             [
@@ -423,6 +454,15 @@ def watchlists_page(client: ConsoleApiClient, params: dict[str, Any], *, role: s
         columns.append(("Origin incident", "origin_incident_id"))
     children = [
         query_badges(params),
+        _filter_panel(
+            "/watchlists",
+            params,
+            [
+                ("target_type", "Type"),
+                ("enabled", "Enabled"),
+                ("owner", "Owner"),
+            ],
+        ),
         records_table(
             payload.get("watch_targets", []),
             columns,
@@ -466,6 +506,15 @@ def review_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) 
     )
     children = [
         query_badges(params),
+        _filter_panel(
+            "/review",
+            params,
+            [
+                ("status", "Status"),
+                ("candidate_type", "Candidate type"),
+                ("target_type", "Target type"),
+            ],
+        ),
         dcc.Link(
             "Open enrichment queue",
             href="/review/enrichment",
@@ -477,13 +526,13 @@ def review_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) 
             className="bulk-actions",
         ),
         records_table(
-            payload.get("candidates", []),
+            [_review_queue_row(candidate) for candidate in payload.get("candidates", [])],
             [
-                ("Candidate", "candidate_type"),
-                ("Target", "target_type"),
-                ("Reason", "reason_code"),
-                ("SLA", "sla_due_at"),
-                ("Version", "version"),
+                ("Name", "name"),
+                ("Company", "company"),
+                ("Domain", "domain"),
+                ("Email", "email"),
+                ("Date added", "created_at"),
             ],
             actions=lambda record: _review_actions(record, role),
         ),
@@ -499,6 +548,10 @@ def enrichment_review_page(
     cases = _safe_get(client, "/v1/enrichment/entity-resolutions", _filtered(params, "status"))
     contact_rows = [_contact_queue_row(candidate) for candidate in contacts.get("candidates", [])]
     children = [
+        html.Div(
+            _bulk_contact_queue_actions(contact_rows, role),
+            className="bulk-actions",
+        ),
         records_table(
             contact_rows,
             [
@@ -528,28 +581,86 @@ def enrichment_review_page(
     return _page("Contact Enrichment Queue", [], children, query_params=params)
 
 
+def review_detail_page(client: ConsoleApiClient, candidate_id: str, *, role: str) -> html.Div:
+    candidate = _safe_get(client, f"/v1/review/candidates/{candidate_id}")
+    row = _review_queue_row(candidate)
+    children = [
+        detail_panel(
+            "Review candidate",
+            [
+                ("Name", row.get("name")),
+                ("Company", row.get("company")),
+                ("Domain", row.get("domain")),
+                ("Email", row.get("email")),
+                ("Reason", candidate.get("reason") or candidate.get("reason_code")),
+                ("Status", candidate.get("status")),
+                ("Date added", candidate.get("created_at")),
+            ],
+        ),
+        _review_edit_panel(row, role),
+        html.Div(_review_actions(candidate, role), className="detail-actions"),
+    ]
+    return _page("Review Candidate", [candidate], children)
+
+
 def crm_exports_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) -> html.Div:
     payload = _safe_get(
         client,
         "/v1/reporting/crm-targets",
-        _filtered(params, "status", "target_type", "export_status", "cursor"),
+        {
+            **_filtered(params, "status", "target_type", "export_status", "cursor"),
+            "target_type": params.get("target_type") or "email_candidate",
+        },
     )
     children = [
         query_badges(params),
-        records_table(
-            payload.get("crm_targets", []),
+        _filter_panel(
+            "/crm/exports",
+            params,
             [
-                ("Target type", "target_type"),
-                ("Target ID", "target_id"),
+                ("status", "Status"),
+                ("target_type", "Target type"),
+                ("export_status", "Export status"),
+            ],
+        ),
+        records_table(
+            [_crm_target_row(target) for target in payload.get("crm_targets", [])],
+            [
+                ("Name", "name"),
+                ("Company", "company"),
+                ("Email", "email"),
                 ("Status", "status"),
                 ("Export", "export_status"),
-                ("Version", "version"),
+                ("Date added", "created_at"),
             ],
             actions=lambda record: _crm_target_actions(record, role),
         ),
         _pagination(payload, "/crm/exports", params),
     ]
     return _page("CRM Targets and Export", [payload], children)
+
+
+def crm_target_detail_page(client: ConsoleApiClient, crm_target_id: str, *, role: str) -> html.Div:
+    payload = _safe_get(client, f"/v1/reporting/crm-targets/{crm_target_id}")
+    target = payload.get("crm_target", {})
+    row = _crm_target_row(target)
+    children = [
+        detail_panel(
+            "CRM Target",
+            [
+                ("Name", row.get("name")),
+                ("Company", row.get("company")),
+                ("Email", row.get("email")),
+                ("Status", target.get("status")),
+                ("Export", target.get("export_status")),
+                ("Target type", target.get("target_type")),
+                ("Date added", target.get("created_at")),
+            ],
+        ),
+        _crm_target_edit_panel(row, role),
+        html.Div(_crm_target_actions(target, role), className="detail-actions"),
+    ]
+    return _page("CRM Target", [payload], children)
 
 
 def crm_export_detail_page(client: ConsoleApiClient, batch_id: str, *, role: str) -> html.Div:
@@ -585,15 +696,16 @@ def crm_export_detail_page(client: ConsoleApiClient, batch_id: str, *, role: str
 
 def sequences_page(client: ConsoleApiClient, params: dict[str, Any], *, role: str) -> html.Div:
     payload = _safe_get(client, "/v1/sequences/enrollments", _filtered(params, "status"))
-    sequences = _safe_get(client, "/v1/sequences", {"limit": REPORTING_LIMIT})
     activities = _safe_get(client, "/v1/sequences/activities", {"limit": REPORTING_LIMIT})
-    prospects = _safe_get(
-        client,
-        "/v1/sequences/crm-prospects",
-        {"query": str(params.get("prospect") or ""), "limit": 10},
-    )
     children = [
         query_badges(params),
+        _filter_panel(
+            "/sequences",
+            params,
+            [
+                ("status", "Enrollment status"),
+            ],
+        ),
         html.Div(
             [
                 dcc.Link(
@@ -604,34 +716,6 @@ def sequences_page(client: ConsoleApiClient, params: dict[str, Any], *, role: st
                 )
             ],
             className="detail-actions",
-        ),
-        html.Section(
-            [
-                html.H2("Sequence definitions"),
-                records_table(
-                    [_sequence_row(sequence) for sequence in sequences.get("sequences", [])],
-                    [
-                        ("Name", "name"),
-                        ("Owner", "owner_id"),
-                        ("Channel", "channel"),
-                        ("Status", "status"),
-                        ("Steps", "step_count"),
-                    ],
-                    actions=lambda record: [
-                        dcc.Link(
-                            "Open",
-                            href=f"/sequences/definitions/{record.get('id')}",
-                            refresh=False,
-                        )
-                    ],
-                ),
-            ],
-            className="detail-panel",
-        ),
-        _crm_prospect_import_panel(
-            prospects.get("prospects", []),
-            sequences.get("sequences", []),
-            role,
         ),
         html.Section(
             [
@@ -656,7 +740,11 @@ def sequences_page(client: ConsoleApiClient, params: dict[str, Any], *, role: st
             className="detail-panel",
         ),
         records_table(
-            [_sequence_enrollment_row(enrollment) for enrollment in payload.get("enrollments", [])],
+            [
+                _sequence_enrollment_row(enrollment)
+                for enrollment in payload.get("enrollments", [])
+                if params.get("status") or enrollment.get("status") not in {"canceled", "completed"}
+            ],
             [
                 ("Prospect", "contact_name"),
                 ("Company", "account_name"),
@@ -675,7 +763,7 @@ def sequences_page(client: ConsoleApiClient, params: dict[str, Any], *, role: st
             className="operator-note",
         ),
     ]
-    return _page("Sequence State", [payload, sequences, activities, prospects], children)
+    return _page("Sequence State", [payload, activities], children)
 
 
 def sequence_definitions_page(
@@ -686,7 +774,11 @@ def sequence_definitions_page(
         query_badges(params),
         _sequence_create_form(role),
         records_table(
-            [_sequence_row(sequence) for sequence in sequences.get("sequences", [])],
+            [
+                _sequence_row(sequence)
+                for sequence in sequences.get("sequences", [])
+                if sequence.get("status") != "archived"
+            ],
             [
                 ("Name", "name"),
                 ("Owner", "owner_id"),
@@ -700,7 +792,14 @@ def sequence_definitions_page(
                     "Open",
                     href=f"/sequences/definitions/{record.get('id')}",
                     refresh=False,
-                )
+                ),
+                action_button(
+                    "Delete",
+                    _action_id("sequence-definition", "delete", record.get("id")),
+                    "trash-2",
+                    disabled=not _can_mutate(role),
+                    danger=True,
+                ),
             ],
         ),
     ]
@@ -739,13 +838,13 @@ def sequence_enrollment_detail_page(
                 records_table(
                     [_sequence_step_row(step) for step in sequence.get("steps", [])],
                     [
-                ("Step", "step_order"),
-                ("Wait", "delay_display"),
-                ("Subject", "subject_template"),
-                ("Channel", "channel"),
-                ("Approval", "requires_approval"),
-            ],
-        ),
+                        ("Step", "step_order"),
+                        ("Wait", "delay_display"),
+                        ("Subject", "subject_template"),
+                        ("Channel", "channel"),
+                        ("Approval", "requires_approval"),
+                    ],
+                ),
             ],
             className="detail-panel",
         ),
@@ -762,6 +861,31 @@ def sequence_enrollment_detail_page(
         _sequence_alert_form(enrollment_id, role),
     ]
     return _page("Sequence Enrollment", [enrollment], children)
+
+
+def sequence_activity_detail_page(
+    client: ConsoleApiClient, activity_id: str, *, role: str
+) -> html.Div:
+    activity = _safe_get(client, f"/v1/sequences/activities/{activity_id}")
+    metadata = activity.get("metadata") if isinstance(activity.get("metadata"), dict) else {}
+    children = [
+        detail_panel(
+            "Sequence Activity",
+            [
+                ("Prospect", activity.get("contact_name")),
+                ("Company", activity.get("account_name")),
+                ("Email", activity.get("contact_email")),
+                ("Sequence", activity.get("sequence_name")),
+                ("Channel", activity.get("channel")),
+                ("Status", activity.get("status")),
+                ("Due", activity.get("due_at")),
+            ],
+        ),
+        _sequence_activity_email_panel(activity, role),
+        detail_panel("Activity metadata", [("Metadata", metadata)]),
+        html.Div(_sequence_activity_actions(activity, role), className="detail-actions"),
+    ]
+    return _page("Sequence Activity", [activity], children)
 
 
 def sequence_definition_detail_page(
@@ -824,7 +948,7 @@ def meeting_detail_page(client: ConsoleApiClient, meeting_id: str, *, role: str)
                 ("Start", meeting.get("start_at")),
                 ("End", meeting.get("end_at")),
                 ("Timezone", meeting.get("timezone")),
-                ("Attendees", meeting.get("attendees")),
+                ("Attendees", _attendees_display(meeting.get("attendees"))),
                 ("Calendar event", meeting.get("provider_event_id")),
                 ("Calendar link", meeting.get("provider_html_link")),
                 ("CRM sync", meeting.get("crm_sync_status")),
@@ -961,6 +1085,39 @@ def _pagination(payload: dict[str, Any], base_path: str, params: dict[str, Any])
     return html.Div(
         dcc.Link("Next page", href=f"{base_path}?{query}", refresh=False),
         className="pagination",
+    )
+
+
+def _filter_panel(
+    action: str,
+    params: dict[str, Any],
+    fields: list[tuple[str, str]],
+) -> html.Form:
+    return html.Form(
+        [
+            html.Div(
+                [
+                    html.Label(label, htmlFor=f"filter-{key}"),
+                    dcc.Input(
+                        id=f"filter-{key}",
+                        name=key,
+                        value=str(params.get(key) or ""),
+                        type="text",
+                    ),
+                ],
+                className="filter-field",
+            )
+            for key, label in fields
+        ]
+        + [
+            html.Button(
+                [icon("filter"), html.Span("Apply")], type="submit", className="icon-button"
+            ),
+            dcc.Link("Clear", href=action, refresh=False, className="text-link"),
+        ],
+        action=action,
+        method="get",
+        className="filter-panel",
     )
 
 
@@ -1327,25 +1484,125 @@ def _manual_incident_form(role: str) -> html.Div:
     )
 
 
+def _incident_edit_modal(incident: dict[str, Any], role: str) -> html.Div:
+    if not _can_mutate(role) or not incident.get("id"):
+        return html.Div()
+    return html.Section(
+        [
+            html.H2("Edit incident"),
+            html.Div(
+                [
+                    dcc.Input(
+                        id="incident-edit-title",
+                        value=incident.get("title"),
+                        placeholder="Title",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="incident-edit-company",
+                        value=_inline_list(incident.get("affected_companies")),
+                        placeholder="Companies",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="incident-edit-domains",
+                        value=_inline_list(incident.get("affected_domains")),
+                        placeholder="Domains",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="incident-edit-type",
+                        value=incident.get("incident_type"),
+                        placeholder="Type",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="incident-edit-vector",
+                        value=incident.get("attack_vector"),
+                        placeholder="Attack vector",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="incident-edit-first-observed",
+                        value=_datetime_local_value(incident.get("first_observed_at")),
+                        placeholder="First observed",
+                        type="datetime-local",
+                    ),
+                    dcc.Input(
+                        id="incident-edit-evidence-urls",
+                        value=_inline_list(incident.get("evidence_urls")),
+                        placeholder="Evidence URLs",
+                        type="text",
+                    ),
+                    html.Button(
+                        [icon("save"), html.Span("Save incident")],
+                        id={
+                            "type": "incident-edit-submit",
+                            "incident_id": str(incident.get("id") or ""),
+                            "version": incident.get("version"),
+                        },
+                        n_clicks=0,
+                        className="icon-button",
+                    ),
+                ],
+                className="form-grid compact-form",
+            ),
+        ],
+        className="detail-panel",
+    )
+
+
 def _participant_enrich_form(event_id: str, role: str) -> html.Div:
+    return html.Div()
+
+
+def _event_participant_form(event_id: str, role: str) -> html.Div:
     if not _can_mutate(role):
         return html.Div()
     return html.Section(
         [
-            html.H2("Target enrichment"),
+            html.H2("Add participant"),
             html.Div(
                 [
                     dcc.Input(
-                        id={"type": "event-enrich-domain", "event_id": event_id},
-                        placeholder="Company domain for selected participant",
+                        id={"type": "event-participant-name", "event_id": event_id},
+                        placeholder="Name",
                         type="text",
                     ),
-                    html.Span(
-                        "Use Enrich Target on a participant row after entering a domain.",
-                        className="muted",
+                    dcc.Input(
+                        id={"type": "event-participant-org", "event_id": event_id},
+                        placeholder="Organization",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id={"type": "event-participant-role", "event_id": event_id},
+                        placeholder="Role",
+                        type="text",
+                    ),
+                    dcc.Dropdown(
+                        id={"type": "event-participant-type", "event_id": event_id},
+                        value="speaker",
+                        clearable=False,
+                        options=[
+                            {"label": "Speaker", "value": "speaker"},
+                            {"label": "Sponsor", "value": "sponsor"},
+                            {"label": "Organizer", "value": "organizer"},
+                            {"label": "Attendee", "value": "attendee"},
+                        ],
+                    ),
+                    dcc.Input(
+                        id={"type": "event-participant-profile", "event_id": event_id},
+                        placeholder="Profile URL",
+                        type="url",
+                    ),
+                    html.Button(
+                        [icon("plus"), html.Span("Add participant")],
+                        id={"type": "event-participant-submit", "event_id": event_id},
+                        n_clicks=0,
+                        className="icon-button",
                     ),
                 ],
-                className="inline-form",
+                className="form-grid compact-form",
             ),
         ],
         className="detail-panel",
@@ -1417,6 +1674,12 @@ def _incident_chart(incidents: list[dict[str, Any]]) -> html.Div:
 def _review_actions(record: dict[str, Any], role: str) -> list[Any]:
     disabled = not _can_mutate(role)
     return [
+        dcc.Link(
+            "Open",
+            href=f"/review/{record.get('id')}",
+            refresh=False,
+            className="text-link",
+        ),
         action_button(
             "Approve",
             _action_id(
@@ -1477,7 +1740,7 @@ def _crm_target_actions(record: dict[str, Any], role: str) -> list[Any]:
             _action_id("crm-export", "start", record.get("id"), record.get("version")),
             "upload",
             disabled=not _can_mutate(role),
-        )
+        ),
     ]
 
 
@@ -1512,7 +1775,34 @@ def _contact_queue_actions(record: dict[str, Any], role: str) -> list[Any]:
             _action_id("contact-candidate", "discover-domain", record.get("id")),
             "globe",
             disabled=not missing_domain or not _can_mutate(role),
-        )
+        ),
+        action_button(
+            "Find Email",
+            _action_id("contact-candidate", "discover-email", record.get("id")),
+            "mail-search",
+            disabled=not _can_mutate(role),
+        ),
+    ]
+
+
+def _bulk_contact_queue_actions(records: list[dict[str, Any]], role: str) -> list[Any]:
+    if not records:
+        return []
+    target_ids = ",".join(str(record.get("id")) for record in records if record.get("id"))
+    disabled = not _can_mutate(role)
+    return [
+        action_button(
+            "Bulk Discover Domain",
+            _action_id("bulk-contact-candidate", "discover-domain", target_ids),
+            "globe-2",
+            disabled=disabled,
+        ),
+        action_button(
+            "Bulk Discover Email",
+            _action_id("bulk-contact-candidate", "discover-email", target_ids),
+            "mail-search",
+            disabled=disabled,
+        ),
     ]
 
 
@@ -1534,19 +1824,14 @@ def _incident_actions(record: dict[str, Any], role: str, *, include_open: bool =
         [
             action_button(
                 "Add to Watchlist",
-                _action_id("incident", "promote", record.get("id"), record.get("version")),
-                "radar",
-                disabled=disabled or version_missing or status != "corroborated",
-            ),
-            action_button(
-                "Revert" if status == "corroborated" else "Corroborate",
                 _action_id(
                     "incident",
-                    "revert" if status == "corroborated" else "corroborate",
+                    "promote",
                     record.get("id"),
                     record.get("version"),
+                    enabled=status,
                 ),
-                "undo-2" if status == "corroborated" else "badge-check",
+                "radar",
                 disabled=disabled or version_missing,
             ),
             action_button(
@@ -1561,9 +1846,7 @@ def _incident_actions(record: dict[str, Any], role: str, *, include_open: bool =
     return actions
 
 
-def _watch_actions(
-    record: dict[str, Any], role: str, *, include_open: bool = True
-) -> list[Any]:
+def _watch_actions(record: dict[str, Any], role: str, *, include_open: bool = True) -> list[Any]:
     next_enabled = not bool(record.get("enabled"))
     actions: list[Any] = []
     if include_open:
@@ -1603,6 +1886,10 @@ def _watch_actions(
 def _sequence_actions(record: dict[str, Any], role: str) -> list[Any]:
     disabled = not _can_mutate(role)
     status = str(record.get("status") or "")
+    terminal = status in {"completed", "canceled", "suppressed", "failed"}
+    toggle_action = "resume" if status == "paused" else "pause"
+    toggle_label = "Resume" if status == "paused" else "Pause"
+    toggle_icon = "play" if status == "paused" else "pause"
     actions = [
         dcc.Link(
             "Open",
@@ -1611,16 +1898,10 @@ def _sequence_actions(record: dict[str, Any], role: str) -> list[Any]:
             className="text-link",
         ),
         action_button(
-            "Pause",
-            _action_id("sequence", "pause", record.get("id")),
-            "pause",
-            disabled=disabled,
-        ),
-        action_button(
-            "Resume",
-            _action_id("sequence", "resume", record.get("id")),
-            "play",
-            disabled=disabled or status != "paused",
+            toggle_label,
+            _action_id("sequence", toggle_action, record.get("id")),
+            toggle_icon,
+            disabled=disabled or terminal,
         ),
         action_button(
             "Cancel",
@@ -1718,7 +1999,14 @@ def _sequence_activity_actions(record: dict[str, Any], role: str) -> list[Any]:
     disabled = not _can_mutate(role)
     channel = str(record.get("channel") or "")
     status = str(record.get("status") or "")
-    actions = []
+    actions = [
+        dcc.Link(
+            "Open",
+            href=f"/sequences/activities/{record.get('id')}",
+            refresh=False,
+            className="text-link",
+        )
+    ]
     if channel == "email":
         actions.append(
             action_button(
@@ -1749,30 +2037,45 @@ def _sequence_activity_actions(record: dict[str, Any], role: str) -> list[Any]:
     return actions
 
 
+def _sequence_activity_email_panel(activity: dict[str, Any], role: str) -> html.Div:
+    metadata = activity.get("metadata") if isinstance(activity.get("metadata"), dict) else {}
+    if activity.get("channel") != "email":
+        return html.Div()
+    subject = metadata.get("subject") or metadata.get("subject_template") or "Following up"
+    body = (
+        metadata.get("body")
+        or metadata.get("body_template")
+        or ("Hi, sharing a concise security follow-up for the local demo.")
+    )
+    if not _can_mutate(role):
+        return detail_panel("Generated email", [("Subject", subject), ("Body", body)])
+    return html.Section(
+        [
+            html.H2("Generated email"),
+            html.Div(
+                [
+                    dcc.Input(
+                        id="sequence-activity-email-subject",
+                        value=str(subject),
+                        placeholder="Subject",
+                        type="text",
+                    ),
+                    dcc.Textarea(
+                        id="sequence-activity-email-body",
+                        value=str(body),
+                        placeholder="Email body",
+                    ),
+                ],
+                className="form-grid compact-form",
+            ),
+        ],
+        className="detail-panel",
+    )
+
+
 def _sequence_create_form(role: str) -> html.Div:
     if not _can_mutate(role):
         return html.Div()
-    example_steps = [
-        {
-            "step_order": 1,
-            "channel": "email",
-            "delay_seconds": 0,
-            "subject_template": "Following up on {account_name}",
-            "body_template": "Hi {contact_first_name}, checking in.",
-        },
-        {
-            "step_order": 2,
-            "channel": "call",
-            "delay_seconds": 86400,
-            "step_metadata": {"instructions": "Call and log security priorities."},
-        },
-        {
-            "step_order": 3,
-            "channel": "google_meet",
-            "delay_seconds": 172800,
-            "step_metadata": {"meeting_subject": "Security discovery"},
-        },
-    ]
     return html.Section(
         [
             html.H2("Create sequence"),
@@ -1780,10 +2083,7 @@ def _sequence_create_form(role: str) -> html.Div:
                 [
                     dcc.Input(id="sequence-create-name", placeholder="Name", type="text"),
                     dcc.Input(id="sequence-create-owner", placeholder="Owner", type="text"),
-                    dcc.Textarea(
-                        id="sequence-create-steps",
-                        value=json.dumps(example_steps, indent=2),
-                    ),
+                    *_sequence_layer_inputs("sequence-create", []),
                     html.Button(
                         [icon("plus"), html.Span("Create sequence")],
                         id="sequence-create-submit",
@@ -1858,6 +2158,92 @@ def _crm_prospect_import_panel(
                     )
                 ],
                 empty_message="No CRM prospects returned.",
+            ),
+        ],
+        className="detail-panel",
+    )
+
+
+def _review_edit_panel(record: dict[str, Any], role: str) -> html.Div:
+    if not _can_mutate(role):
+        return html.Div()
+    return html.Section(
+        [
+            html.H2("Edit contact"),
+            html.Div(
+                [
+                    dcc.Input(
+                        id="review-edit-name",
+                        value=record.get("name"),
+                        placeholder="Name",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="review-edit-company",
+                        value=record.get("company"),
+                        placeholder="Company",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="review-edit-domain",
+                        value=record.get("domain"),
+                        placeholder="Domain",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="review-edit-email",
+                        value=record.get("email"),
+                        placeholder="Email",
+                        type="email",
+                    ),
+                    html.Button(
+                        [icon("save"), html.Span("Save")],
+                        id="review-edit-submit",
+                        n_clicks=0,
+                        className="icon-button",
+                    ),
+                ],
+                className="form-grid compact-form",
+            ),
+        ],
+        className="detail-panel",
+    )
+
+
+def _crm_target_edit_panel(record: dict[str, Any], role: str) -> html.Div:
+    if not _can_mutate(role):
+        return html.Div()
+    return html.Section(
+        [
+            html.H2("Edit CRM contact"),
+            html.Div(
+                [
+                    dcc.Input(
+                        id="crm-target-edit-name",
+                        value=record.get("name"),
+                        placeholder="Name",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="crm-target-edit-company",
+                        value=record.get("company"),
+                        placeholder="Company",
+                        type="text",
+                    ),
+                    dcc.Input(
+                        id="crm-target-edit-email",
+                        value=record.get("email"),
+                        placeholder="Email",
+                        type="email",
+                    ),
+                    html.Button(
+                        [icon("save"), html.Span("Save")],
+                        id="crm-target-edit-submit",
+                        n_clicks=0,
+                        className="icon-button",
+                    ),
+                ],
+                className="form-grid compact-form",
             ),
         ],
         className="detail-panel",
@@ -1940,11 +2326,7 @@ def _sequence_edit_form(sequence: dict[str, Any], role: str) -> html.Div:
                         ],
                         clearable=False,
                     ),
-                    dcc.Textarea(
-                        id="sequence-edit-steps",
-                        value=json.dumps(sequence.get("steps") or [], indent=2, default=str),
-                        placeholder="Ordered email, call, and google_meet steps",
-                    ),
+                    *_sequence_layer_inputs("sequence-edit", sequence.get("steps") or []),
                     html.Button(
                         [icon("save"), html.Span("Save sequence")],
                         id={
@@ -1962,6 +2344,76 @@ def _sequence_edit_form(sequence: dict[str, Any], role: str) -> html.Div:
     )
 
 
+def _sequence_layer_inputs(prefix: str, steps: list[dict[str, Any]]) -> list[Any]:
+    defaults = steps or [
+        {
+            "channel": "email",
+            "delay_seconds": 0,
+            "subject_template": "Following up on {account_name}",
+            "body_template": "Hi {contact_first_name}, checking in.",
+            "requires_approval": True,
+        },
+        {
+            "channel": "call",
+            "delay_seconds": 86400,
+            "step_metadata": {"instructions": "Call and log security priorities."},
+            "requires_approval": False,
+        },
+        {
+            "channel": "google_meet",
+            "delay_seconds": 172800,
+            "step_metadata": {"meeting_subject": "Security discovery"},
+            "requires_approval": False,
+        },
+    ]
+    layers: list[Any] = []
+    for index in range(SEQUENCE_LAYER_COUNT):
+        step = defaults[index] if index < len(defaults) else {}
+        metadata = step.get("step_metadata") if isinstance(step.get("step_metadata"), dict) else {}
+        has_step = bool(step)
+        layers.append(
+            html.Div(
+                [
+                    html.H3(f"Layer {index + 1}"),
+                    dcc.Dropdown(
+                        id=f"{prefix}-step-{index + 1}-channel",
+                        value=step.get("channel") if has_step else None,
+                        clearable=True,
+                        options=[
+                            {"label": "Email", "value": "email"},
+                            {"label": "Call", "value": "call"},
+                            {"label": "Google Meet", "value": "google_meet"},
+                        ],
+                    ),
+                    dcc.Input(
+                        id=f"{prefix}-step-{index + 1}-delay-days",
+                        value=str(int(step.get("delay_seconds") or 0) // 86400) if has_step else "",
+                        placeholder="Delay days",
+                        type="number",
+                    ),
+                    dcc.Input(
+                        id=f"{prefix}-step-{index + 1}-subject",
+                        value=step.get("subject_template") or metadata.get("meeting_subject") or "",
+                        placeholder="Subject",
+                        type="text",
+                    ),
+                    dcc.Textarea(
+                        id=f"{prefix}-step-{index + 1}-body",
+                        value=step.get("body_template") or metadata.get("instructions") or "",
+                        placeholder="Body or instructions",
+                    ),
+                    dcc.Checklist(
+                        id=f"{prefix}-step-{index + 1}-approval",
+                        options=[{"label": "Requires approval", "value": "yes"}],
+                        value=["yes"] if step.get("requires_approval") else [],
+                    ),
+                ],
+                className="sequence-layer",
+            )
+        )
+    return layers
+
+
 def _contact_queue_row(candidate: dict[str, Any]) -> dict[str, Any]:
     payload = candidate.get("candidate_payload") or {}
     verified_email = payload.get("verified_email")
@@ -1973,6 +2425,53 @@ def _contact_queue_row(candidate: dict[str, Any]) -> dict[str, Any]:
         **candidate,
         "provenance": _provenance_label(candidate),
         "verified_email": verified_display,
+    }
+
+
+def _review_queue_row(candidate: dict[str, Any]) -> dict[str, Any]:
+    evidence = (
+        candidate.get("evidence_summary")
+        if isinstance(candidate.get("evidence_summary"), dict)
+        else {}
+    )
+    payload = (
+        evidence.get("candidate_payload")
+        if isinstance(evidence.get("candidate_payload"), dict)
+        else {}
+    )
+    return {
+        **candidate,
+        "name": evidence.get("published_name")
+        or evidence.get("contact")
+        or payload.get("published_name")
+        or candidate.get("target_id"),
+        "company": evidence.get("organization") or payload.get("company") or "-",
+        "domain": evidence.get("domain") or payload.get("domain") or "-",
+        "email": payload.get("verified_email") or evidence.get("email") or "-",
+    }
+
+
+def _crm_target_row(target: dict[str, Any]) -> dict[str, Any]:
+    approval = (
+        target.get("approval_snapshot") if isinstance(target.get("approval_snapshot"), dict) else {}
+    )
+    policy = (
+        target.get("policy_snapshot") if isinstance(target.get("policy_snapshot"), dict) else {}
+    )
+    return {
+        **target,
+        "name": target.get("display_name")
+        or approval.get("name")
+        or policy.get("name")
+        or target.get("target_id"),
+        "company": target.get("company_name")
+        or approval.get("company")
+        or policy.get("company")
+        or "-",
+        "email": approval.get("email")
+        or policy.get("email")
+        or target.get("email")
+        or (target.get("target_id") if target.get("target_type") == "email_candidate" else "-"),
     }
 
 
@@ -2138,6 +2637,25 @@ def _inline_list(value: Any) -> str:
         values = [str(item) for item in value if item not in (None, "")]
         return ", ".join(values) if values else "-"
     return str(value)
+
+
+def _attendees_display(value: Any) -> str:
+    if not isinstance(value, list) or not value:
+        return "-"
+    attendees: list[str] = []
+    for item in value:
+        if isinstance(item, dict):
+            email = str(item.get("email") or "").strip()
+            name = str(item.get("display_name") or item.get("name") or "").strip()
+            if name and email:
+                attendees.append(f"{name} <{email}>")
+            elif email:
+                attendees.append(email)
+            elif name:
+                attendees.append(name)
+        elif item not in (None, ""):
+            attendees.append(str(item))
+    return ", ".join(attendees) if attendees else "-"
 
 
 def _address(event: dict[str, Any]) -> str:

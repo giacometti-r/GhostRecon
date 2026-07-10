@@ -14,6 +14,7 @@ from ghostrecon.common.config import Settings
 from ghostrecon.common.database import session_scope
 from ghostrecon.events.contracts import EventName, new_event
 from ghostrecon.models.api import (
+    EventParticipantCreate,
     EventUpdateRequest,
     ManualEventCreate,
     normalize_event_format_value,
@@ -249,6 +250,59 @@ async def list_events(
 async def get_event(event_id: str, settings: Settings | None = None) -> CyberEvent | None:
     async with session_scope(settings) as session:
         return await session.get(CyberEvent, event_id)
+
+
+async def create_event_participant(
+    event_id: str,
+    payload: EventParticipantCreate,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+) -> EventParticipant | None:
+    async with session_scope(settings) as session:
+        event = await session.get(CyberEvent, event_id)
+        if event is None:
+            return None
+        dedupe_key = f"manual-participant:{event_id}:{idempotency_key}"
+        existing = await session.scalar(
+            select(EventParticipant).where(EventParticipant.dedupe_key == dedupe_key)
+        )
+        if existing is not None:
+            return existing
+        now = datetime.now(UTC)
+        participant = EventParticipant(
+            cyber_event_id=event_id,
+            source_definition_id=event.source_definition_id,
+            source_item_id=None,
+            source_participant_id=None,
+            published_name=payload.published_name,
+            organization=payload.organization,
+            published_role=payload.published_role,
+            participant_type=payload.participant_type.value,
+            profile_url=normalize_url(payload.profile_url) if payload.profile_url else None,
+            reuse_state=payload.reuse_state.value,
+            reuse_evidence={"basis": "manual dashboard entry", "actor": actor},
+            contact_extraction_allowed=payload.contact_extraction_allowed,
+            crm_export_allowed=payload.crm_export_allowed,
+            resolution_confidence=payload.resolution_confidence,
+            dedupe_key=dedupe_key,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(participant)
+        await session.flush()
+        session.add(
+            AuditEvent(
+                actor=actor,
+                action="event_participant.manual_created",
+                entity_type="event_participant",
+                entity_id=participant.id,
+                idempotency_key=idempotency_key,
+                payload={"cyber_event_id": event_id},
+            )
+        )
+        return participant
 
 
 async def create_manual_event(

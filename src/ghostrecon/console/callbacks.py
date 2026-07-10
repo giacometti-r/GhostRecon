@@ -33,6 +33,7 @@ MUTATING_ROLES = {
     DashboardRole.GOVERNANCE_REVIEWER.value,
     DashboardRole.ADMINISTRATOR.value,
 }
+SEQUENCE_LAYER_COUNT = 20
 
 
 def register_callbacks(dash_app: Any, settings: Settings) -> None:
@@ -101,8 +102,6 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
             return no_update, no_update, no_update, no_update
         if _triggered_click_count() < 1:
             return no_update, no_update, no_update, no_update
-        if action_id.get("kind") == "sequence" and action_id.get("action") == "pause":
-            return no_update, no_update, no_update, no_update
         try:
             message = perform_dashboard_action(
                 action_id,
@@ -128,14 +127,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         prevent_initial_call=True,
     )
     def open_sequence_pause_modal(_clicks: list[int] | None) -> tuple[Any, str, str]:
-        action_id = ctx.triggered_id
-        if not isinstance(action_id, dict):
-            return no_update, no_update, no_update
-        if _triggered_click_count() < 1:
-            return no_update, no_update, no_update
-        if action_id.get("kind") != "sequence" or action_id.get("action") != "pause":
-            return no_update, no_update, no_update
-        return action_id, "modal-backdrop", ""
+        return no_update, no_update, no_update
 
     @dash_app.callback(
         Output("sequence-pause-modal", "className", allow_duplicate=True),
@@ -416,6 +408,68 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         Output("mutation-status", "children", allow_duplicate=True),
         Output("mutation-refresh-token", "data", allow_duplicate=True),
         Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input({"type": "event-participant-submit", "event_id": ALL}, "n_clicks"),
+        State({"type": "event-participant-name", "event_id": ALL}, "value"),
+        State({"type": "event-participant-org", "event_id": ALL}, "value"),
+        State({"type": "event-participant-role", "event_id": ALL}, "value"),
+        State({"type": "event-participant-type", "event_id": ALL}, "value"),
+        State({"type": "event-participant-profile", "event_id": ALL}, "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def create_event_participant(
+        clicks: list[int] | None,
+        names: list[str] | None,
+        orgs: list[str] | None,
+        roles: list[str] | None,
+        participant_types: list[str] | None,
+        profile_urls: list[str] | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        action_id = ctx.triggered_id
+        if not isinstance(action_id, dict) or not any(clicks or []):
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot create participants"),
+                no_update,
+                False,
+            )
+        name = _first_value(names)
+        if not name:
+            return error_notice("Participant name required"), no_update, False
+        event_id = str(action_id.get("event_id") or "")
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        payload = {
+            "published_name": name,
+            "organization": _first_value(orgs),
+            "published_role": _first_value(roles),
+            "participant_type": _first_value(participant_types) or "speaker",
+            "profile_url": _first_value(profile_urls),
+            "reuse_state": "allowed",
+            "contact_extraction_allowed": True,
+            "crm_export_allowed": False,
+        }
+        try:
+            api.post(
+                f"/v1/intelligence/events/{event_id}/participants",
+                payload=payload,
+                idempotency_key=idempotency_key("event-participant", event_id, name),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice(f"Participant {name} added."), (token or 0) + 1, False
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
         Output("manual-incident-modal", "className", allow_duplicate=True),
         Input("manual-incident-submit", "n_clicks"),
         State("manual-incident-title", "value"),
@@ -462,7 +516,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         payload = {
             "title": title.strip(),
             "affected_companies": _csv(companies),
-            "affected_domains": _csv(domains),
+            "affected_domains": _csv(domains, none_values=True),
             "incident_type": _clean(incident_type),
             "attack_vector": _clean(vector),
             "first_observed_at": _datetime_value(first_observed),
@@ -484,6 +538,173 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
             False,
             "modal-backdrop hidden",
         )
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input({"type": "incident-edit-submit", "incident_id": ALL, "version": ALL}, "n_clicks"),
+        State("incident-edit-title", "value"),
+        State("incident-edit-company", "value"),
+        State("incident-edit-domains", "value"),
+        State("incident-edit-type", "value"),
+        State("incident-edit-vector", "value"),
+        State("incident-edit-first-observed", "value"),
+        State("incident-edit-evidence-urls", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def save_incident_edit(
+        clicks: list[int] | None,
+        title: str | None,
+        companies: str | None,
+        domains: str | None,
+        incident_type: str | None,
+        vector: str | None,
+        first_observed: str | None,
+        evidence_urls: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        action_id = ctx.triggered_id
+        if not isinstance(action_id, dict) or not any(clicks or []):
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot edit incidents"),
+                no_update,
+                False,
+            )
+        incident_id = str(action_id.get("incident_id") or "")
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        try:
+            api.patch(
+                f"/v1/intelligence/incidents/{incident_id}",
+                payload={
+                    "version": _int(action_id.get("version")),
+                    "title": _clean(title),
+                    "affected_companies": _csv(companies),
+                    "affected_domains": _csv(domains, none_values=True),
+                    "incident_type": _clean(incident_type),
+                    "attack_vector": _clean(vector),
+                    "first_observed_at": _datetime_value(first_observed),
+                    "evidence_urls": _csv(evidence_urls),
+                },
+                idempotency_key=idempotency_key(
+                    "incident-edit", incident_id, action_id.get("version")
+                ),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice("Incident updated."), (token or 0) + 1, False
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input("review-edit-submit", "n_clicks"),
+        State("console-url", "pathname"),
+        State("review-edit-name", "value"),
+        State("review-edit-company", "value"),
+        State("review-edit-domain", "value"),
+        State("review-edit-email", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def save_review_candidate_edit(
+        clicks: int | None,
+        pathname: str | None,
+        name: str | None,
+        company: str | None,
+        domain: str | None,
+        email: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        if (clicks or 0) < 1:
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot edit review candidates"),
+                no_update,
+                False,
+            )
+        candidate_id = _path_tail(pathname, "/review/")
+        if not candidate_id:
+            return error_notice("Action failed", "missing review candidate id"), no_update, False
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        try:
+            api.patch(
+                f"/v1/review/candidates/{candidate_id}",
+                payload={
+                    "name": _clean(name),
+                    "company": _clean(company),
+                    "domain": _clean(domain),
+                    "email": _clean(email),
+                },
+                idempotency_key=idempotency_key("review-edit", candidate_id),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice("Review candidate updated."), (token or 0) + 1, False
+
+    @dash_app.callback(
+        Output("mutation-status", "children", allow_duplicate=True),
+        Output("mutation-refresh-token", "data", allow_duplicate=True),
+        Output("mutation-status-clear", "disabled", allow_duplicate=True),
+        Input("crm-target-edit-submit", "n_clicks"),
+        State("console-url", "pathname"),
+        State("crm-target-edit-name", "value"),
+        State("crm-target-edit-company", "value"),
+        State("crm-target-edit-email", "value"),
+        State("operator-actor", "value"),
+        State("operator-role", "value"),
+        State("mutation-refresh-token", "data"),
+        prevent_initial_call=True,
+    )
+    def save_crm_target_edit(
+        clicks: int | None,
+        pathname: str | None,
+        name: str | None,
+        company: str | None,
+        email: str | None,
+        actor: str | None,
+        role: str | None,
+        token: int | None,
+    ) -> tuple[Any, Any, Any]:
+        if (clicks or 0) < 1:
+            return no_update, no_update, no_update
+        if normalize_role(role) not in MUTATING_ROLES:
+            return (
+                error_notice("Action failed", "viewer role cannot edit CRM targets"),
+                no_update,
+                False,
+            )
+        target_id = _path_tail(pathname, "/crm/exports/targets/")
+        if not target_id:
+            return error_notice("Action failed", "missing CRM target id"), no_update, False
+        api = ConsoleApiClient.from_settings(
+            settings, actor=actor or "dashboard", role=normalize_role(role)
+        )
+        try:
+            api.patch(
+                f"/v1/review/crm-targets/{target_id}",
+                payload={"name": _clean(name), "company": _clean(company), "email": _clean(email)},
+                idempotency_key=idempotency_key("crm-target-edit", target_id),
+            )
+        except ConsoleApiError as exc:
+            return error_notice("Action failed", str(exc)), no_update, False
+        return _success_notice("CRM target updated."), (token or 0) + 1, False
 
     @dash_app.callback(
         Output("mutation-status", "children", allow_duplicate=True),
@@ -542,7 +763,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         Input("sequence-create-submit", "n_clicks"),
         State("sequence-create-name", "value"),
         State("sequence-create-owner", "value"),
-        State("sequence-create-steps", "value"),
+        *_sequence_layer_states("sequence-create"),
         State("operator-actor", "value"),
         State("operator-role", "value"),
         State("mutation-refresh-token", "data"),
@@ -552,11 +773,13 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         clicks: int | None,
         name: str | None,
         owner: str | None,
-        steps_json: str | None,
-        actor: str | None,
-        role: str | None,
-        token: int | None,
+        *values: Any,
     ) -> tuple[Any, Any, Any]:
+        layer_value_count = SEQUENCE_LAYER_COUNT * 5
+        layer_values = list(values[:layer_value_count])
+        actor = values[layer_value_count] if len(values) > layer_value_count else None
+        role = values[layer_value_count + 1] if len(values) > layer_value_count + 1 else None
+        token = values[layer_value_count + 2] if len(values) > layer_value_count + 2 else None
         if (clicks or 0) < 1:
             return no_update, no_update, no_update
         if normalize_role(role) not in MUTATING_ROLES:
@@ -565,11 +788,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
                 no_update,
                 False,
             )
-        try:
-            parsed_steps = json.loads(steps_json or "[]")
-        except json.JSONDecodeError as exc:
-            return error_notice("Invalid steps JSON", str(exc)), no_update, False
-        steps = [_sequence_step_payload(step) for step in parsed_steps if isinstance(step, dict)]
+        steps = _sequence_steps_from_layers(layer_values)
         if not name or not steps:
             return error_notice("Sequence name and steps are required"), no_update, False
         api = ConsoleApiClient.from_settings(
@@ -580,7 +799,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
                 "/v1/sequences",
                 payload={
                     "name": name.strip(),
-                    "owner_id": (owner or "").strip() or None,
+                    "owner_id": (owner or "").strip() or (actor or "dashboard"),
                     "steps": steps,
                 },
                 idempotency_key=idempotency_key("sequence-create", name.strip()),
@@ -593,51 +812,11 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         Output("mutation-status", "children", allow_duplicate=True),
         Output("mutation-refresh-token", "data", allow_duplicate=True),
         Output("mutation-status-clear", "disabled", allow_duplicate=True),
-        Input({"type": "crm-prospect-import", "provider_record_id": ALL}, "n_clicks"),
-        State("crm-prospect-sequence", "value"),
-        State("crm-prospect-approval-reason", "value"),
-        State("operator-actor", "value"),
-        State("operator-role", "value"),
-        State("mutation-refresh-token", "data"),
+        Input({"type": "removed-crm-prospect-import", "provider_record_id": ALL}, "n_clicks"),
         prevent_initial_call=True,
     )
-    def import_crm_prospect(
-        clicks: list[int] | None,
-        sequence_id: str | None,
-        approval_reason: str | None,
-        actor: str | None,
-        role: str | None,
-        token: int | None,
-    ) -> tuple[Any, Any, Any]:
-        action_id = ctx.triggered_id
-        if not isinstance(action_id, dict) or not any(clicks or []):
-            return no_update, no_update, no_update
-        if normalize_role(role) not in MUTATING_ROLES:
-            return (
-                error_notice("Action failed", "viewer role cannot import prospects"),
-                no_update,
-                False,
-            )
-        provider_record_id = str(action_id.get("provider_record_id") or "")
-        if not provider_record_id or not sequence_id:
-            return error_notice("Prospect and sequence are required"), no_update, False
-        api = ConsoleApiClient.from_settings(
-            settings, actor=actor or "dashboard", role=normalize_role(role)
-        )
-        try:
-            api.post(
-                "/v1/sequences/enrollments/import-crm-prospect",
-                payload={
-                    "provider_record_id": provider_record_id,
-                    "sequence_id": sequence_id,
-                    "outreach_approved": True,
-                    "approval_reason": approval_reason or "Approved from dashboard CRM import.",
-                },
-                idempotency_key=idempotency_key("crm-prospect-import", provider_record_id),
-            )
-        except ConsoleApiError as exc:
-            return error_notice("Action failed", str(exc)), no_update, False
-        return _success_notice("CRM prospect imported and assigned."), (token or 0) + 1, False
+    def import_crm_prospect(_clicks: list[int] | None) -> tuple[Any, Any, Any]:
+        return no_update, no_update, no_update
 
     @dash_app.callback(
         Output("mutation-status", "children", allow_duplicate=True),
@@ -647,7 +826,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         State("sequence-edit-name", "value"),
         State("sequence-edit-owner", "value"),
         State("sequence-edit-status", "value"),
-        State("sequence-edit-steps", "value"),
+        *_sequence_layer_states("sequence-edit"),
         State("sequence-edit-version", "data"),
         State("operator-actor", "value"),
         State("operator-role", "value"),
@@ -659,12 +838,14 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
         name: str | None,
         owner: str | None,
         status: str | None,
-        steps_json: str | None,
-        version: int | None,
-        actor: str | None,
-        role: str | None,
-        token: int | None,
+        *values: Any,
     ) -> tuple[Any, Any, Any]:
+        layer_value_count = SEQUENCE_LAYER_COUNT * 5
+        layer_values = list(values[:layer_value_count])
+        version = values[layer_value_count] if len(values) > layer_value_count else None
+        actor = values[layer_value_count + 1] if len(values) > layer_value_count + 1 else None
+        role = values[layer_value_count + 2] if len(values) > layer_value_count + 2 else None
+        token = values[layer_value_count + 3] if len(values) > layer_value_count + 3 else None
         action_id = ctx.triggered_id
         if not isinstance(action_id, dict) or not any(clicks or []):
             return no_update, no_update, no_update
@@ -674,11 +855,7 @@ def register_callbacks(dash_app: Any, settings: Settings) -> None:
                 no_update,
                 False,
             )
-        try:
-            parsed_steps = json.loads(steps_json or "[]")
-        except json.JSONDecodeError as exc:
-            return error_notice("Invalid steps JSON", str(exc)), no_update, False
-        steps = [_sequence_step_payload(step) for step in parsed_steps if isinstance(step, dict)]
+        steps = _sequence_steps_from_layers(layer_values)
         sequence_id = str(action_id.get("sequence_id") or "")
         api = ConsoleApiClient.from_settings(
             settings, actor=actor or "dashboard", role=normalize_role(role)
@@ -729,7 +906,7 @@ def perform_dashboard_action(
         payload = {
             "version": _int(action_id.get("version")),
             "reason_code": f"dashboard_{action}",
-            "reason": "Sprint 12 dashboard review action.",
+            "reason": "Dashboard analyst review action.",
             "policy_snapshot_hash": action_id.get("policy_hash"),
             "evidence_snapshot": {},
             "target_scope": "crm_export",
@@ -751,7 +928,7 @@ def perform_dashboard_action(
             "decision": decision,
             "candidate_versions": _version_map(action_id.get("version")),
             "reason_code": f"dashboard_bulk_{action}",
-            "reason": "Sprint 12 dashboard bulk review action.",
+            "reason": "Dashboard analyst bulk review action.",
             "policy_snapshot_hash": action_id.get("policy_hash"),
             "evidence_snapshot": {},
         }
@@ -768,7 +945,7 @@ def perform_dashboard_action(
             payload={
                 "crm_target_ids": [target_id],
                 "provider": "attio",
-                "reason": "Sprint 12 dashboard export action.",
+                "reason": "Dashboard CRM export action.",
             },
             idempotency_key=idempotency_key("crm-export", target_id),
         )
@@ -808,6 +985,18 @@ def perform_dashboard_action(
         return f"Watch target {target_id} {state}."
 
     if kind == "contact-candidate":
+        if action == "discover-email":
+            result = api.post(
+                f"/v1/enrichment/contact-candidates/{target_id}/discover-email",
+                payload={},
+                idempotency_key=idempotency_key("contact-email", target_id),
+            )
+            count = len(result.get("candidates") or [])
+            return (
+                f"Contact candidate {target_id} email discovery returned {count} candidate(s)."
+                if count
+                else f"Contact candidate {target_id} routed to review for email discovery."
+            )
         if action != "discover-domain":
             raise ConsoleApiError(f"unsupported contact candidate action {action}", status_code=400)
         result = api.post(
@@ -822,6 +1011,19 @@ def perform_dashboard_action(
             else f"Contact candidate {target_id} routed to review for domain discovery."
         )
 
+    if kind == "bulk-contact-candidate":
+        candidate_ids = [candidate_id for candidate_id in target_id.split(",") if candidate_id]
+        if not candidate_ids:
+            raise ConsoleApiError("bulk discovery requires at least one candidate", status_code=400)
+        endpoint = "discover-domain" if action == "discover-domain" else "discover-email"
+        for candidate_id in candidate_ids:
+            api.post(
+                f"/v1/enrichment/contact-candidates/{candidate_id}/{endpoint}",
+                payload={},
+                idempotency_key=idempotency_key(f"contact-{endpoint}", candidate_id),
+            )
+        return f"Bulk {action.replace('-', ' ')} submitted for {len(candidate_ids)} candidate(s)."
+
     if kind == "sequence":
         if action not in {"pause", "resume", "cancel"}:
             raise ConsoleApiError(f"unsupported sequence action {action}", status_code=400)
@@ -830,6 +1032,14 @@ def perform_dashboard_action(
             payload={"reason": _action_reason(action, extra_payload)},
         )
         return f"Sequence enrollment {target_id} {action} requested."
+
+    if kind == "sequence-definition":
+        if action != "delete":
+            raise ConsoleApiError(
+                f"unsupported sequence definition action {action}", status_code=400
+            )
+        api.delete(f"/v1/sequences/{target_id}")
+        return f"Sequence definition {target_id} deleted."
 
     if kind == "sequence-activity":
         if action == "approve-email":
@@ -864,11 +1074,9 @@ def perform_dashboard_action(
 
     if kind == "event-participant":
         domain = str((extra_payload or {}).get("domain") or "").strip()
-        if not domain:
-            raise ConsoleApiError("domain is required to enrich a participant", status_code=400)
         result = api.post(
             f"/v1/enrichment/event-participants/{target_id}/enrich-target",
-            payload={"domain": domain},
+            payload={"domain": domain} if domain else {},
             idempotency_key=idempotency_key("participant-enrichment-queue", target_id),
         )
         verified = result.get("verified_email")
@@ -894,9 +1102,25 @@ def _perform_incident_action(
         version = action_id.get("version")
         if version in (None, ""):
             raise ConsoleApiError("incident action requires an optimistic version", status_code=409)
+        promoted_version = _int(version)
+        if str(action_id.get("enabled") or "") == "candidate":
+            payload = {
+                "version": promoted_version,
+                "method": "analyst_decision",
+                "reason_code": "dashboard_incident_watchlist",
+                "reason": "Dashboard watchlist promotion corroborated this incident.",
+                "evidence_snapshot": {},
+                "policy_snapshot": {},
+            }
+            api.post(
+                f"/v1/governance/incidents/{target_id}/corroborate",
+                payload=payload,
+                idempotency_key=idempotency_key("incident-corroborate", target_id),
+            )
+            promoted_version += 1
         api.post(
             f"/v1/intelligence/incidents/{target_id}/promote-to-watchlist",
-            payload={"version": _int(version)},
+            payload={"version": promoted_version},
             idempotency_key=idempotency_key("incident-watch", target_id),
         )
         return f"Incident {target_id} added to watchlist."
@@ -907,7 +1131,7 @@ def _perform_incident_action(
         payload = {
             "version": _int(version),
             "reason_code": f"dashboard_incident_{action}",
-            "reason": "Sprint 17/18 dashboard incident decision.",
+            "reason": "Dashboard incident decision.",
             "evidence_snapshot": {},
             "policy_snapshot": {},
         }
@@ -968,8 +1192,20 @@ def _clean(value: Any) -> str | None:
     return text or None
 
 
-def _csv(value: Any) -> list[str]:
-    return [item.strip() for item in str(value or "").split(",") if item.strip()]
+def _csv(value: Any, *, none_values: bool = False) -> list[str]:
+    ignored = {"none", "n/a", "na", "null"} if none_values else set()
+    return [
+        item.strip()
+        for item in str(value or "").split(",")
+        if item.strip() and item.strip().lower() not in ignored
+    ]
+
+
+def _path_tail(pathname: str | None, prefix: str) -> str:
+    path = (pathname or "").rstrip("/")
+    if not path.startswith(prefix):
+        return ""
+    return path.removeprefix(prefix).split("/", 1)[0]
 
 
 def _datetime_value(value: Any) -> str | None:
@@ -1021,6 +1257,56 @@ def _sequence_step_payload(step: dict[str, Any]) -> dict[str, Any]:
     elif channel == "email":
         payload["body_template"] = "Checking in."
     return payload
+
+
+def _sequence_layer_states(prefix: str) -> list[State]:
+    states: list[State] = []
+    for index in range(1, SEQUENCE_LAYER_COUNT + 1):
+        states.extend(
+            [
+                State(f"{prefix}-step-{index}-channel", "value"),
+                State(f"{prefix}-step-{index}-delay-days", "value"),
+                State(f"{prefix}-step-{index}-subject", "value"),
+                State(f"{prefix}-step-{index}-body", "value"),
+                State(f"{prefix}-step-{index}-approval", "value"),
+            ]
+        )
+    return states
+
+
+def _sequence_steps_from_layers(values: list[Any]) -> list[dict[str, Any]]:
+    steps: list[dict[str, Any]] = []
+    for index in range(0, len(values), 5):
+        chunk = values[index : index + 5]
+        if len(chunk) < 5:
+            continue
+        channel, delay_days, subject, body, approval = chunk
+        if not channel:
+            continue
+        try:
+            delay_seconds = int(float(delay_days or 0) * 86400)
+        except (TypeError, ValueError):
+            delay_seconds = 0
+        step_order = len(steps) + 1
+        step: dict[str, Any] = {
+            "step_order": step_order,
+            "channel": channel,
+            "delay_seconds": delay_seconds,
+            "requires_approval": "yes" in (approval or []),
+            "step_metadata": {},
+        }
+        if channel == "email":
+            step["subject_template"] = subject or "Follow up"
+            step["body_template"] = body or "Checking in."
+        elif channel == "google_meet":
+            step["step_metadata"] = {
+                "meeting_subject": subject or "Security discovery",
+                "instructions": body or "Schedule a discovery meeting.",
+            }
+        else:
+            step["step_metadata"] = {"instructions": body or "Call and log next steps."}
+        steps.append(_sequence_step_payload(step))
+    return steps
 
 
 def _int(value: Any) -> int:

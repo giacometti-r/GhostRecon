@@ -109,6 +109,28 @@ def _review_candidate() -> SimpleNamespace:
     )
 
 
+def _crm_target() -> SimpleNamespace:
+    now = datetime(2026, 7, 6, tzinfo=UTC)
+    return SimpleNamespace(
+        id="crm-target-1",
+        review_candidate_id="review-1",
+        review_decision_id="decision-1",
+        target_type="email_candidate",
+        target_id="email-candidate-1",
+        origin_type="security_incident",
+        origin_id="incident-1",
+        source_definition_id="source-1",
+        source_item_ids=["raw-1"],
+        status="pending_export",
+        export_status="not_exported",
+        policy_snapshot={"name": "Ada Lovelace"},
+        approval_snapshot={"email": "ada@example.com"},
+        version=2,
+        created_at=now,
+        updated_at=now,
+    )
+
+
 def _candidate_score() -> SimpleNamespace:
     now = datetime(2026, 7, 6, tzinfo=UTC)
     return SimpleNamespace(
@@ -331,8 +353,15 @@ def test_watch_target_contact_and_domain_discovery_routes(monkeypatch) -> None:
             "review_reason": None,
         }
 
+    async def fake_discover_email(candidate_id, **kwargs):
+        assert candidate_id == "contact-candidate-1"
+        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["idempotency_key"] == "idem-email"
+        return [_email_candidate("verified")]
+
     monkeypatch.setattr(routers, "discover_watch_target_contacts", fake_find_contacts)
     monkeypatch.setattr(routers, "discover_contact_candidate_domain", fake_discover_domain)
+    monkeypatch.setattr(routers, "discover_contact_candidate_email", fake_discover_email)
 
     client = TestClient(build_app(Settings(service_name="enrichment-service")))
     contacts = client.post(
@@ -343,11 +372,16 @@ def test_watch_target_contact_and_domain_discovery_routes(monkeypatch) -> None:
         "/v1/enrichment/contact-candidates/contact-candidate-1/discover-domain",
         headers={"X-Actor": "analyst@example.com"},
     )
+    email = client.post(
+        "/v1/enrichment/contact-candidates/contact-candidate-1/discover-email",
+        headers={"X-Actor": "analyst@example.com", "Idempotency-Key": "idem-email"},
+    )
 
     assert contacts.status_code == 200
     assert contacts.json()["provider"] == "local_demo"
     assert "site:linkedin.com/in" in contacts.json()["query"]
     assert domain.json()["discovered_domain"] == "example.com"
+    assert email.json()["candidates"][0]["email"] == "ada.lovelace@example.com"
 
 
 def test_review_candidates_route_is_read_only_queue(monkeypatch) -> None:
@@ -433,6 +467,62 @@ def test_review_decision_routes_and_crm_targets(monkeypatch) -> None:
     assert rejected["decision"] == "rejected"
     assert bulk["decisions"][0]["decision"] == "approved"
     assert targets["crm_targets"][0]["export_status"] == "not_exported"
+
+
+def test_review_and_crm_target_update_routes(monkeypatch) -> None:
+    async def fake_update_review_candidate(candidate_id, request, **kwargs):
+        assert candidate_id == "review-1"
+        assert kwargs["actor"] == "analyst@example.com"
+        candidate = _review_candidate()
+        candidate.evidence_summary = {
+            "published_name": request.name,
+            "organization": request.company,
+            "domain": request.domain,
+            "email": request.email,
+        }
+        candidate.version = 2
+        return candidate
+
+    async def fake_update_crm_target(crm_target_id, request, **kwargs):
+        assert crm_target_id == "crm-target-1"
+        assert kwargs["actor"] == "analyst@example.com"
+        target = _crm_target()
+        target.approval_snapshot = {
+            "name": request.name,
+            "company": request.company,
+            "email": request.email,
+        }
+        target.version = 3
+        return target
+
+    monkeypatch.setattr(routers, "update_review_candidate", fake_update_review_candidate)
+    monkeypatch.setattr(routers, "update_crm_target", fake_update_crm_target)
+
+    client = TestClient(build_app(Settings(service_name="governance-service")))
+    review = client.patch(
+        "/v1/review/candidates/review-1",
+        headers={"X-Actor": "analyst@example.com"},
+        json={
+            "name": "Ada Updated",
+            "company": "Example Industries",
+            "domain": "example.com",
+            "email": "ada.updated@example.com",
+        },
+    ).json()
+    crm = client.patch(
+        "/v1/review/crm-targets/crm-target-1",
+        headers={"X-Actor": "analyst@example.com"},
+        json={
+            "name": "Ada Updated",
+            "company": "Example Industries",
+            "email": "ada.updated@example.com",
+        },
+    ).json()
+
+    assert review["version"] == 2
+    assert review["evidence_summary"]["published_name"] == "Ada Updated"
+    assert crm["version"] == 3
+    assert crm["approval_snapshot"]["email"] == "ada.updated@example.com"
 
 
 def test_suppression_and_incident_governance_routes(monkeypatch) -> None:

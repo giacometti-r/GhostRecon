@@ -46,12 +46,19 @@ def _seed_uuid(name: str) -> str:
     return str(uuid5(NAMESPACE_URL, f"{DEMO_NAMESPACE}/{name}"))
 
 
+def _slug(value: str) -> str:
+    return "-".join(part for part in value.lower().replace(".", " ").split() if part)
+
+
 @dataclass(frozen=True)
 class DemoSeedIds:
     fresh_source_definition_id: str = _seed_uuid("source/fresh-event-source")
     degraded_source_definition_id: str = _seed_uuid("source/degraded-incident-source")
     cyber_event_id: str = _seed_uuid("event/cloud-security-summit")
+    secondary_cyber_event_id: str = _seed_uuid("event/identity-defense-forum")
     event_participant_id: str = _seed_uuid("event-participant/morgan-lee")
+    secondary_event_participant_id: str = _seed_uuid("event-participant/samira-owens")
+    tertiary_event_participant_id: str = _seed_uuid("event-participant/leo-martin")
     security_incident_id: str = _seed_uuid("incident/example-ransomware")
     secondary_incident_id: str = _seed_uuid("incident/contoso-ransomware")
     review_incident_id: str = _seed_uuid("incident/nimbus-phishing")
@@ -225,6 +232,78 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
     participant.dedupe_key = "demo:sprint15:participant:morgan-lee"
     participant.created_at = now
     participant.updated_at = now
+
+    second_event = await _get_or_create(session, CyberEvent, DEMO_SEED_IDS.secondary_cyber_event_id)
+    second_event.name = "Identity Defense Forum Demo"
+    second_event.event_series_key = "identity-defense-forum-demo"
+    second_event.external_id = "demo-event-002"
+    second_event.canonical_url = "https://ghostrecon.local/demo/events/identity-defense-forum"
+    second_event.original_start = (event_start + timedelta(days=12)).isoformat()
+    second_event.original_end = (event_start + timedelta(days=13)).isoformat()
+    second_event.source_timezone = "America/Los_Angeles"
+    second_event.iana_timezone = "America/Los_Angeles"
+    second_event.timezone_status = "resolved"
+    second_event.starts_at_utc = event_start + timedelta(days=12)
+    second_event.ends_at_utc = event_start + timedelta(days=13)
+    second_event.event_format = "hybrid"
+    second_event.venue_name = "Demo Security Exchange"
+    second_event.street_address = "1 Market St"
+    second_event.city = "San Francisco"
+    second_event.region = "CA"
+    second_event.postcode = "94105"
+    second_event.country = "US"
+    second_event.virtual_url = "https://ghostrecon.local/demo/events/identity-defense-forum/join"
+    second_event.latitude = 37.7936
+    second_event.longitude = -122.3959
+    second_event.geocode_status = "resolved"
+    second_event.geocode_provider = "local_demo"
+    second_event.geocode_display_name = "1 Market St, San Francisco, CA 94105, US"
+    second_event.geocoded_at = now
+    second_event.topics = ["identity", "zero trust", "phishing"]
+    second_event.organizers = [{"name": "GhostRecon Demo Team"}]
+    second_event.confidence = 89
+    second_event.canonical_state = "canonical"
+    second_event.dedupe_key = "demo:sprint22:event:identity-defense-forum"
+    second_event.source_definition_id = fresh_source.id
+    second_event.source_item_ids = []
+    second_event.version = 1
+    second_event.created_at = now
+    second_event.updated_at = now
+
+    for participant_id, name, organization, role, participant_type in [
+        (
+            DEMO_SEED_IDS.secondary_event_participant_id,
+            "Samira Owens",
+            "Nimbus Retail",
+            "CISO",
+            "speaker",
+        ),
+        (
+            DEMO_SEED_IDS.tertiary_event_participant_id,
+            "Leo Martin",
+            "Contoso Manufacturing",
+            "Security Architect",
+            "attendee",
+        ),
+    ]:
+        extra_participant = await _get_or_create(session, EventParticipant, participant_id)
+        extra_participant.cyber_event_id = second_event.id
+        extra_participant.source_definition_id = fresh_source.id
+        extra_participant.source_item_id = None
+        extra_participant.source_participant_id = f"demo-{participant_id}"
+        extra_participant.published_name = name
+        extra_participant.organization = organization
+        extra_participant.published_role = role
+        extra_participant.participant_type = participant_type
+        extra_participant.profile_url = f"https://ghostrecon.local/demo/people/{_slug(name)}"
+        extra_participant.reuse_state = "allowed"
+        extra_participant.reuse_evidence = {"basis": "synthetic local fixture"}
+        extra_participant.contact_extraction_allowed = True
+        extra_participant.crm_export_allowed = False
+        extra_participant.resolution_confidence = 86
+        extra_participant.dedupe_key = f"demo:sprint22:participant:{_slug(name)}"
+        extra_participant.created_at = now
+        extra_participant.updated_at = now
 
     incident = await _get_or_create(session, SecurityIncident, DEMO_SEED_IDS.security_incident_id)
     ransomware_group_key = "demo:sprint17:incident-group:example-contoso-ransomware"
@@ -479,6 +558,8 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
         idempotency_key="demo:sprint15:review:reject-nimbus-retail",
         sla_due_at=now + timedelta(days=1),
     )
+    approve_review.status = "superseded"
+    reject_review.status = "superseded"
     await _review_candidate(
         session,
         DEMO_SEED_IDS.contact_review_candidate_id,
@@ -526,28 +607,52 @@ async def _upsert_demo_records(session: AsyncSession) -> None:
         session,
         DEMO_SEED_IDS.export_crm_target_id,
         now=now,
-        review_candidate_id=approve_review.id,
-        target_type="security_incident",
-        target_id=incident.id,
+        review_candidate_id=DEMO_SEED_IDS.email_review_candidate_id,
+        target_type="email_candidate",
+        target_id=email_candidate.id,
         origin_id=incident.id,
         source_definition_id=degraded_source.id,
         status="pending_export",
         export_status="not_exported",
         idempotency_key="demo:sprint15:crm-target:export-example-industries",
     )
+    export_target.policy_snapshot = {
+        **dict(export_target.policy_snapshot or {}),
+        "name": contact.full_name,
+        "company": account.company_name,
+        "email": email_candidate.email,
+    }
+    export_target.approval_snapshot = {
+        **dict(export_target.approval_snapshot or {}),
+        "name": contact.full_name,
+        "company": account.company_name,
+        "email": email_candidate.email,
+    }
     retry_target = await _crm_target(
         session,
         DEMO_SEED_IDS.retry_crm_target_id,
         now=now,
-        review_candidate_id=reject_review.id,
-        target_type="security_incident",
-        target_id=review_incident.id,
+        review_candidate_id=DEMO_SEED_IDS.email_review_candidate_id,
+        target_type="email_candidate",
+        target_id=email_candidate.id,
         origin_id=review_incident.id,
         source_definition_id=degraded_source.id,
         status="pending_export",
         export_status="failed_retryable",
         idempotency_key="demo:sprint15:crm-target:retry-nimbus-retail",
     )
+    retry_target.policy_snapshot = {
+        **dict(retry_target.policy_snapshot or {}),
+        "name": contact.full_name,
+        "company": account.company_name,
+        "email": email_candidate.email,
+    }
+    retry_target.approval_snapshot = {
+        **dict(retry_target.approval_snapshot or {}),
+        "name": contact.full_name,
+        "company": account.company_name,
+        "email": email_candidate.email,
+    }
     meeting_target = await _crm_target(
         session,
         DEMO_SEED_IDS.meeting_crm_target_id,
@@ -934,11 +1039,11 @@ async def _crm_export_batch(
     item.target_id = target.target_id
     item.operation = "upsert_record"
     item.dependency_item_ids = []
-    item.provider_object = "security_incidents"
+    item.provider_object = "people"
     item.provider_record_id = None
     item.provider_list_id = None
     item.provider_list_entry_id = None
-    item.stable_match_key = f"ghostrecon_incident:{target.target_id}"
+    item.stable_match_key = f"ghostrecon_contact:{target.target_id}"
     item.status = "failed_retryable"
     item.attempt_count = 1
     item.last_error = "Synthetic Attio rate limit for retry demo."
@@ -1216,9 +1321,7 @@ async def _seeded_counts(settings: Settings) -> dict[str, int]:
             "event_participants": await _count_seeded(session, EventParticipant),
             "security_incidents": await _count_seeded(session, SecurityIncident),
             "watch_targets": await _count_seeded(session, WatchTarget),
-            "watch_target_monitoring_runs": await _count_seeded(
-                session, WatchTargetMonitoringRun
-            ),
+            "watch_target_monitoring_runs": await _count_seeded(session, WatchTargetMonitoringRun),
             "entity_resolution_cases": await _count_seeded(session, EntityResolutionCase),
             "contact_enrichment_candidates": await _count_seeded(
                 session, ContactEnrichmentCandidate

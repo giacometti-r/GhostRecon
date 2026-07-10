@@ -414,13 +414,16 @@ def test_render_page_shows_sequence_workflow_and_structured_meeting_prep() -> No
         ),
         ("GET", "/v1/reporting/meetings/meeting-1"): (
             200,
-            {
-                "metadata": _metadata(),
-                "meeting": {
-                    "id": "meeting-1",
-                    "subject": "Security discovery",
-                    "status": "scheduled",
-                    "prep_packet": {
+                {
+                    "metadata": _metadata(),
+                    "meeting": {
+                        "id": "meeting-1",
+                        "subject": "Security discovery",
+                        "status": "scheduled",
+                        "attendees": [
+                            {"display_name": "Taylor Ng", "email": "taylor.ng@example.com"}
+                        ],
+                        "prep_packet": {
                         "account_summary": "Example Industries has active incident intent.",
                         "stakeholder_map": [{"name": "Taylor Ng", "role": "VP Security"}],
                         "likely_security_priorities": ["identity response"],
@@ -466,13 +469,14 @@ def test_render_page_shows_sequence_workflow_and_structured_meeting_prep() -> No
     )
 
     assert "Sequence Definitions" in sequences
-    assert "CRM prospect import" in sequences
+    assert "CRM prospect import" not in sequences
     assert "Sequence activities" in sequences
     assert "Create sequence" in definitions
     assert "Multi-channel" in definitions
     assert "Account context" in meeting
     assert "Recommended talk tracks" in meeting
     assert "Taylor Ng" in meeting
+    assert "taylor.ng@example.com" in meeting
 
 
 def test_render_page_surfaces_gateway_error_path_and_status() -> None:
@@ -497,6 +501,105 @@ def test_render_page_surfaces_gateway_error_path_and_status() -> None:
     assert "reporting database unavailable" in rendered
     assert "Endpoint: /v1/reporting/events" in rendered
     assert "Status: 503" in rendered
+
+
+class RecordingDashboardClient:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, dict[str, Any] | None]] = []
+
+    def post(
+        self,
+        path: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        _ = idempotency_key
+        self.calls.append(("POST", path, payload))
+        return {}
+
+    def patch(
+        self,
+        path: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        _ = idempotency_key
+        self.calls.append(("PATCH", path, payload))
+        return {}
+
+    def delete(
+        self,
+        path: str,
+        *,
+        payload: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
+        _ = payload, idempotency_key
+        self.calls.append(("DELETE", path, None))
+        return {}
+
+
+def test_sequence_pause_is_direct_dashboard_action() -> None:
+    client = RecordingDashboardClient()
+
+    message = perform_dashboard_action(
+        {
+            "kind": "sequence",
+            "action": "pause",
+            "target_id": "enroll-1",
+        },
+        actor="analyst@example.com",
+        role="analyst",
+        settings=Settings(),
+        client=client,  # type: ignore[arg-type]
+    )
+
+    assert message == "Sequence enrollment enroll-1 pause requested."
+    assert client.calls == [
+        (
+            "POST",
+            "/v1/sequences/enrollments/enroll-1/pause",
+            {"reason": "Sprint 12 dashboard pause action."},
+        )
+    ]
+
+
+def test_incident_watchlist_promotion_auto_corroborates_candidate() -> None:
+    client = RecordingDashboardClient()
+
+    perform_dashboard_action(
+        {
+            "kind": "incident",
+            "action": "promote",
+            "target_id": "incident-1",
+            "version": 3,
+            "enabled": "candidate",
+        },
+        actor="analyst@example.com",
+        role="analyst",
+        settings=Settings(),
+        client=client,  # type: ignore[arg-type]
+    )
+
+    assert client.calls[0] == (
+        "POST",
+        "/v1/governance/incidents/incident-1/corroborate",
+        {
+            "version": 3,
+            "method": "analyst_decision",
+            "reason_code": "dashboard_incident_watchlist",
+            "reason": "Dashboard watchlist promotion corroborated this incident.",
+            "evidence_snapshot": {},
+            "policy_snapshot": {},
+        },
+    )
+    assert client.calls[1] == (
+        "POST",
+        "/v1/intelligence/incidents/incident-1/promote-to-watchlist",
+        {"version": 4},
+    )
 
 
 def test_dashboard_actions_send_expected_gateway_mutations() -> None:

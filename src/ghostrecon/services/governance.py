@@ -12,6 +12,7 @@ from ghostrecon.models.api import (
     BulkReviewDecisionRequest,
     CrmTargetList,
     CrmTargetOut,
+    CrmTargetUpdateRequest,
     IncidentDecisionRequest,
     ReviewDecisionAction,
     ReviewDecisionOut,
@@ -283,6 +284,52 @@ async def list_crm_targets(
         return list((await session.scalars(stmt)).all())
 
 
+async def update_crm_target(
+    crm_target_id: str,
+    request: CrmTargetUpdateRequest,
+    *,
+    actor: str,
+    settings: Settings | None = None,
+) -> CrmTarget | None:
+    async with session_scope(settings) as session:
+        target = await session.get(CrmTarget, crm_target_id)
+        if target is None:
+            return None
+        approval = dict(target.approval_snapshot or {})
+        policy = dict(target.policy_snapshot or {})
+        fields = request.model_fields_set
+        if "name" in fields:
+            _set_or_remove(approval, "name", request.name)
+            _set_or_remove(policy, "name", request.name)
+        if "company" in fields:
+            _set_or_remove(approval, "company", request.company)
+            _set_or_remove(policy, "company", request.company)
+        if "email" in fields:
+            _set_or_remove(approval, "email", request.email)
+            _set_or_remove(policy, "email", request.email)
+        if request.status is not None:
+            target.status = request.status.value
+        if request.export_status is not None:
+            target.export_status = request.export_status
+        approval["updated_by"] = actor
+        approval["updated_at"] = datetime.now(UTC).isoformat()
+        target.approval_snapshot = approval
+        target.policy_snapshot = policy
+        target.version += 1
+        target.updated_at = datetime.now(UTC)
+        _audit(
+            session,
+            actor,
+            "crm_target.updated",
+            "crm_target",
+            target.id,
+            idempotency_key=f"crm-target.update:{target.id}:{target.version}",
+            payload=crm_target_to_api(target),
+        )
+        await session.flush()
+        return target
+
+
 async def corroborate_incident(
     incident_id: str,
     request: IncidentDecisionRequest,
@@ -530,12 +577,17 @@ def review_decision_to_model(decision: ReviewDecision) -> ReviewDecisionOut:
 
 
 def crm_target_to_api(target: CrmTarget) -> dict[str, object]:
+    approval = target.approval_snapshot or {}
+    policy = target.policy_snapshot or {}
     return {
         "id": target.id,
         "review_candidate_id": target.review_candidate_id,
         "review_decision_id": target.review_decision_id,
         "target_type": target.target_type,
         "target_id": target.target_id,
+        "display_name": approval.get("name") or policy.get("name"),
+        "company_name": approval.get("company") or policy.get("company"),
+        "email": approval.get("email") or policy.get("email"),
         "origin_type": target.origin_type,
         "origin_id": target.origin_id,
         "source_definition_id": target.source_definition_id,
@@ -556,6 +608,13 @@ def crm_target_to_model(target: CrmTarget) -> CrmTargetOut:
 
 def crm_targets_to_model(targets: list[CrmTarget]) -> CrmTargetList:
     return CrmTargetList(crm_targets=[crm_target_to_model(target) for target in targets])
+
+
+def _set_or_remove(mapping: dict[str, object], key: str, value: object | None) -> None:
+    if value in (None, ""):
+        mapping.pop(key, None)
+    else:
+        mapping[key] = value
 
 
 def suppression_to_api(suppression: Suppression) -> dict[str, object]:

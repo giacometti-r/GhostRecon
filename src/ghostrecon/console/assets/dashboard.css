@@ -197,6 +197,57 @@ a:hover {
   align-items: start;
 }
 
+.filter-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  align-items: end;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 12px;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-field label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.filter-field input,
+.sequence-layer input,
+.sequence-layer textarea,
+.sequence-layer .Select-control {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+}
+
+.sequence-layer {
+  display: grid;
+  grid-template-columns: minmax(90px, 0.5fr) minmax(140px, 1fr) minmax(110px, 0.6fr) minmax(180px, 1fr) minmax(220px, 1.3fr) minmax(150px, 0.8fr);
+  gap: 10px;
+  align-items: start;
+  grid-column: 1 / -1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.sequence-layer h3 {
+  margin: 7px 0 0;
+  font-size: 14px;
+}
+
 .toolbar-block,
 .form-launcher {
   display: flex;

@@ -20,6 +20,8 @@ from ghostrecon.models.api import (
     CrmExportRetryRequest,
     CrmProspectList,
     CrmTargetList,
+    CrmTargetOut,
+    CrmTargetUpdateRequest,
     CyberEventList,
     CyberEventOut,
     DashboardRole,
@@ -32,12 +34,14 @@ from ghostrecon.models.api import (
     EntityResolutionCreate,
     EntityResolutionList,
     EntityResolutionOut,
+    EventParticipantCreate,
     EventParticipantEnrichRequest,
     EventParticipantEnrichResult,
     EventParticipantList,
     EventParticipantOut,
     EventUpdateRequest,
     IncidentDecisionRequest,
+    IncidentUpdateRequest,
     IncidentWatchPromotionRequest,
     ManualEventCreate,
     ManualIncidentCreate,
@@ -47,6 +51,7 @@ from ghostrecon.models.api import (
     MeetingHandoffOut,
     MeetingOutcomeRequest,
     PrepPacketRequest,
+    ReportingCrmTargetDetail,
     ReportingCrmTargetList,
     ReportingEventDetail,
     ReportingEventList,
@@ -61,6 +66,8 @@ from ghostrecon.models.api import (
     ReportingWatchTargetDetail,
     ReportingWatchTargetList,
     ReviewCandidateList,
+    ReviewCandidateOut,
+    ReviewCandidateUpdateRequest,
     ReviewDecisionOut,
     ReviewDecisionRequest,
     ScoreRequest,
@@ -106,18 +113,22 @@ from ghostrecon.services.enrichment_workflows import (
     create_contact_enrichment_candidate,
     create_entity_resolution,
     discover_contact_candidate_domain,
+    discover_contact_candidate_email,
     discover_watch_target_contacts,
     email_candidate_to_model,
     enrich_event_participant_target,
     entity_resolution_to_model,
+    get_review_candidate,
     list_contact_enrichment_candidates,
     list_entity_resolutions,
     list_review_candidates,
     persist_email_candidates,
     review_candidate_to_model,
+    update_review_candidate,
     verify_email_candidates,
 )
 from ghostrecon.services.event_intelligence import (
+    create_event_participant,
     create_manual_event,
     event_to_api,
     get_event,
@@ -139,6 +150,7 @@ from ghostrecon.services.governance import (
     revert_incident,
     review_decision_to_model,
     suppression_to_model,
+    update_crm_target,
 )
 from ghostrecon.services.incident_intelligence import (
     create_manual_incident,
@@ -151,6 +163,7 @@ from ghostrecon.services.incident_intelligence import (
     monitor_watch_targets,
     patch_watch_target,
     promote_incident_to_watchlist,
+    update_incident,
     watch_target_to_api,
 )
 from ghostrecon.services.meeting import (
@@ -165,6 +178,7 @@ from ghostrecon.services.meeting import (
     retry_meeting_crm_sync,
 )
 from ghostrecon.services.reporting import (
+    get_reporting_crm_target_detail,
     get_reporting_crm_targets,
     get_reporting_event_detail,
     get_reporting_events,
@@ -184,6 +198,7 @@ from ghostrecon.services.scoring import (
     score_lead,
 )
 from ghostrecon.services.sequencing import (
+    archive_sequence,
     cancel_sequence_enrollment,
     complete_sequence_activity,
     create_sequence,
@@ -191,6 +206,7 @@ from ghostrecon.services.sequencing import (
     create_sequence_enrollment,
     evaluate_sequence_eligibility,
     get_sequence,
+    get_sequence_activity,
     get_sequence_enrollment,
     import_crm_prospect_to_sequence,
     list_sequence_activities,
@@ -440,6 +456,28 @@ async def reporting_crm_targets(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@gateway_router.get(
+    "/v1/reporting/crm-targets/{crm_target_id}",
+    response_model=ReportingCrmTargetDetail,
+)
+@reporting_router.get(
+    "/v1/reporting/crm-targets/{crm_target_id}",
+    response_model=ReportingCrmTargetDetail,
+)
+async def reporting_crm_target_detail(
+    crm_target_id: str,
+    operator: ReportingOperatorContext = REPORTING_OPERATOR_CONTEXT,
+) -> ReportingCrmTargetDetail:
+    detail = await get_reporting_crm_target_detail(
+        crm_target_id,
+        operator=operator,
+        settings=get_settings(),
+    )
+    if detail is None:
+        raise HTTPException(status_code=404, detail="crm target not found")
+    return detail
+
+
 @gateway_router.get("/v1/reporting/meetings", response_model=ReportingMeetingList)
 @reporting_router.get("/v1/reporting/meetings", response_model=ReportingMeetingList)
 async def reporting_meetings(
@@ -606,6 +644,32 @@ async def intelligence_event_participants(
     )
 
 
+@gateway_router.post(
+    "/v1/intelligence/events/{event_id}/participants",
+    response_model=EventParticipantOut,
+)
+@event_intelligence_router.post(
+    "/v1/intelligence/events/{event_id}/participants",
+    response_model=EventParticipantOut,
+)
+async def intelligence_create_event_participant(
+    event_id: str,
+    request: EventParticipantCreate,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> EventParticipantOut:
+    participant = await create_event_participant(
+        event_id,
+        request,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        settings=get_settings(),
+    )
+    if participant is None:
+        raise HTTPException(status_code=404, detail="event not found")
+    return EventParticipantOut.model_validate(participant_to_api(participant))
+
+
 @gateway_router.get("/v1/intelligence/participants", response_model=EventParticipantList)
 @event_intelligence_router.get("/v1/intelligence/participants", response_model=EventParticipantList)
 async def intelligence_participants(
@@ -670,6 +734,35 @@ async def intelligence_create_manual_incident(
 )
 async def intelligence_incident_detail(incident_id: str) -> SecurityIncidentOut:
     incident = await get_incident(incident_id, get_settings())
+    if incident is None:
+        raise HTTPException(status_code=404, detail="incident not found")
+    return SecurityIncidentOut.model_validate(incident_to_api(incident))
+
+
+@gateway_router.patch(
+    "/v1/intelligence/incidents/{incident_id}",
+    response_model=SecurityIncidentOut,
+)
+@incident_intelligence_router.patch(
+    "/v1/intelligence/incidents/{incident_id}",
+    response_model=SecurityIncidentOut,
+)
+async def intelligence_patch_incident(
+    incident_id: str,
+    request: IncidentUpdateRequest,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SecurityIncidentOut:
+    try:
+        incident = await update_incident(
+            incident_id,
+            request,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            settings=get_settings(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if incident is None:
         raise HTTPException(status_code=404, detail="incident not found")
     return SecurityIncidentOut.model_validate(incident_to_api(incident))
@@ -889,6 +982,32 @@ async def enrichment_contact_candidate_discover_domain(
     return result
 
 
+@gateway_router.post(
+    "/v1/enrichment/contact-candidates/{candidate_id}/discover-email",
+    response_model=EmailCandidatePersistResult,
+)
+@enrichment_router.post(
+    "/v1/enrichment/contact-candidates/{candidate_id}/discover-email",
+    response_model=EmailCandidatePersistResult,
+)
+async def enrichment_contact_candidate_discover_email(
+    candidate_id: str,
+    idempotency_key: str = Header(alias="Idempotency-Key"),
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> EmailCandidatePersistResult:
+    records = await discover_contact_candidate_email(
+        candidate_id,
+        actor=actor,
+        idempotency_key=idempotency_key,
+        settings=get_settings(),
+    )
+    if records is None:
+        raise HTTPException(status_code=404, detail="contact candidate not found")
+    return EmailCandidatePersistResult(
+        candidates=[email_candidate_to_model(record) for record in records]
+    )
+
+
 @gateway_router.post("/v1/enrichment/entity-resolutions", response_model=EntityResolutionOut)
 @enrichment_router.post("/v1/enrichment/entity-resolutions", response_model=EntityResolutionOut)
 async def enrichment_create_entity_resolution(
@@ -1087,6 +1206,15 @@ async def sequence_activity_list(
         limit=limit,
         settings=get_settings(),
     )
+
+
+@gateway_router.get("/v1/sequences/activities/{activity_id}", response_model=SequenceActivityOut)
+@sequencing_router.get("/v1/sequences/activities/{activity_id}", response_model=SequenceActivityOut)
+async def sequence_activity_detail(activity_id: str) -> SequenceActivityOut:
+    activity = await get_sequence_activity(activity_id, settings=get_settings())
+    if activity is None:
+        raise HTTPException(status_code=404, detail="sequence activity not found")
+    return activity
 
 
 @gateway_router.post("/v1/sequences/enrollments", response_model=SequenceEnrollmentOut)
@@ -1369,6 +1497,18 @@ async def sequence_update(
     return sequence
 
 
+@gateway_router.delete("/v1/sequences/{sequence_id}", response_model=SequenceOut)
+@sequencing_router.delete("/v1/sequences/{sequence_id}", response_model=SequenceOut)
+async def sequence_delete(
+    sequence_id: str,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> SequenceOut:
+    sequence = await archive_sequence(sequence_id, actor=actor, settings=get_settings())
+    if sequence is None:
+        raise HTTPException(status_code=404, detail="sequence not found")
+    return sequence
+
+
 @gateway_router.post("/v1/calendar/availability", response_model=CalendarAvailabilityResult)
 @meeting_router.post("/v1/calendar/availability", response_model=CalendarAvailabilityResult)
 async def calendar_availability(
@@ -1551,6 +1691,35 @@ async def review_candidates(
     )
 
 
+@gateway_router.get("/v1/review/candidates/{candidate_id}", response_model=ReviewCandidateOut)
+@governance_router.get("/v1/review/candidates/{candidate_id}", response_model=ReviewCandidateOut)
+@console_router.get("/v1/review/candidates/{candidate_id}", response_model=ReviewCandidateOut)
+async def review_candidate_detail(candidate_id: str) -> ReviewCandidateOut:
+    candidate = await get_review_candidate(candidate_id, settings=get_settings())
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="review candidate not found")
+    return review_candidate_to_model(candidate)
+
+
+@gateway_router.patch("/v1/review/candidates/{candidate_id}", response_model=ReviewCandidateOut)
+@governance_router.patch("/v1/review/candidates/{candidate_id}", response_model=ReviewCandidateOut)
+@console_router.patch("/v1/review/candidates/{candidate_id}", response_model=ReviewCandidateOut)
+async def review_candidate_update(
+    candidate_id: str,
+    request: ReviewCandidateUpdateRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> ReviewCandidateOut:
+    candidate = await update_review_candidate(
+        candidate_id,
+        request,
+        actor=actor,
+        settings=get_settings(),
+    )
+    if candidate is None:
+        raise HTTPException(status_code=404, detail="review candidate not found")
+    return review_candidate_to_model(candidate)
+
+
 @gateway_router.post(
     "/v1/review/candidates/{candidate_id}/approve", response_model=ReviewDecisionOut
 )
@@ -1644,6 +1813,25 @@ async def review_crm_targets(
         status=status, target_type=target_type, limit=limit, settings=get_settings()
     )
     return CrmTargetList(crm_targets=[crm_target_to_model(target) for target in targets])
+
+
+@gateway_router.patch("/v1/review/crm-targets/{crm_target_id}", response_model=CrmTargetOut)
+@governance_router.patch("/v1/review/crm-targets/{crm_target_id}", response_model=CrmTargetOut)
+@console_router.patch("/v1/review/crm-targets/{crm_target_id}", response_model=CrmTargetOut)
+async def review_crm_target_update(
+    crm_target_id: str,
+    request: CrmTargetUpdateRequest,
+    actor: str = Header(default="system", alias="X-Actor"),
+) -> CrmTargetOut:
+    target = await update_crm_target(
+        crm_target_id,
+        request,
+        actor=actor,
+        settings=get_settings(),
+    )
+    if target is None:
+        raise HTTPException(status_code=404, detail="crm target not found")
+    return crm_target_to_model(target)
 
 
 @gateway_router.post(

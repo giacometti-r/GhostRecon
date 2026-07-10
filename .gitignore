@@ -58,3 +58,5 @@ deploy/helm/ghostrecon/*.dec.yaml
 graphify-out/
 .agents/
 .codex/
+TODO
+TODO_backup

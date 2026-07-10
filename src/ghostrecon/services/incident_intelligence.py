@@ -13,7 +13,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ghostrecon.common.config import Settings
 from ghostrecon.common.database import session_scope
 from ghostrecon.events.contracts import EventName, new_event
-from ghostrecon.models.api import ManualIncidentCreate, WatchTargetCreate, WatchTargetPatch
+from ghostrecon.models.api import (
+    IncidentUpdateRequest,
+    ManualIncidentCreate,
+    WatchTargetCreate,
+    WatchTargetPatch,
+)
 from ghostrecon.models.db import (
     AuditEvent,
     NewsArticle,
@@ -341,6 +346,66 @@ async def create_manual_incident(
         return incidents
 
 
+async def update_incident(
+    incident_id: str,
+    payload: IncidentUpdateRequest,
+    *,
+    actor: str,
+    idempotency_key: str,
+    settings: Settings | None = None,
+) -> SecurityIncident | None:
+    async with session_scope(settings) as session:
+        incident = await session.get(SecurityIncident, incident_id)
+        if incident is None:
+            return None
+        if incident.version != payload.version:
+            raise ValueError("incident version conflict")
+        fields = payload.model_fields_set - {"version"}
+        if "title" in fields and payload.title is not None:
+            incident.title = payload.title
+        if "affected_companies" in fields and payload.affected_companies is not None:
+            incident.affected_companies = list(payload.affected_companies)
+            incident.primary_affected_company = (
+                payload.affected_companies[0] if payload.affected_companies else None
+            )
+        if "affected_domains" in fields and payload.affected_domains is not None:
+            incident.affected_domains = list(payload.affected_domains)
+            incident.primary_affected_domain = (
+                payload.affected_domains[0] if payload.affected_domains else None
+            )
+        if "incident_type" in fields:
+            incident.incident_type = payload.incident_type
+        if "attack_vector" in fields:
+            incident.attack_vector = payload.attack_vector
+        if "first_observed_at" in fields:
+            incident.first_observed_at = payload.first_observed_at
+        if "last_observed_at" in fields:
+            incident.last_observed_at = payload.last_observed_at
+        if "geography" in fields and payload.geography is not None:
+            incident.geography = list(payload.geography)
+        if "languages" in fields and payload.languages is not None:
+            incident.languages = list(payload.languages)
+        if "source_item_ids" in fields and payload.source_item_ids is not None:
+            incident.source_item_ids = list(payload.source_item_ids)
+        if "evidence_urls" in fields and payload.evidence_urls is not None:
+            incident.evidence_urls = list(payload.evidence_urls)
+        if "confidence" in fields and payload.confidence is not None:
+            incident.confidence = payload.confidence
+        incident.version += 1
+        incident.updated_at = datetime.now(UTC)
+        session.add(
+            AuditEvent(
+                actor=actor,
+                action="security_incident.updated",
+                entity_type="security_incident",
+                entity_id=incident.id,
+                idempotency_key=idempotency_key,
+                payload={"source": "dashboard"},
+            )
+        )
+        return incident
+
+
 async def list_watch_targets(
     *,
     target_type: str | None = None,
@@ -423,7 +488,14 @@ async def promote_incident_to_watchlist(
         if incident.version != version:
             raise ValueError("stale optimistic version")
         if incident.status != "corroborated":
-            raise ValueError("incident must be corroborated before watchlist promotion")
+            if incident.status == "candidate":
+                incident.status = "corroborated"
+                incident.corroboration_method = (
+                    incident.corroboration_method or "dashboard_promotion"
+                )
+                incident.version += 1
+            else:
+                raise ValueError("incident must be corroborated before watchlist promotion")
         company = incident.primary_affected_company or _string(
             (incident.affected_companies or [None])[0]
         )
@@ -705,11 +777,13 @@ class IncidentIntelligenceRepository:
             canonical_target_key=key,
             display_name=payload.display_name,
             query_config=payload.query_config,
+            enabled=True,
             owner=payload.owner,
             origin_incident_id=payload.origin_incident_id,
             created_by=actor,
-            monitoring_status="not_run",
+            monitoring_status="queued" if payload.target_type == "company" else "not_required",
             next_monitoring_at=datetime.now(UTC) if payload.target_type == "company" else None,
+            monitoring_summary={},
         )
         self.session.add(target)
         await self.session.flush()
@@ -742,7 +816,12 @@ class IncidentIntelligenceRepository:
         if payload.enabled is not None:
             target.enabled = payload.enabled
             if payload.enabled and target.target_type == "company":
+                target.monitoring_status = "queued"
+                target.monitoring_error = None
                 target.next_monitoring_at = datetime.now(UTC)
+            elif not payload.enabled:
+                target.monitoring_status = "paused"
+                target.next_monitoring_at = None
         if payload.display_name is not None:
             target.display_name = payload.display_name
         if payload.query_config is not None:
