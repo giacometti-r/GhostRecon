@@ -18,7 +18,8 @@ NOW = datetime(2026, 7, 7, 15, tzinfo=UTC)
 
 def _settings() -> Settings:
     return Settings(
-        environment="prod",
+        profile="test",
+        calendar_provider="google",
         google_calendar_id="primary",
         google_client_email="calendar@example.iam.gserviceaccount.com",
         google_private_key="unit-test-key",

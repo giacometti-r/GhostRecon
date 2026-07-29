@@ -233,7 +233,11 @@ helm secrets upgrade --install ghostrecon deploy/helm/ghostrecon \
   --timeout 15m \
   -f deploy/helm/ghostrecon/secrets.sops.yaml \
   --set image.repository=registry.example.com/ghostrecon \
-  --set image.tag=0.1.0
+  --set profile=production \
+  --set image.digest=sha256:REPLACE_WITH_IMAGE_DIGEST \
+  --set postgresql.image.digest=sha256:REPLACE_WITH_POSTGRES_DIGEST \
+  --set redis.image.digest=sha256:REPLACE_WITH_REDIS_DIGEST \
+  --set emailVerifier.image.digest=sha256:REPLACE_WITH_VERIFIER_DIGEST
 ```
 
 The default release provisions persistent PostgreSQL and Redis instances, creates the application database and role on an empty PostgreSQL volume, and runs Alembic migrations. Disable either bundled datastore and provide its encrypted external URL when using managed infrastructure.
@@ -252,5 +256,34 @@ GhostRecon stores source lineage, source-reuse policy, idempotency keys, evidenc
 - [Dashboard product specification](docs/specifications/dashboard.md)
 - [Operations runbook](docs/runbooks/operations.md)
 - [Intelligence-first acquisition ADR](docs/adr/0004-intelligence-first-acquisition.md)
+- [Runtime profiles and no-synthetic production ADR](docs/adr/0005-runtime-profiles-and-no-synthetic-production.md)
 
 Every service directory under `services/` contains an operator `README.md` and an engineering `TECHNICAL_README.md`.
+
+## Runtime Profiles and Release Gates
+
+Set GHOSTRECON_PROFILE to local, test, staging, or production. The retired
+GHOSTRECON_ENVIRONMENT selector is rejected. Run make config-check before a process; the command
+returns redacted issues and exit code 2 for invalid configuration. API readiness includes profile
+and named dependency checks, and console-service owns only the gateway URL.
+
+Local Compose is explicitly local and retains deterministic demo data. Staging and production
+require explicit live providers and owned credentials, reject synthetic adapters/inference and
+placeholder identities, and guard persisted provider/lineage fields against exact demo sentinels.
+
+Production Helm releases must set `image.digest` and a SHA-256 digest for every enabled bundled
+PostgreSQL, Redis, or email-verifier image. The chart runs service-scoped preflight hooks and
+projects only owned secret keys. Use `make migration-check` and `make helm-check` for database and
+chart evidence.
+
+Build the local release image before scanning it or generating SBOMs:
+
+```bash
+make docker-build
+make image-scan
+make sbom
+```
+
+`make image-scan` requires Trivy, writes `trivy-report.json`, and fails on high or critical
+findings. `make sbom` requires Syft and writes `sbom.spdx.json` and `sbom.cyclonedx.json`. The
+protected staging workflow performs bounded read-only or protocol no-op provider checks.

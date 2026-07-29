@@ -7,6 +7,10 @@ from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from ghostrecon.common.config import Settings
+from ghostrecon.common.configuration import (
+    require_valid_configuration,
+    requirements_for,
+)
 from ghostrecon.common.database import check_database_schema_ready
 from ghostrecon.common.logging import configure_logging
 
@@ -20,10 +24,11 @@ REQUEST_LATENCY = Histogram(
     "HTTP request latency by service, method, and path.",
     ["service", "method", "path"],
 )
-SCHEMA_READY_SERVICES = {"gateway-service", "reporting-service", "console-service"}
+DATABASE_CHECK = "database"
 
 
 def create_base_app(settings: Settings) -> FastAPI:
+    require_valid_configuration(settings)
     configure_logging(settings.service_name, settings.log_level)
     app = FastAPI(
         title=f"GhostRecon {settings.service_name}",
@@ -39,21 +44,30 @@ def create_base_app(settings: Settings) -> FastAPI:
         return {"status": "ok", "service": settings.service_name}
 
     @app.get("/readyz", tags=["system"], response_model=None)
-    async def readyz() -> dict[str, str] | JSONResponse:
-        if settings.service_name in SCHEMA_READY_SERVICES:
+    async def readyz() -> dict[str, object] | JSONResponse:
+        requirements = requirements_for(settings.service_name)
+        checks = {item.check_name: {"status": "configured"} for item in requirements}
+        if DATABASE_CHECK in checks:
             schema = await check_database_schema_ready(settings)
             if not schema.ready:
                 payload: dict[str, object] = {
                     "status": "not_ready",
                     "service": settings.service_name,
+                    "profile": settings.profile.value,
+                    "checks": {**checks, DATABASE_CHECK: {"status": "failed"}},
                     "reason": schema.reason or "database schema is not ready",
                 }
                 if schema.missing_tables:
                     payload["missing_tables"] = list(schema.missing_tables)
-                if schema.error:
-                    payload["error"] = schema.error
                 return JSONResponse(status_code=503, content=payload)
-        return {"status": "ready", "service": settings.service_name}
+        if DATABASE_CHECK in checks:
+            checks[DATABASE_CHECK] = {"status": "ready"}
+        return {
+            "status": "ready",
+            "service": settings.service_name,
+            "profile": settings.profile.value,
+            "checks": checks,
+        }
 
     @app.get("/metrics", tags=["system"])
     async def metrics() -> Response:

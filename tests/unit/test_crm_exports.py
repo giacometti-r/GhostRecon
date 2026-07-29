@@ -89,9 +89,9 @@ def test_crm_export_routes_start_detail_and_retry(monkeypatch) -> None:
         seen["retry_key"] = kwargs["idempotency_key"]
         return _batch("partial", "failed_retryable")
 
-    monkeypatch.setattr(routers, "start_crm_export", fake_start)
-    monkeypatch.setattr(routers, "get_crm_export_batch", fake_get)
-    monkeypatch.setattr(routers, "retry_failed_crm_export_items", fake_retry)
+    monkeypatch.setattr(routers.crm, "start_crm_export", fake_start)
+    monkeypatch.setattr(routers.crm, "get_crm_export_batch", fake_get)
+    monkeypatch.setattr(routers.crm, "retry_failed_crm_export_items", fake_retry)
 
     client = TestClient(build_app(Settings(service_name="crm-service")))
     headers = {"Idempotency-Key": "idem-export", "X-Actor": "analyst@example.com"}
@@ -141,7 +141,7 @@ def test_selection_hash_is_order_independent() -> None:
 
 
 def test_local_demo_crm_client_is_used_without_attio_token() -> None:
-    client = _crm_client_for_settings(Settings(environment="local", attio_access_token=None))
+    client = _crm_client_for_settings(Settings(profile="local", crm_provider="local_demo"))
 
     assert isinstance(client, LocalDemoCrmClient)
 
@@ -207,11 +207,7 @@ async def test_attio_crm_client_upserts_record_and_list_entry() -> None:
             calls.append((method, path, json))
             if path.endswith("/records"):
                 return {"data": {"id": {"record_id": "attio-record-1"}}}
-            return {
-                "data": {
-                    "id": {"list_id": "attio-list-1", "entry_id": "attio-entry-1"}
-                }
-            }
+            return {"data": {"id": {"list_id": "attio-list-1", "entry_id": "attio-entry-1"}}}
 
     client = AttioCrmClient.__new__(AttioCrmClient)
     client.http = FakeHttp()
@@ -246,11 +242,7 @@ async def test_attio_crm_client_syncs_meeting_handoff_plan() -> None:
             calls.append((method, path, json))
             if path.endswith("/records"):
                 return {"data": {"id": {"record_id": "attio-meeting-1"}}}
-            return {
-                "data": {
-                    "id": {"list_id": "attio-list-1", "entry_id": "attio-entry-1"}
-                }
-            }
+            return {"data": {"id": {"list_id": "attio-list-1", "entry_id": "attio-entry-1"}}}
 
     client = AttioCrmClient.__new__(AttioCrmClient)
     client.http = FakeHttp()

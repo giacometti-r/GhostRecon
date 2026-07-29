@@ -16,7 +16,7 @@ Owns source registration, duplicate detection, source adapter parsing, source he
 
 - `src/ghostrecon/services/source_registry.py`
 - `src/ghostrecon/services/source_adapters.py`
-- Related/shared: `src/ghostrecon/service_apps/routers.py`
+- Related/shared: `src/ghostrecon/service_apps/routers/`
 
 ## APIs And Jobs
 
@@ -53,3 +53,13 @@ GHOSTRECON_SERVICE_NAME=ingestion-service uvicorn ghostrecon.service_apps.runtim
 ```bash
 pytest tests/unit/test_source_registry.py tests/unit/test_source_adapters.py
 ```
+
+## Runtime configuration
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database only. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

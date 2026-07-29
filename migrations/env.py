@@ -8,6 +8,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from ghostrecon.common.config import get_settings
+from ghostrecon.common.configuration import ServiceName, require_valid_configuration
 from ghostrecon.common.database import Base
 from ghostrecon.models import db as _db_models  # noqa: F401
 
@@ -20,7 +21,9 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    return str(get_settings().database_url)
+    settings = get_settings()
+    require_valid_configuration(settings, ServiceName.MIGRATION)
+    return str(settings.database_url)
 
 
 def run_migrations_offline() -> None:

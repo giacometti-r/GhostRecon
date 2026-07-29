@@ -26,7 +26,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: migrate
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "ghostrecon.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["/bin/sh", "-ec"]
           args:
@@ -44,11 +44,10 @@ spec:
           env:
             - name: GHOSTRECON_SERVICE_NAME
               value: migration-job
+            {{- include "ghostrecon.projectSecrets" (list . "migration-job") | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: ghostrecon-config
-            - secretRef:
-                name: ghostrecon-secrets
           resources:
             requests:
               cpu: 50m

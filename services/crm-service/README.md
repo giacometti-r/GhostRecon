@@ -14,7 +14,7 @@ Plans and executes CRM exports, maps GhostRecon targets to Attio objects, tracks
 
 ## Implementation Modules
 
-- `src/ghostrecon/services/crm_exports.py`
+- `src/ghostrecon/services/crm_exports/`
 - `src/ghostrecon/services/crm_attio.py`
 
 ## APIs And Jobs
@@ -60,3 +60,13 @@ GHOSTRECON_SERVICE_NAME=crm-service uvicorn ghostrecon.service_apps.runtime:app 
 ```bash
 pytest tests/unit/test_crm_exports.py
 ```
+
+## Runtime configuration
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database and explicit Attio CRM credentials. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

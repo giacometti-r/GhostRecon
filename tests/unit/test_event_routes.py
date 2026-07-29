@@ -82,10 +82,10 @@ def test_event_intelligence_routes_return_events_and_policy_gated_participants(m
     async def fake_list_participants(**kwargs):
         return [_participant()]
 
-    monkeypatch.setattr(routers, "list_events", fake_list_events)
-    monkeypatch.setattr(routers, "get_event", fake_get_event)
-    monkeypatch.setattr(routers, "list_participants", fake_list_participants)
-    monkeypatch.setattr(routers, "create_manual_event", fake_get_event)
+    monkeypatch.setattr(routers.events, "list_events", fake_list_events)
+    monkeypatch.setattr(routers.events, "get_event", fake_get_event)
+    monkeypatch.setattr(routers.events, "list_participants", fake_list_participants)
+    monkeypatch.setattr(routers.events, "create_manual_event", fake_get_event)
 
     app = build_app(Settings(service_name="event-intelligence-service"))
     client = TestClient(app)
@@ -108,7 +108,7 @@ def test_manual_event_route_uses_additive_create_contract(monkeypatch) -> None:
         assert kwargs["actor"] == "analyst@example.com"
         return _event()
 
-    monkeypatch.setattr(routers, "create_manual_event", fake_create_manual_event)
+    monkeypatch.setattr(routers.events, "create_manual_event", fake_create_manual_event)
 
     client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
     response = client.post(
@@ -174,7 +174,7 @@ def test_event_patch_route_uses_versioned_update_contract(monkeypatch) -> None:
         assert kwargs["actor"] == "analyst@example.com"
         return _event()
 
-    monkeypatch.setattr(routers, "update_event", fake_update_event)
+    monkeypatch.setattr(routers.events, "update_event", fake_update_event)
 
     client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
     response = client.patch(

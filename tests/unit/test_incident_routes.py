@@ -83,12 +83,12 @@ def test_incident_routes_return_incidents_and_promoted_watch_targets(monkeypatch
     async def fake_monitor_watch_targets(**kwargs):
         return {"checked": 1, "failed": 0, "provider": "local_demo"}
 
-    monkeypatch.setattr(routers, "list_incidents", fake_list_incidents)
-    monkeypatch.setattr(routers, "get_incident", fake_get_incident)
-    monkeypatch.setattr(routers, "get_watch_target", fake_get_watch_target)
-    monkeypatch.setattr(routers, "monitor_watch_targets", fake_monitor_watch_targets)
+    monkeypatch.setattr(routers.incidents, "list_incidents", fake_list_incidents)
+    monkeypatch.setattr(routers.incidents, "get_incident", fake_get_incident)
+    monkeypatch.setattr(routers.incidents, "get_watch_target", fake_get_watch_target)
+    monkeypatch.setattr(routers.incidents, "monitor_watch_targets", fake_monitor_watch_targets)
     monkeypatch.setattr(
-        routers, "promote_incident_to_watchlist", fake_promote_incident_to_watchlist
+        routers.incidents, "promote_incident_to_watchlist", fake_promote_incident_to_watchlist
     )
 
     app = build_app(Settings(service_name="incident-intelligence-service"))
@@ -121,7 +121,7 @@ def test_manual_incident_route_exposes_version(monkeypatch) -> None:
         assert kwargs["actor"] == "analyst@example.com"
         return [_incident()]
 
-    monkeypatch.setattr(routers, "create_manual_incident", fake_create_manual_incident)
+    monkeypatch.setattr(routers.incidents, "create_manual_incident", fake_create_manual_incident)
 
     client = TestClient(build_app(Settings(service_name="incident-intelligence-service")))
     response = client.post(

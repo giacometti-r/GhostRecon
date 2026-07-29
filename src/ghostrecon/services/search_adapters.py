@@ -7,6 +7,7 @@ import httpx
 import tldextract
 
 from ghostrecon.common.config import Settings
+from ghostrecon.common.configuration import assert_adapter_allowed
 
 CONTACT_DISCOVERY_TITLES = (
     '"Head of Cybersecurity" OR "CISO" OR "Chief Information Security Officer" OR '
@@ -112,9 +113,7 @@ class OpenSerpSearchProvider:
         payload = response.json()
         raw_results = payload.get("results", []) if isinstance(payload, dict) else []
         return [
-            _result_from_openserp(item)
-            for item in raw_results[:limit]
-            if isinstance(item, dict)
+            _result_from_openserp(item) for item in raw_results[:limit] if isinstance(item, dict)
         ]
 
 
@@ -164,26 +163,30 @@ class SerpApiGoogleNewsProvider:
         payload = response.json()
         raw_results = payload.get("news_results", []) if isinstance(payload, dict) else []
         return [
-            _result_from_serpapi(item)
-            for item in raw_results[:limit]
-            if isinstance(item, dict)
+            _result_from_serpapi(item) for item in raw_results[:limit] if isinstance(item, dict)
         ]
 
 
 def search_provider_for_settings(settings: Settings) -> SearchProvider:
     if settings.search_provider == "openserp":
-        return OpenSerpSearchProvider(settings)
-    if settings.search_provider == "local_demo":
-        return LocalDemoSearchProvider()
-    return DisabledSearchProvider()
+        provider: SearchProvider = OpenSerpSearchProvider(settings)
+    elif settings.search_provider == "local_demo":
+        provider = LocalDemoSearchProvider()
+    else:
+        provider = DisabledSearchProvider()
+    assert_adapter_allowed(settings, provider, "search_provider")
+    return provider
 
 
 def news_provider_for_settings(settings: Settings) -> NewsProvider:
     if settings.news_provider == "serpapi":
-        return SerpApiGoogleNewsProvider(settings)
-    if settings.news_provider == "local_demo":
-        return LocalDemoNewsProvider()
-    return DisabledNewsProvider()
+        provider: NewsProvider = SerpApiGoogleNewsProvider(settings)
+    elif settings.news_provider == "local_demo":
+        provider = LocalDemoNewsProvider()
+    else:
+        provider = DisabledNewsProvider()
+    assert_adapter_allowed(settings, provider, "news_provider")
+    return provider
 
 
 def linkedin_contact_query(company_name: str) -> str:

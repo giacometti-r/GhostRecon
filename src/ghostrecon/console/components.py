@@ -64,7 +64,7 @@ def metadata_banner(payloads: list[dict[str, Any] | None]) -> html.Div:
     return html.Div(detail, className="freshness-banner warning")
 
 
-def metadata_details(payload: dict[str, Any] | None) -> html.Div:
+def metadata_details(payload: dict[str, Any] | None) -> Component:
     metadata = metadata_from(payload)
     if not metadata:
         return html.Div("No freshness metadata returned.", className="muted")

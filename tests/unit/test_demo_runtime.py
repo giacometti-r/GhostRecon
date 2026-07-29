@@ -58,17 +58,18 @@ def test_demo_seed_ids_are_stable_uuid_strings() -> None:
     assert len(set(ids.values())) == len(ids)
 
 
-def test_demo_seed_refuses_non_local_environments_by_default(monkeypatch) -> None:
+def test_demo_seed_refuses_non_local_profiles(monkeypatch) -> None:
     monkeypatch.delenv("GHOSTRECON_ALLOW_DEMO_SEED", raising=False)
 
     with pytest.raises(DemoSeedSafetyError):
-        assert_demo_seed_allowed(Settings(environment="prod"))
+        assert_demo_seed_allowed(Settings(profile="production"))
 
 
-def test_demo_seed_allows_explicit_non_local_override(monkeypatch) -> None:
+def test_demo_seed_ignores_retired_non_local_override(monkeypatch) -> None:
     monkeypatch.setenv("GHOSTRECON_ALLOW_DEMO_SEED", "1")
 
-    assert_demo_seed_allowed(Settings(environment="prod"))
+    with pytest.raises(DemoSeedSafetyError):
+        assert_demo_seed_allowed(Settings(profile="staging"))
 
 
 def test_demo_seed_covers_demo_check_reporting_resources() -> None:

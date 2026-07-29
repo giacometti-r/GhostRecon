@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Scoring Routing Service is implemented by `src/ghostrecon/services/scoring.py`. It is exposed through `scoring_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Scoring Routing Service is implemented by `src/ghostrecon/services/scoring/`. It is exposed through `scoring_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 ## Route Surface
 
@@ -23,7 +23,7 @@ Scoring Routing Service is implemented by `src/ghostrecon/services/scoring.py`. 
 
 ## Function Reference
 
-### `src/ghostrecon/services/scoring.py`
+### `src/ghostrecon/services/scoring/`
 
 #### Module Functions
 
@@ -31,7 +31,7 @@ Scoring Routing Service is implemented by `src/ghostrecon/services/scoring.py`. 
 
 - Inputs: `request` (ScoreRequest)
 - Output: Returns `ScoreResult`.
-- Why: `score_lead` provides the src/ghostrecon/services/scoring.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `score_lead` provides the src/ghostrecon/services/scoring/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `account.get`, `min`, `round`, `ScoreResult`, `reasons.append`, `signal.get`, `max`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -40,7 +40,7 @@ Scoring Routing Service is implemented by `src/ghostrecon/services/scoring.py`. 
 
 - Inputs: `request` (CandidateScoreRequest)
 - Output: Returns `CandidateScoreOut`.
-- Why: `score_candidate_preview` provides the src/ghostrecon/services/scoring.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `score_candidate_preview` provides the src/ghostrecon/services/scoring/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_component_scores`, `policy_blockers_for_score`, `round`, `_route_for_score`, `CandidateScoreOut`, `reasons.extend`, `reasons.append`, `policy_snapshot_hash`; uses policy validation.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -76,7 +76,7 @@ Scoring Routing Service is implemented by `src/ghostrecon/services/scoring.py`. 
 
 - Inputs: `snapshot` (dict[str, object])
 - Output: Returns `str`.
-- Why: `policy_snapshot_hash` provides the src/ghostrecon/services/scoring.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `policy_snapshot_hash` provides the src/ghostrecon/services/scoring/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `json.dumps`, `hexdigest`, `hashlib.sha256`, `payload.encode`; uses policy validation.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -85,7 +85,7 @@ Scoring Routing Service is implemented by `src/ghostrecon/services/scoring.py`. 
 
 - Inputs: `request` (CandidateScoreRequest)
 - Output: Returns `list[str]`.
-- Why: `policy_blockers_for_score` provides the src/ghostrecon/services/scoring.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `policy_blockers_for_score` provides the src/ghostrecon/services/scoring/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `lower`, `_optional_int`, `blockers.append`, `snapshot.get`, `get`; uses parsing/normalization, policy validation.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -163,3 +163,13 @@ Scoring Routing Service is implemented by `src/ghostrecon/services/scoring.py`. 
 ## Tests
 
 - `tests/unit/test_scoring.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database only. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

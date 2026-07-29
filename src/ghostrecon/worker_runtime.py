@@ -3,6 +3,7 @@ import asyncio
 from celery import Celery
 
 from ghostrecon.common.config import get_settings
+from ghostrecon.common.configuration import require_valid_configuration
 from ghostrecon.models.api import (
     ContactEnrichmentCreate,
     EmailCandidatePersistRequest,
@@ -38,6 +39,7 @@ from ghostrecon.services.sequencing import (
 from ghostrecon.services.source_registry import fetch_source_by_id
 
 settings = get_settings()
+require_valid_configuration(settings)
 
 celery_app = Celery(
     "ghostrecon",

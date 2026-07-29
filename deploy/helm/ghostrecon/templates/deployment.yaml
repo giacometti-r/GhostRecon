@@ -23,7 +23,7 @@ spec:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ $service }}
-          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          image: {{ include "ghostrecon.image" $ | quote }}
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           ports:
             - containerPort: 8080
@@ -31,11 +31,10 @@ spec:
           env:
             - name: GHOSTRECON_SERVICE_NAME
               value: {{ $service | quote }}
+            {{- include "ghostrecon.projectSecrets" (list $ $service) | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: ghostrecon-config
-            - secretRef:
-                name: ghostrecon-secrets
           readinessProbe:
             httpGet:
               path: /readyz

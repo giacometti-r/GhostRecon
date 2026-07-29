@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src/ghostrecon/service_apps/factory.py`, `src/ghostrecon/service_apps/entrypoint.py`, `src/ghostrecon/service_apps/runtime.py`. It is exposed through `gateway_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Gateway Service is implemented by `src/ghostrecon/service_apps/routers/`, `src/ghostrecon/service_apps/factory.py`, `src/ghostrecon/service_apps/entrypoint.py`, `src/ghostrecon/service_apps/runtime.py`. It is exposed through `gateway_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 ## Route Surface
 
@@ -87,7 +87,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 ## Function Reference
 
-### `src/ghostrecon/service_apps/routers.py`
+### `src/ghostrecon/service_apps/routers/`
 
 #### Module Functions
 
@@ -95,7 +95,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `actor` (str), `operator_role` (str)
 - Output: Returns `ReportingOperatorContext`.
-- Why: `reporting_operator_context` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_operator_context` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `ReportingOperatorContext`, `DashboardRole`, `HTTPException`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -104,7 +104,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: No external inputs.
 - Output: Returns `dict[str, list[str]]`.
-- Why: `service_map` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `service_map` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `ROUTERS.keys`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -113,7 +113,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `kind` (str | None)
 - Output: Returns `SourceHealthList`.
-- Why: `source_health` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `source_health` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `SourceHealthList`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -122,7 +122,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `series` (str | None), `source` (str | None), `country` (str | None), `event_format` (str | None), `topic` (str | None), `cursor` (str | None), `limit` (int), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingEventList`.
-- Why: `reporting_events` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_events` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_reporting_events`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -131,7 +131,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `event_id` (str), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingEventDetail`.
-- Why: `reporting_event_detail` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_event_detail` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_reporting_event_detail`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -140,7 +140,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `source` (str | None), `company` (str | None), `attack_vector` (str | None), `incident_type` (str | None), `cursor` (str | None), `limit` (int), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingIncidentList`.
-- Why: `reporting_incidents` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_incidents` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_reporting_incidents`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -149,7 +149,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `incident_id` (str), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingIncidentDetail`.
-- Why: `reporting_incident_detail` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_incident_detail` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_reporting_incident_detail`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -158,7 +158,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `target_type` (str | None), `enabled` (bool | None), `owner` (str | None), `cursor` (str | None), `limit` (int), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingWatchTargetList`.
-- Why: `reporting_watch_targets` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_watch_targets` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_reporting_watch_targets`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -167,7 +167,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `candidate_type` (str | None), `target_type` (str | None), `cursor` (str | None), `limit` (int), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingReviewQueue`.
-- Why: `reporting_review_queue` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_review_queue` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_reporting_review_queue`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -176,7 +176,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `target_type` (str | None), `export_status` (str | None), `cursor` (str | None), `limit` (int), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingCrmTargetList`.
-- Why: `reporting_crm_targets` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_crm_targets` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_reporting_crm_targets`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -185,7 +185,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `crm_sync_status` (str | None), `cursor` (str | None), `limit` (int), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingMeetingList`.
-- Why: `reporting_meetings` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_meetings` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_reporting_meetings`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -194,7 +194,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `meeting_id` (str), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingMeetingDetail`.
-- Why: `reporting_meeting_detail` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_meeting_detail` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_reporting_meeting_detail`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -203,7 +203,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `kind` (str | None), `freshness_status` (str | None), `cursor` (str | None), `limit` (int), `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingSourceHealthList`.
-- Why: `reporting_source_health` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_source_health` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_reporting_source_health`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -212,7 +212,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingKpiCatalog`.
-- Why: `reporting_kpi_catalog` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_kpi_catalog` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_reporting_kpi_catalog`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -221,7 +221,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `series` (str | None), `source` (str | None), `country` (str | None), `event_format` (str | None), `limit` (int)
 - Output: Returns `CyberEventList`.
-- Why: `intelligence_events` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_events` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `CyberEventList`, `get_settings`, `CyberEventOut.model_validate`, `event_to_api`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -230,7 +230,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `event_id` (str)
 - Output: Returns `CyberEventOut`.
-- Why: `intelligence_event_detail` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_event_detail` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `CyberEventOut.model_validate`, `get_event`, `HTTPException`, `event_to_api`, `get_settings`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -239,7 +239,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `event_id` (str), `reuse_state` (str | None), `limit` (int)
 - Output: Returns `EventParticipantList`.
-- Why: `intelligence_event_participants` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_event_participants` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `EventParticipantList`, `get_event`, `HTTPException`, `get_settings`, `EventParticipantOut.model_validate`, `participant_to_api`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -248,7 +248,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `event_id` (str | None), `reuse_state` (str | None), `limit` (int)
 - Output: Returns `EventParticipantList`.
-- Why: `intelligence_participants` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_participants` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `EventParticipantList`, `get_settings`, `EventParticipantOut.model_validate`, `participant_to_api`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -257,7 +257,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `source` (str | None), `company` (str | None), `limit` (int)
 - Output: Returns `SecurityIncidentList`.
-- Why: `intelligence_incidents` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_incidents` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `SecurityIncidentList`, `get_settings`, `SecurityIncidentOut.model_validate`, `incident_to_api`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -266,7 +266,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `incident_id` (str)
 - Output: Returns `SecurityIncidentOut`.
-- Why: `intelligence_incident_detail` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_incident_detail` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `SecurityIncidentOut.model_validate`, `get_incident`, `HTTPException`, `incident_to_api`, `get_settings`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -275,7 +275,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `target_type` (str | None), `enabled` (bool | None), `limit` (int)
 - Output: Returns `WatchTargetList`.
-- Why: `intelligence_watch_targets` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_watch_targets` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `WatchTargetList`, `get_settings`, `WatchTargetOut.model_validate`, `watch_target_to_api`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -284,7 +284,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `payload` (WatchTargetCreate), `idempotency_key` (str), `actor` (str)
 - Output: Returns `WatchTargetOut`.
-- Why: `intelligence_create_watch_target` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_create_watch_target` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `WatchTargetOut.model_validate`, `create_watch_target`, `watch_target_to_api`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -293,7 +293,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `watch_target_id` (str), `payload` (WatchTargetPatch), `idempotency_key` (str), `actor` (str)
 - Output: Returns `WatchTargetOut`.
-- Why: `intelligence_patch_watch_target` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_patch_watch_target` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `WatchTargetOut.model_validate`, `HTTPException`, `watch_target_to_api`, `patch_watch_target`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -302,7 +302,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `incident_id` (str), `request` (IncidentWatchPromotionRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `WatchTargetOut`.
-- Why: `intelligence_promote_incident_to_watchlist` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `intelligence_promote_incident_to_watchlist` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `WatchTargetOut.model_validate`, `promote_incident_to_watchlist`, `HTTPException`, `watch_target_to_api`, `get_settings`; uses optimistic version checks, idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -311,7 +311,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `payload` (dict[str, object])
 - Output: Returns `dict[str, object]`.
-- Why: `crm_sync_account` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `crm_sync_account` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `new_event`, `event.model_dump`, `payload.get`, `uuid4`; uses outbox/event emission, serialization/projection.
 - Side effects: adds outbox/event records; runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -320,7 +320,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (CrmExportCreateRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `CrmExportBatchOut`.
-- Why: `crm_export_start` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `crm_export_start` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `start_crm_export`, `HTTPException`, `get_settings`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -329,7 +329,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `batch_id` (str)
 - Output: Returns `CrmExportBatchOut`.
-- Why: `crm_export_detail` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `crm_export_detail` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_crm_export_batch`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -338,7 +338,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `batch_id` (str), `request` (CrmExportRetryRequest | None), `idempotency_key` (str), `actor` (str)
 - Output: Returns `CrmExportBatchOut`.
-- Why: `crm_export_retry_failed` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `crm_export_retry_failed` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `HTTPException`, `retry_failed_crm_export_items`, `get_settings`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -347,7 +347,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (DomainEnrichmentRequest)
 - Output: Returns `Any`.
-- Why: `domain_enrichment` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `domain_enrichment` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `enrich_domain`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -356,7 +356,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (EntityResolutionCreate), `idempotency_key` (str)
 - Output: Returns `EntityResolutionOut`.
-- Why: `enrichment_create_entity_resolution` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `enrichment_create_entity_resolution` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `entity_resolution_to_model`, `create_entity_resolution`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -365,7 +365,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `origin_type` (str | None), `limit` (int)
 - Output: Returns `EntityResolutionList`.
-- Why: `enrichment_entity_resolutions` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `enrichment_entity_resolutions` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `EntityResolutionList`, `get_settings`, `entity_resolution_to_model`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -374,7 +374,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (ContactEnrichmentCreate), `idempotency_key` (str)
 - Output: Returns `ContactEnrichmentOut`.
-- Why: `enrichment_create_contact_candidate` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `enrichment_create_contact_candidate` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `contact_candidate_to_model`, `create_contact_enrichment_candidate`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -383,7 +383,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `origin_type` (str | None), `limit` (int)
 - Output: Returns `ContactEnrichmentList`.
-- Why: `enrichment_contact_candidates` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `enrichment_contact_candidates` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `ContactEnrichmentList`, `get_settings`, `contact_candidate_to_model`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -392,7 +392,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (EmailCandidateRequest)
 - Output: Returns `Any`.
-- Why: `email_candidates` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `email_candidates` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `candidate.model_dump`, `generate_email_candidates`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -401,7 +401,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (EmailCandidatePersistRequest), `idempotency_key` (str)
 - Output: Returns `EmailCandidatePersistResult`.
-- Why: `email_persist_candidates` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `email_persist_candidates` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `EmailCandidatePersistResult`, `persist_email_candidates`, `HTTPException`, `email_candidate_to_model`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -410,7 +410,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (EmailVerifyBatchRequest)
 - Output: Returns `EmailVerifyBatchResult`.
-- Why: `email_verify_batch` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `email_verify_batch` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `EmailVerifyBatchResult`, `verify_email_candidates`, `get_settings`, `email_candidate_to_model`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -419,7 +419,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `payload` (dict[str, object])
 - Output: Returns `dict[str, object]`.
-- Why: `email_verify` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `email_verify` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It performs direct field checks, simple transformations, or object construction in-process.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -428,7 +428,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (ScoreRequest)
 - Output: Returns `Any`.
-- Why: `lead_score` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `lead_score` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `score_lead`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -437,7 +437,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (CandidateScoreRequest), `idempotency_key` (str)
 - Output: Returns `CandidateScoreOut`.
-- Why: `candidate_score` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `candidate_score` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `candidate_score_to_model`, `create_candidate_score`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -446,7 +446,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (SequenceEligibilityRequest)
 - Output: Returns `Any`.
-- Why: `sequence_eligibility` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_eligibility` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `evaluate_sequence_eligibility`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -455,7 +455,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (SequenceCreateRequest), `idempotency_key` (str | None), `actor` (str)
 - Output: Returns `SequenceOut`.
-- Why: `sequence_create` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_create` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `create_sequence`, `HTTPException`, `get_settings`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -464,7 +464,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (SequenceEnrollmentCreateRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `SequenceEnrollmentOut`.
-- Why: `sequence_enrollment_create` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_enrollment_create` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `create_sequence_enrollment`, `HTTPException`, `get_settings`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -473,7 +473,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `limit` (int)
 - Output: Returns `SequenceEnrollmentList`.
-- Why: `sequence_enrollment_list` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_enrollment_list` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -482,7 +482,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `enrollment_id` (str)
 - Output: Returns `SequenceEnrollmentOut`.
-- Why: `sequence_enrollment_detail` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_enrollment_detail` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_sequence_enrollment`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -491,7 +491,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `enrollment_id` (str), `request` (SequenceEnrollmentActionRequest), `actor` (str)
 - Output: Returns `SequenceEnrollmentOut`.
-- Why: `sequence_enrollment_pause` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_enrollment_pause` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `HTTPException`, `pause_sequence_enrollment`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -500,7 +500,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `enrollment_id` (str), `request` (SequenceEnrollmentActionRequest), `actor` (str)
 - Output: Returns `SequenceEnrollmentOut`.
-- Why: `sequence_enrollment_resume` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_enrollment_resume` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `HTTPException`, `resume_sequence_enrollment`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -509,7 +509,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `enrollment_id` (str), `request` (SequenceEnrollmentActionRequest), `actor` (str)
 - Output: Returns `SequenceEnrollmentOut`.
-- Why: `sequence_enrollment_cancel` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_enrollment_cancel` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `HTTPException`, `cancel_sequence_enrollment`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -518,7 +518,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (UnsubscribeRequest), `idempotency_key` (str)
 - Output: Returns `Any`.
-- Why: `sequence_unsubscribe` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequence_unsubscribe` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `process_unsubscribe`, `get_settings`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -527,7 +527,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (CalendarAvailabilityRequest)
 - Output: Returns `CalendarAvailabilityResult`.
-- Why: `calendar_availability` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `calendar_availability` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_calendar_availability`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -536,7 +536,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (MeetingCreateRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `MeetingHandoffOut`.
-- Why: `meeting_create` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meeting_create` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `create_meeting`, `HTTPException`, `get_settings`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -545,7 +545,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `crm_target_id` (str | None), `limit` (int)
 - Output: Returns `MeetingHandoffList`.
-- Why: `meeting_list` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meeting_list` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -554,7 +554,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `meeting_id` (str)
 - Output: Returns `MeetingHandoffOut`.
-- Why: `meeting_detail` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meeting_detail` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_meeting`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -563,7 +563,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `meeting_id` (str), `idempotency_key` (str | None), `actor` (str)
 - Output: Returns `MeetingHandoffOut`.
-- Why: `meeting_generate_prep_packet` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meeting_generate_prep_packet` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `generate_meeting_prep_packet`, `HTTPException`, `get_settings`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -572,7 +572,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `meeting_id` (str), `request` (MeetingOutcomeRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `MeetingHandoffOut`.
-- Why: `meeting_record_outcome` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meeting_record_outcome` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `record_meeting_outcome`, `HTTPException`, `get_settings`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -581,7 +581,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `meeting_id` (str), `request` (MeetingActionRequest), `actor` (str)
 - Output: Returns `MeetingHandoffOut`.
-- Why: `meeting_cancel` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meeting_cancel` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `HTTPException`, `cancel_meeting`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -590,7 +590,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `meeting_id` (str), `actor` (str)
 - Output: Returns `MeetingHandoffOut`.
-- Why: `meeting_retry_sync` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meeting_retry_sync` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `retry_meeting_crm_sync`, `HTTPException`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`.
@@ -599,7 +599,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (PrepPacketRequest)
 - Output: Returns `Any`.
-- Why: `prep_packet` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `prep_packet` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `build_prep_packet`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -608,7 +608,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (SuppressionCreate), `idempotency_key` (str), `actor` (str)
 - Output: Returns `SuppressionOut`.
-- Why: `suppression_create` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `suppression_create` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `suppression_to_model`, `create_suppression`, `get_settings`; uses idempotency lookup, policy validation, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -617,7 +617,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (SuppressionCheckRequest)
 - Output: Returns `Any`.
-- Why: `suppression_check` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `suppression_check` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `evaluate_suppression_with_store`, `get_settings`; uses policy validation.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -626,7 +626,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `candidate_type` (str | None), `limit` (int)
 - Output: Returns `ReviewCandidateList`.
-- Why: `review_candidates` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `review_candidates` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `ReviewCandidateList`, `get_settings`, `review_candidate_to_model`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -635,7 +635,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `candidate_id` (str), `request` (ReviewDecisionRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `ReviewDecisionOut`.
-- Why: `review_candidate_approve` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `review_candidate_approve` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `review_decision_to_model`, `HTTPException`, `approve_review_candidate`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -644,7 +644,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `candidate_id` (str), `request` (ReviewDecisionRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `ReviewDecisionOut`.
-- Why: `review_candidate_reject` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `review_candidate_reject` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `review_decision_to_model`, `HTTPException`, `reject_review_candidate`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -653,7 +653,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `request` (BulkReviewDecisionRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `BulkReviewDecisionResult`.
-- Why: `review_candidates_bulk_decision` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `review_candidates_bulk_decision` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `BulkReviewDecisionResult`, `bulk_decide_review_candidates`, `HTTPException`, `review_decision_to_model`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -662,7 +662,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `status` (str | None), `target_type` (str | None), `limit` (int)
 - Output: Returns `CrmTargetList`.
-- Why: `review_crm_targets` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `review_crm_targets` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Query`, `CrmTargetList`, `get_settings`, `crm_target_to_model`; uses serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -671,7 +671,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `incident_id` (str), `request` (IncidentDecisionRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `ReviewDecisionOut`.
-- Why: `governance_corroborate_incident` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `governance_corroborate_incident` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `review_decision_to_model`, `HTTPException`, `corroborate_incident`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -680,7 +680,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `incident_id` (str), `request` (IncidentDecisionRequest), `idempotency_key` (str), `actor` (str)
 - Output: Returns `ReviewDecisionOut`.
-- Why: `governance_reject_incident` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `governance_reject_incident` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `Header`, `review_decision_to_model`, `HTTPException`, `reject_incident`, `get_settings`; uses idempotency lookup, serialization/projection.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `HTTPException`; catches provider or validation errors and maps them to the module contract.
@@ -689,7 +689,7 @@ Gateway Service is implemented by `src/ghostrecon/service_apps/routers.py`, `src
 
 - Inputs: `operator` (ReportingOperatorContext)
 - Output: Returns `ReportingKpiCatalog`.
-- Why: `kpi_catalog` provides the src/ghostrecon/service_apps/routers.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `kpi_catalog` provides the src/ghostrecon/service_apps/routers/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_reporting_kpi_catalog`, `get_settings`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -728,3 +728,13 @@ No classes or functions are defined in this module.
 - `tests/unit/test_incident_routes.py`
 - `tests/unit/test_reporting_routes.py`
 - `tests/unit/test_enrichment_routes.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database; live geocoder, search, news, email verifier, Attio CRM, Google Calendar, SMTP, IMAP, and crawler identity. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

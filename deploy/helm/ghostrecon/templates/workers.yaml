@@ -23,18 +23,17 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: worker
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "ghostrecon.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["celery"]
           args: ["-A", "ghostrecon.worker_runtime:celery_app", "worker", "--loglevel=INFO"]
           env:
             - name: GHOSTRECON_SERVICE_NAME
               value: "worker"
+            {{- include "ghostrecon.projectSecrets" (list . "worker") | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: ghostrecon-config
-            - secretRef:
-                name: ghostrecon-secrets
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           securityContext:
@@ -66,7 +65,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: scheduler
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "ghostrecon.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command: ["celery"]
           args:
@@ -78,11 +77,10 @@ spec:
           env:
             - name: GHOSTRECON_SERVICE_NAME
               value: "scheduler"
+            {{- include "ghostrecon.projectSecrets" (list . "scheduler") | nindent 12 }}
           envFrom:
             - configMapRef:
                 name: ghostrecon-config
-            - secretRef:
-                name: ghostrecon-secrets
           volumeMounts:
             - name: beat-state
               mountPath: /tmp

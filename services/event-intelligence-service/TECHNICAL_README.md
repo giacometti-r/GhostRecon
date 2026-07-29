@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Event Intelligence Service is implemented by `src/ghostrecon/services/event_intelligence.py`. It is exposed through `event_intelligence_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Event Intelligence Service is implemented by `src/ghostrecon/services/event_intelligence/`. It is exposed through `event_intelligence_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 Related/shared modules referenced by this service: `src/ghostrecon/services/source_adapters.py`, `src/ghostrecon/services/source_registry.py`.
 
@@ -40,7 +40,7 @@ Geocoding support is implemented by `src/ghostrecon/services/geocoding.py`. Prod
 
 ## Function Reference
 
-### `src/ghostrecon/services/event_intelligence.py`
+### `src/ghostrecon/services/event_intelligence/`
 
 #### Classes
 
@@ -77,14 +77,14 @@ Geocoding support is implemented by `src/ghostrecon/services/geocoding.py`. Prod
 - `async upsert_event(source: SourceDefinition, raw_item: RawSourceItem, candidate: EventCandidate) -> tuple[CyberEvent, bool]`
   - Inputs: `source` (SourceDefinition), `raw_item` (RawSourceItem), `candidate` (EventCandidate)
   - Output: Returns `tuple[CyberEvent, bool]`.
-  - Why: `EventIntelligenceRepository.upsert_event` provides the src/ghostrecon/services/event_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `EventIntelligenceRepository.upsert_event` provides the src/ghostrecon/services/event_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `build_event_dedupe_key`, `CyberEvent`, `add`, `self._enqueue_event`, `scalar`, `flush`, `new_event`, `where`; uses database session queries, database writes, idempotency lookup, outbox/event emission.
   - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
   - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 - `async upsert_participant(source: SourceDefinition, raw_item: RawSourceItem, event: CyberEvent, candidate: ParticipantCandidate) -> tuple[EventParticipant, bool]`
   - Inputs: `source` (SourceDefinition), `raw_item` (RawSourceItem), `event` (CyberEvent), `candidate` (ParticipantCandidate)
   - Output: Returns `tuple[EventParticipant, bool]`.
-  - Why: `EventIntelligenceRepository.upsert_participant` provides the src/ghostrecon/services/event_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `EventIntelligenceRepository.upsert_participant` provides the src/ghostrecon/services/event_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `build_participant_dedupe_key`, `participant_eligibility`, `EventParticipant`, `add`, `self._enqueue_event`, `scalar`, `flush`, `new_event`; uses database session queries, database writes, idempotency lookup, outbox/event emission, policy validation.
   - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
   - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -143,7 +143,7 @@ Geocoding support is implemented by `src/ghostrecon/services/geocoding.py`. Prod
 
 - Inputs: `reuse_state` (str)
 - Output: Returns `tuple[bool, bool]`.
-- Why: `participant_eligibility` provides the src/ghostrecon/services/event_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `participant_eligibility` provides the src/ghostrecon/services/event_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It uses policy validation.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -152,7 +152,7 @@ Geocoding support is implemented by `src/ghostrecon/services/geocoding.py`. Prod
 
 - Inputs: `source` (SourceDefinition), `raw_item` (RawSourceItem)
 - Output: Returns `list[EventCandidate]`.
-- Why: `candidates_from_raw_item` provides the src/ghostrecon/services/event_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `candidates_from_raw_item` provides the src/ghostrecon/services/event_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `isinstance`, `metadata.get`, `_candidate_from_page`, `get`, `_slug`, `_candidate_from_schema_org`, `_candidate_from_ics`, `_candidate_from_feed`; uses parsing/normalization.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -161,7 +161,7 @@ Geocoding support is implemented by `src/ghostrecon/services/geocoding.py`. Prod
 
 - Inputs: `source` (SourceDefinition), `raw_item` (RawSourceItem)
 - Output: Returns `list[ParticipantCandidate]`.
-- Why: `participants_from_raw_item` provides the src/ghostrecon/services/event_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `participants_from_raw_item` provides the src/ghostrecon/services/event_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `metadata.get`, `isinstance`, `_as_list`, `schema_event.get`, `_participant_from_schema_node`, `participants.append`; uses parsing/normalization.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -409,3 +409,13 @@ Geocoding support is implemented by `src/ghostrecon/services/geocoding.py`. Prod
 - `tests/unit/test_event_routes.py`
 - `tests/unit/test_source_adapters.py`
 - `tests/unit/test_source_registry.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database; live Nominatim geocoder and an identifying user agent. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

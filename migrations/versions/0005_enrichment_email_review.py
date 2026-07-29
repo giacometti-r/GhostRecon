@@ -46,18 +46,14 @@ def upgrade() -> None:
         sa.Column("version", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint(
-            "idempotency_key", name="uq_entity_resolution_cases_idempotency_key"
-        ),
+        sa.UniqueConstraint("idempotency_key", name="uq_entity_resolution_cases_idempotency_key"),
     )
     op.create_index(
         "ix_entity_resolution_cases_origin",
         "entity_resolution_cases",
         ["origin_type", "origin_id"],
     )
-    op.create_index(
-        "ix_entity_resolution_cases_status", "entity_resolution_cases", ["status"]
-    )
+    op.create_index("ix_entity_resolution_cases_status", "entity_resolution_cases", ["status"])
     op.create_index(
         "ix_entity_resolution_cases_domain", "entity_resolution_cases", ["input_domain"]
     )
@@ -197,9 +193,7 @@ def downgrade() -> None:
     op.drop_index("ix_review_candidates_status", table_name="review_candidates")
     op.drop_table("review_candidates")
 
-    op.drop_index(
-        "ix_organization_email_patterns_domain", table_name="organization_email_patterns"
-    )
+    op.drop_index("ix_organization_email_patterns_domain", table_name="organization_email_patterns")
     op.drop_table("organization_email_patterns")
 
     op.drop_index(
@@ -264,9 +258,7 @@ def _add_contact_columns() -> None:
         ["id"],
         ondelete="SET NULL",
     )
-    op.create_unique_constraint(
-        "uq_contacts_idempotency_key", "contacts", ["idempotency_key"]
-    )
+    op.create_unique_constraint("uq_contacts_idempotency_key", "contacts", ["idempotency_key"])
 
 
 def _drop_contact_columns() -> None:
@@ -335,9 +327,7 @@ def _add_email_candidate_columns() -> None:
     op.create_unique_constraint(
         "uq_email_candidates_idempotency_key", "email_candidates", ["idempotency_key"]
     )
-    op.create_index(
-        "ix_email_candidates_origin", "email_candidates", ["origin_type", "origin_id"]
-    )
+    op.create_index("ix_email_candidates_origin", "email_candidates", ["origin_type", "origin_id"])
 
 
 def _drop_email_candidate_columns() -> None:

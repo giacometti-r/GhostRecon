@@ -27,13 +27,11 @@ class SmtpSendResult:
 
 
 class SmtpSender(Protocol):
-    def send(self, request: SmtpSendRequest) -> SmtpSendResult:
-        ...
+    def send(self, request: SmtpSendRequest) -> SmtpSendResult: ...
 
 
 class ImapPoller(Protocol):
-    def poll(self, limit: int = 50) -> list[InboundEmailEventCreate]:
-        ...
+    def poll(self, limit: int = 50) -> list[InboundEmailEventCreate]: ...
 
 
 class StdlibSmtpSender:

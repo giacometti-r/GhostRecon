@@ -7,6 +7,7 @@ from typing import Protocol
 import httpx
 
 from ghostrecon.common.config import Settings
+from ghostrecon.common.configuration import assert_adapter_allowed
 
 
 @dataclass(frozen=True)
@@ -129,10 +130,13 @@ class NominatimGeocoder:
 
 def geocoder_for_settings(settings: Settings) -> Geocoder:
     if settings.geocoder_provider == "nominatim":
-        return NominatimGeocoder(settings)
-    if settings.geocoder_provider == "local_demo":
-        return LocalDemoGeocoder()
-    return DisabledGeocoder()
+        provider: Geocoder = NominatimGeocoder(settings)
+    elif settings.geocoder_provider == "local_demo":
+        provider = LocalDemoGeocoder()
+    else:
+        provider = DisabledGeocoder()
+    assert_adapter_allowed(settings, provider, "geocoder_provider")
+    return provider
 
 
 def _normalize(value: str | None) -> str:

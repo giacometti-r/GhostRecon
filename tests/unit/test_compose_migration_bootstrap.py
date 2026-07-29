@@ -86,7 +86,7 @@ def test_schema_readiness_reports_database_errors(monkeypatch) -> None:
     assert result.error == "connection refused"
 
 
-def test_schema_gated_services_return_not_ready_when_schema_is_missing(monkeypatch) -> None:
+def test_database_owning_services_return_named_failure_checks(monkeypatch) -> None:
     async def not_ready(_settings=None) -> SchemaReadiness:
         return SchemaReadiness(
             ready=False,
@@ -96,30 +96,36 @@ def test_schema_gated_services_return_not_ready_when_schema_is_missing(monkeypat
 
     monkeypatch.setattr(service_module, "check_database_schema_ready", not_ready)
 
-    for service_name in ("gateway-service", "reporting-service", "console-service"):
+    for service_name in ("gateway-service", "reporting-service", "enrichment-service"):
         client = TestClient(build_app(Settings(service_name=service_name)))
         response = client.get("/readyz")
+        payload = response.json()
 
         assert response.status_code == 503
-        assert response.json() == {
-            "status": "not_ready",
-            "service": service_name,
-            "reason": "database schema is not migrated",
-            "missing_tables": ["cyber_events"],
-        }
+        assert payload["status"] == "not_ready"
+        assert payload["service"] == service_name
+        assert payload["profile"] == "local"
+        assert payload["checks"]["database"] == {"status": "failed"}
+        assert payload["reason"] == "database schema is not migrated"
+        assert payload["missing_tables"] == ["cyber_events"]
 
 
-def test_non_schema_gated_services_keep_process_readiness(monkeypatch) -> None:
+def test_console_readiness_has_no_direct_database_dependency(monkeypatch) -> None:
     async def unexpected_check(_settings=None) -> SchemaReadiness:
         raise AssertionError("schema readiness should not be checked")
 
     monkeypatch.setattr(service_module, "check_database_schema_ready", unexpected_check)
 
-    client = TestClient(build_app(Settings(service_name="enrichment-service")))
+    client = TestClient(build_app(Settings(service_name="console-service")))
     response = client.get("/readyz")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ready", "service": "enrichment-service"}
+    assert response.json() == {
+        "status": "ready",
+        "service": "console-service",
+        "profile": "local",
+        "checks": {"gateway": {"status": "configured"}},
+    }
 
 
 def test_compose_runs_migrations_before_demo_services() -> None:

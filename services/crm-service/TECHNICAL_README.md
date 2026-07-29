@@ -3,7 +3,7 @@
 
 ## Architecture
 
-CRM Service is implemented by `src/ghostrecon/services/crm_exports.py`, `src/ghostrecon/services/crm_attio.py`. It is exposed through `crm_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+CRM Service is implemented by `src/ghostrecon/services/crm_exports/`, `src/ghostrecon/services/crm_attio.py`. It is exposed through `crm_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 ## Route Surface
 
@@ -27,7 +27,7 @@ CRM Service is implemented by `src/ghostrecon/services/crm_exports.py`, `src/gho
 
 ## Function Reference
 
-### `src/ghostrecon/services/crm_exports.py`
+### `src/ghostrecon/services/crm_exports/`
 
 #### Classes
 
@@ -41,7 +41,7 @@ CRM Service is implemented by `src/ghostrecon/services/crm_exports.py`, `src/gho
 
 - Inputs: `request` (CrmExportCreateRequest), `actor` (str), `idempotency_key` (str), `settings` (Settings | None), `client` (CrmClient | None)
 - Output: Returns `CrmExportBatchOut`.
-- Why: `start_crm_export` provides the src/ghostrecon/services/crm_exports.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `start_crm_export` provides the src/ghostrecon/services/crm_exports/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_settings`, `session_scope`, `_unique_ordered`, `_require_exportable_targets`, `utcnow`, `CrmExportBatch`, `session.add`, `_ordered_targets`; uses database writes, idempotency lookup, outbox/event emission, serialization/projection, time calculations.
 - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -77,7 +77,7 @@ CRM Service is implemented by `src/ghostrecon/services/crm_exports.py`, `src/gho
 
 - Inputs: `target_ids` (list[str])
 - Output: Returns `str`.
-- Why: `selection_hash` provides the src/ghostrecon/services/crm_exports.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `selection_hash` provides the src/ghostrecon/services/crm_exports/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `json.dumps`, `hexdigest`, `hashlib.sha256`, `payload.encode`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -293,7 +293,7 @@ CRM Service is implemented by `src/ghostrecon/services/crm_exports.py`, `src/gho
 
 - Inputs: No external inputs.
 - Output: Returns `datetime`.
-- Why: `utcnow` provides the src/ghostrecon/services/crm_exports.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `utcnow` provides the src/ghostrecon/services/crm_exports/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `datetime.now`; uses time calculations.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -445,3 +445,13 @@ CRM Service is implemented by `src/ghostrecon/services/crm_exports.py`, `src/gho
 ## Tests
 
 - `tests/unit/test_crm_exports.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database and explicit Attio CRM credentials. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

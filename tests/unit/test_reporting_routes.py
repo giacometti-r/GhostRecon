@@ -211,18 +211,20 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
             kpis={"review": ["approval_rate"], "meeting_handoff": ["meetings_booked"]},
         )
 
-    monkeypatch.setattr(routers, "get_reporting_events", fake_events)
-    monkeypatch.setattr(routers, "get_reporting_event_detail", fake_event_detail)
-    monkeypatch.setattr(routers, "get_reporting_incidents", fake_incidents)
-    monkeypatch.setattr(routers, "get_reporting_incident_detail", fake_incident_detail)
-    monkeypatch.setattr(routers, "get_reporting_watch_targets", fake_watch_targets)
-    monkeypatch.setattr(routers, "get_reporting_watch_target_detail", fake_watch_target_detail)
-    monkeypatch.setattr(routers, "get_reporting_review_queue", fake_review_queue)
-    monkeypatch.setattr(routers, "get_reporting_crm_targets", fake_crm_targets)
-    monkeypatch.setattr(routers, "get_reporting_meetings", fake_meetings)
-    monkeypatch.setattr(routers, "get_reporting_meeting_detail", fake_meeting_detail)
-    monkeypatch.setattr(routers, "get_reporting_source_health", fake_source_health)
-    monkeypatch.setattr(routers, "get_reporting_kpi_catalog", fake_kpis)
+    monkeypatch.setattr(routers.reporting, "get_reporting_events", fake_events)
+    monkeypatch.setattr(routers.reporting, "get_reporting_event_detail", fake_event_detail)
+    monkeypatch.setattr(routers.reporting, "get_reporting_incidents", fake_incidents)
+    monkeypatch.setattr(routers.reporting, "get_reporting_incident_detail", fake_incident_detail)
+    monkeypatch.setattr(routers.reporting, "get_reporting_watch_targets", fake_watch_targets)
+    monkeypatch.setattr(
+        routers.reporting, "get_reporting_watch_target_detail", fake_watch_target_detail
+    )
+    monkeypatch.setattr(routers.reporting, "get_reporting_review_queue", fake_review_queue)
+    monkeypatch.setattr(routers.reporting, "get_reporting_crm_targets", fake_crm_targets)
+    monkeypatch.setattr(routers.reporting, "get_reporting_meetings", fake_meetings)
+    monkeypatch.setattr(routers.reporting, "get_reporting_meeting_detail", fake_meeting_detail)
+    monkeypatch.setattr(routers.reporting, "get_reporting_source_health", fake_source_health)
+    monkeypatch.setattr(routers.reporting, "get_reporting_kpi_catalog", fake_kpis)
 
     client = TestClient(build_app(Settings(service_name="reporting-service")))
     headers = {"X-Operator-Role": "analyst", "X-Actor": "analyst@example.com"}
@@ -232,9 +234,7 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     incidents = client.get("/v1/reporting/incidents", headers=headers).json()
     incident_detail = client.get("/v1/reporting/incidents/incident-1", headers=headers).json()
     watch_targets = client.get("/v1/reporting/watch-targets", headers=headers).json()
-    watch_target_detail = client.get(
-        "/v1/reporting/watch-targets/watch-1", headers=headers
-    ).json()
+    watch_target_detail = client.get("/v1/reporting/watch-targets/watch-1", headers=headers).json()
     review_queue = client.get("/v1/reporting/review-queue", headers=headers).json()
     crm_targets = client.get("/v1/reporting/crm-targets", headers=headers).json()
     meetings = client.get("/v1/reporting/meetings", headers=headers).json()

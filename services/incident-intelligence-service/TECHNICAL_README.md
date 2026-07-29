@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Incident Intelligence Service is implemented by `src/ghostrecon/services/incident_intelligence.py`, `src/ghostrecon/services/security_feeds.py`. It is exposed through `incident_intelligence_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Incident Intelligence Service is implemented by `src/ghostrecon/services/incident_intelligence/`, `src/ghostrecon/services/security_feeds.py`. It is exposed through `incident_intelligence_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 Related/shared modules referenced by this service: `src/ghostrecon/services/source_registry.py`.
 
@@ -38,7 +38,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 
 ## Function Reference
 
-### `src/ghostrecon/services/incident_intelligence.py`
+### `src/ghostrecon/services/incident_intelligence/`
 
 #### Classes
 
@@ -71,14 +71,14 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 - `async upsert_article(source: SourceDefinition, raw_item: RawSourceItem, candidate: ArticleCandidate) -> tuple[NewsArticle, bool]`
   - Inputs: `source` (SourceDefinition), `raw_item` (RawSourceItem), `candidate` (ArticleCandidate)
   - Output: Returns `tuple[NewsArticle, bool]`.
-  - Why: `IncidentIntelligenceRepository.upsert_article` provides the src/ghostrecon/services/incident_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `IncidentIntelligenceRepository.upsert_article` provides the src/ghostrecon/services/incident_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `NewsArticle`, `add`, `self._enqueue_event`, `scalar`, `flush`, `new_event`, `where`, `select`; uses database session queries, database writes, idempotency lookup, outbox/event emission.
   - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
   - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 - `async upsert_incident(source: SourceDefinition, raw_item: RawSourceItem, article: NewsArticle, candidate: IncidentCandidate) -> tuple[SecurityIncident, bool, bool]`
   - Inputs: `source` (SourceDefinition), `raw_item` (RawSourceItem), `article` (NewsArticle), `candidate` (IncidentCandidate)
   - Output: Returns `tuple[SecurityIncident, bool, bool]`.
-  - Why: `IncidentIntelligenceRepository.upsert_incident` provides the src/ghostrecon/services/incident_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `IncidentIntelligenceRepository.upsert_incident` provides the src/ghostrecon/services/incident_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `self._apply_corroboration`, `scalar`, `SecurityIncident`, `add`, `self._enqueue_event`, `_append_unique`, `_merge_list`, `self._link_evidence`; uses database session queries, database writes, idempotency lookup, outbox/event emission.
   - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
   - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -145,7 +145,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 
 - Inputs: `source` (SourceDefinition), `raw_item` (RawSourceItem)
 - Output: Returns `ArticleCandidate`.
-- Why: `article_candidate_from_raw_item` provides the src/ghostrecon/services/incident_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `article_candidate_from_raw_item` provides the src/ghostrecon/services/incident_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_slug`, `hexdigest`, `ArticleCandidate`, `isinstance`, `metadata.get`, `_string`, `_hostname`, `isoformat`; uses parsing/normalization.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -154,7 +154,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 
 - Inputs: `source` (SourceDefinition), `raw_item` (RawSourceItem), `article` (ArticleCandidate)
 - Output: Returns `IncidentCandidate | None`; callers must handle the documented not-found or unavailable path.
-- Why: `incident_candidate_from_article` provides the src/ghostrecon/services/incident_intelligence.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `incident_candidate_from_article` provides the src/ghostrecon/services/incident_intelligence/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `join`, `text.lower`, `_domains_from_metadata`, `_attack_vector`, `bool`, `hexdigest`, `IncidentCandidate`, `isinstance`; uses parsing/normalization.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: may return `None` for not-found or unavailable data.
@@ -394,3 +394,13 @@ Related/shared modules referenced by this service: `src/ghostrecon/services/sour
 
 - `tests/unit/test_incident_intelligence.py`
 - `tests/unit/test_incident_routes.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database; live SerpAPI news and its API key. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

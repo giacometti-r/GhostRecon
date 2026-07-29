@@ -1,6 +1,9 @@
+profile: local
+
 image:
   repository: ghostrecon
   tag: local
+  digest: ""
   pullPolicy: IfNotPresent
 
 nameOverride: ""
@@ -13,8 +16,15 @@ serviceAccount:
   name: ghostrecon
 
 env:
-  GHOSTRECON_ENVIRONMENT: prod
   GHOSTRECON_LOG_LEVEL: INFO
+  GHOSTRECON_GEOCODER_PROVIDER: local_demo
+  GHOSTRECON_SEARCH_PROVIDER: local_demo
+  GHOSTRECON_NEWS_PROVIDER: local_demo
+  GHOSTRECON_EMAIL_VERIFIER_PROVIDER: http
+  GHOSTRECON_CRM_PROVIDER: local_demo
+  GHOSTRECON_CALENDAR_PROVIDER: fake
+  GHOSTRECON_SMTP_PROVIDER: disabled
+  GHOSTRECON_IMAP_PROVIDER: disabled
   GHOSTRECON_ATTIO_BASE_URL: https://api.attio.com
   GHOSTRECON_GATEWAY_BASE_URL: http://gateway-service:8080
   GHOSTRECON_CONSOLE_REQUEST_TIMEOUT_SECONDS: "10"
@@ -32,6 +42,7 @@ postgresql:
   image:
     repository: postgres
     tag: 17.10-alpine3.23
+    digest: ""
     pullPolicy: IfNotPresent
   auth:
     username: ghostrecon
@@ -59,6 +70,7 @@ redis:
   image:
     repository: redis
     tag: 7.4.8-alpine3.21
+    digest: ""
     pullPolicy: IfNotPresent
   auth:
     password: ""
@@ -111,6 +123,28 @@ scheduler:
   enabled: true
   replicaCount: 1
 
+preflight:
+  enabled: true
+  backoffLimit: 0
+
+secretProjection:
+  gateway-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_ATTIO_ACCESS_TOKEN, GHOSTRECON_OPENSERP_API_KEY, GHOSTRECON_SERPAPI_API_KEY, GHOSTRECON_GOOGLE_PRIVATE_KEY, GHOSTRECON_SMTP_PASSWORD, GHOSTRECON_IMAP_PASSWORD]
+  event-intelligence-service: [GHOSTRECON_DATABASE_URL]
+  incident-intelligence-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_SERPAPI_API_KEY]
+  crm-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_ATTIO_ACCESS_TOKEN]
+  ingestion-service: [GHOSTRECON_DATABASE_URL]
+  enrichment-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_OPENSERP_API_KEY]
+  email-intelligence-service: [GHOSTRECON_DATABASE_URL]
+  scoring-routing-service: [GHOSTRECON_DATABASE_URL]
+  sequencing-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_ATTIO_ACCESS_TOKEN, GHOSTRECON_GOOGLE_PRIVATE_KEY, GHOSTRECON_SMTP_PASSWORD, GHOSTRECON_IMAP_PASSWORD]
+  meeting-handoff-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_ATTIO_ACCESS_TOKEN, GHOSTRECON_GOOGLE_PRIVATE_KEY]
+  governance-service: [GHOSTRECON_DATABASE_URL]
+  console-service: []
+  reporting-service: [GHOSTRECON_DATABASE_URL]
+  worker: [GHOSTRECON_DATABASE_URL, GHOSTRECON_REDIS_URL, GHOSTRECON_ATTIO_ACCESS_TOKEN, GHOSTRECON_OPENSERP_API_KEY, GHOSTRECON_SERPAPI_API_KEY, GHOSTRECON_GOOGLE_PRIVATE_KEY, GHOSTRECON_SMTP_PASSWORD, GHOSTRECON_IMAP_PASSWORD]
+  scheduler: [GHOSTRECON_REDIS_URL]
+  migration-job: [GHOSTRECON_DATABASE_URL]
+
 resources:
   requests:
     cpu: 100m
@@ -141,6 +175,7 @@ emailVerifier:
   image:
     repository: umutert/emailvalidator
     tag: latest
+    digest: ""
     pullPolicy: IfNotPresent
   env: {}
   resources:

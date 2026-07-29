@@ -99,3 +99,20 @@ The existing `ingestion-service` remains for source imports and other compatibil
 - Meeting handoff requires an exported/current CRM target; booking a meeting can complete a linked active sequence enrollment but does not bypass CRM export or outreach approval.
 - Suppression, retention, lawful basis, verified email, do-not-contact state, and approval state are re-evaluated before any outbound action.
 - Email suppression state is checked before Google Calendar invites are created.
+
+## Production Runtime Boundary
+
+The RuntimeProfile and ServiceName contracts define one profile selector and one dependency
+registry for APIs, workers, scheduler, migration, and console. Construction order is validation,
+logging/application or Celery initialization, then traffic. Readiness reports configured dependency
+names; database-owning APIs additionally verify the migrated schema, while console verifies no
+direct database state.
+
+Synthetic behavior is an architectural boundary: deterministic adapters and inferred domains exist
+only in the local demo, explicit test injection is allowed under test, and strict profiles reject
+fake clients at provider factories and injection boundaries. SQLAlchemy sessions tagged staging or
+production reject exact synthetic provider/lineage markers before flush.
+
+Helm mirrors service credential ownership with per-key projections. Strict chart profiles require
+digest-addressed application, datastore, and verifier images and run configuration preflight before
+migration/rollout hooks.

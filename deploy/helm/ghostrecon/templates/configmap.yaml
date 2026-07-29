@@ -1,10 +1,16 @@
+{{- include "ghostrecon.validate" . }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: ghostrecon-config
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
   labels:
     {{- include "ghostrecon.labels" . | nindent 4 }}
 data:
+  GHOSTRECON_PROFILE: {{ .Values.profile | quote }}
 {{- range $key, $value := .Values.env }}
   {{ $key }}: {{ $value | quote }}
 {{- end }}

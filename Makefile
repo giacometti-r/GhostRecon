@@ -1,4 +1,16 @@
-.PHONY: install lint type test security migrate dev demo-reset-schema demo-reset demo-check demo docker-build helm-lint helm-template helm-template-external helm-check helm-template-secrets
+.PHONY: config-check migration-check image-scan sbom install lint type test security migrate dev demo-reset-schema demo-reset demo-check demo docker-build helm-lint helm-template helm-template-external helm-check helm-template-secrets
+
+config-check:
+	python -m ghostrecon.common.preflight --format text
+
+migration-check:
+	sh scripts/validate_migrations.sh
+
+image-scan:
+	trivy image --severity HIGH,CRITICAL --exit-code 1 --format json --output trivy-report.json ghostrecon:local
+
+sbom:
+	syft ghostrecon:local -o spdx-json=sbom.spdx.json -o cyclonedx-json=sbom.cyclonedx.json
 
 install:
 	python -m pip install --upgrade pip

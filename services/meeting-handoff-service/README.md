@@ -14,8 +14,8 @@ Schedules qualified meetings, generates prep packets, records outcomes, creates 
 
 ## Implementation Modules
 
-- `src/ghostrecon/services/meeting.py`
-- `src/ghostrecon/services/calendar_adapters.py`
+- `src/ghostrecon/services/meeting/`
+- `src/ghostrecon/services/calendar_adapters/`
 
 ## APIs And Jobs
 
@@ -72,3 +72,13 @@ GHOSTRECON_SERVICE_NAME=meeting-handoff-service uvicorn ghostrecon.service_apps.
 ```bash
 pytest tests/unit/test_meeting.py tests/unit/test_calendar_adapters.py
 ```
+
+## Runtime configuration
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database, Attio, and Google Calendar. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

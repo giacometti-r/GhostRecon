@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Reporting Service is implemented by `src/ghostrecon/services/reporting.py`. It is exposed through `reporting_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Reporting Service is implemented by `src/ghostrecon/services/reporting/`. It is exposed through `reporting_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 ## Route Surface
 
@@ -48,7 +48,7 @@ Reporting Service is implemented by `src/ghostrecon/services/reporting.py`. It i
 
 ## Function Reference
 
-### `src/ghostrecon/services/reporting.py`
+### `src/ghostrecon/services/reporting/`
 
 #### Module Functions
 
@@ -56,7 +56,7 @@ Reporting Service is implemented by `src/ghostrecon/services/reporting.py`. It i
 
 - Inputs: `sources` (list[SourceHealth]), `generated_at` (datetime | None), `record_watermark_name` (str | None), `record_watermark` (datetime | None)
 - Output: Returns `ReportingMetadata`.
-- Why: `reporting_metadata_from_sources` provides the src/ghostrecon/services/reporting.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_metadata_from_sources` provides the src/ghostrecon/services/reporting/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_latest_datetime`, `ReportingMetadata`, `datetime.now`, `bool`; uses time calculations.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -65,7 +65,7 @@ Reporting Service is implemented by `src/ghostrecon/services/reporting.py`. It i
 
 - Inputs: `kind` (str | None), `settings` (Settings | None), `record_watermark_name` (str | None), `record_watermark` (datetime | None)
 - Output: Returns `ReportingMetadata`.
-- Why: `reporting_metadata` provides the src/ghostrecon/services/reporting.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reporting_metadata` provides the src/ghostrecon/services/reporting/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `reporting_metadata_from_sources`; uses time calculations.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -182,7 +182,7 @@ Reporting Service is implemented by `src/ghostrecon/services/reporting.py`. It i
 
 - Inputs: `rows` (list[Any]), `limit` (int), `offset` (int)
 - Output: Returns `str | None`; callers must handle the documented not-found or unavailable path.
-- Why: `next_cursor` provides the src/ghostrecon/services/reporting.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `next_cursor` provides the src/ghostrecon/services/reporting/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It performs direct field checks, simple transformations, or object construction in-process.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: may return `None` for not-found or unavailable data.
@@ -242,3 +242,13 @@ Reporting Service is implemented by `src/ghostrecon/services/reporting.py`. It i
 ## Tests
 
 - `tests/unit/test_reporting_routes.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database only. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

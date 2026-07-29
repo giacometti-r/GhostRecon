@@ -1,0 +1,51 @@
+profile: production
+
+image:
+  repository: registry.example.internal/ghostrecon
+  tag: "0.1.0"
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+env:
+  GHOSTRECON_GEOCODER_PROVIDER: nominatim
+  GHOSTRECON_SEARCH_PROVIDER: openserp
+  GHOSTRECON_NEWS_PROVIDER: serpapi
+  GHOSTRECON_CRM_PROVIDER: attio
+  GHOSTRECON_CALENDAR_PROVIDER: google
+  GHOSTRECON_SMTP_PROVIDER: smtp
+  GHOSTRECON_IMAP_PROVIDER: imap
+  GHOSTRECON_NOMINATIM_USER_AGENT: "GhostRecon/0.1 (mailto:ops@company.ch)"
+  GHOSTRECON_CRAWL_USER_AGENT: "GhostReconBot/0.1 (mailto:ops@company.ch)"
+  GHOSTRECON_GOOGLE_CALENDAR_ID: primary
+  GHOSTRECON_GOOGLE_CLIENT_EMAIL: calendar@company.ch
+  GHOSTRECON_SMTP_HOST: smtp.company.ch
+  GHOSTRECON_SMTP_USERNAME: ghostrecon
+  GHOSTRECON_SMTP_FROM_ADDRESS: prospecting@company.ch
+  GHOSTRECON_IMAP_HOST: imap.company.ch
+  GHOSTRECON_IMAP_USERNAME: ghostrecon
+
+secretEnv:
+  GHOSTRECON_ATTIO_ACCESS_TOKEN: test-attio-token
+  GHOSTRECON_SERPAPI_API_KEY: test-serpapi-key
+  GHOSTRECON_GOOGLE_PRIVATE_KEY: test-render-private-key
+  GHOSTRECON_SMTP_PASSWORD: test-smtp-password
+  GHOSTRECON_IMAP_PASSWORD: test-imap-password
+
+postgresql:
+  image:
+    tag: 17.10-alpine3.23
+    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  auth:
+    postgresPassword: test-admin-password
+    password: test-app-password
+
+redis:
+  image:
+    tag: 7.4.8-alpine3.21
+    digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  auth:
+    password: test-redis-password
+
+emailVerifier:
+  image:
+    tag: "1.0.0"
+    digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd

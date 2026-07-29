@@ -101,13 +101,9 @@ def upgrade() -> None:
         sa.Column("idempotency_key", sa.String(length=255)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint(
-            "idempotency_key", name="uq_meeting_prep_packets_idempotency_key"
-        ),
+        sa.UniqueConstraint("idempotency_key", name="uq_meeting_prep_packets_idempotency_key"),
     )
-    op.create_index(
-        "ix_meeting_prep_packets_meeting", "meeting_prep_packets", ["meeting_id"]
-    )
+    op.create_index("ix_meeting_prep_packets_meeting", "meeting_prep_packets", ["meeting_id"])
 
     op.create_table(
         "meeting_follow_up_tasks",
@@ -129,13 +125,9 @@ def upgrade() -> None:
         sa.Column("idempotency_key", sa.String(length=255)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint(
-            "idempotency_key", name="uq_meeting_follow_up_tasks_idempotency_key"
-        ),
+        sa.UniqueConstraint("idempotency_key", name="uq_meeting_follow_up_tasks_idempotency_key"),
     )
-    op.create_index(
-        "ix_meeting_follow_up_tasks_meeting", "meeting_follow_up_tasks", ["meeting_id"]
-    )
+    op.create_index("ix_meeting_follow_up_tasks_meeting", "meeting_follow_up_tasks", ["meeting_id"])
     op.create_index(
         "ix_meeting_follow_up_tasks_status_due",
         "meeting_follow_up_tasks",
@@ -144,9 +136,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_meeting_follow_up_tasks_status_due", table_name="meeting_follow_up_tasks"
-    )
+    op.drop_index("ix_meeting_follow_up_tasks_status_due", table_name="meeting_follow_up_tasks")
     op.drop_index("ix_meeting_follow_up_tasks_meeting", table_name="meeting_follow_up_tasks")
     op.drop_table("meeting_follow_up_tasks")
 

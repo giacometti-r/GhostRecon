@@ -253,24 +253,38 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         seen["import_key"] = kwargs["idempotency_key"]
         return _enrollment()
 
-    monkeypatch.setattr(routers, "create_sequence", fake_create_sequence)
-    monkeypatch.setattr(routers, "create_sequence_enrollment", fake_create_enrollment)
-    monkeypatch.setattr(routers, "list_sequence_enrollments", fake_list)
-    monkeypatch.setattr(routers, "get_sequence_enrollment", fake_get)
-    monkeypatch.setattr(routers, "list_sequences", fake_list_sequences)
-    monkeypatch.setattr(routers, "get_sequence", fake_get_sequence)
-    monkeypatch.setattr(routers, "update_sequence", fake_update_sequence)
-    monkeypatch.setattr(routers, "pause_sequence_enrollment", fake_pause)
-    monkeypatch.setattr(routers, "resume_sequence_enrollment", fake_resume)
-    monkeypatch.setattr(routers, "cancel_sequence_enrollment", fake_cancel)
-    monkeypatch.setattr(routers, "process_unsubscribe", fake_unsubscribe)
-    monkeypatch.setattr(routers, "create_sequence_email_alert", fake_create_alert)
-    monkeypatch.setattr(routers, "list_sequence_activities", fake_list_activities)
-    monkeypatch.setattr(routers, "send_approved_sequence_email", fake_approve_activity)
-    monkeypatch.setattr(routers, "complete_sequence_activity", fake_complete_activity)
-    monkeypatch.setattr(routers, "schedule_sequence_meeting_activity", fake_schedule_activity)
-    monkeypatch.setattr(routers, "search_crm_prospects", fake_search_prospects)
-    monkeypatch.setattr(routers, "import_crm_prospect_to_sequence", fake_import_prospect)
+    monkeypatch.setattr(routers.sequence_definitions, "create_sequence", fake_create_sequence)
+    monkeypatch.setattr(
+        routers.sequence_enrollments, "create_sequence_enrollment", fake_create_enrollment
+    )
+    monkeypatch.setattr(routers.sequence_enrollments, "list_sequence_enrollments", fake_list)
+    monkeypatch.setattr(routers.sequence_enrollments, "get_sequence_enrollment", fake_get)
+    monkeypatch.setattr(routers.sequence_definitions, "list_sequences", fake_list_sequences)
+    monkeypatch.setattr(routers.sequence_definitions, "get_sequence", fake_get_sequence)
+    monkeypatch.setattr(routers.sequence_definitions, "update_sequence", fake_update_sequence)
+    monkeypatch.setattr(routers.sequence_enrollments, "pause_sequence_enrollment", fake_pause)
+    monkeypatch.setattr(routers.sequence_enrollments, "resume_sequence_enrollment", fake_resume)
+    monkeypatch.setattr(routers.sequence_enrollments, "cancel_sequence_enrollment", fake_cancel)
+    monkeypatch.setattr(routers.sequence_definitions, "process_unsubscribe", fake_unsubscribe)
+    monkeypatch.setattr(
+        routers.sequence_enrollments, "create_sequence_email_alert", fake_create_alert
+    )
+    monkeypatch.setattr(
+        routers.sequence_activities, "list_sequence_activities", fake_list_activities
+    )
+    monkeypatch.setattr(
+        routers.sequence_activities, "send_approved_sequence_email", fake_approve_activity
+    )
+    monkeypatch.setattr(
+        routers.sequence_activities, "complete_sequence_activity", fake_complete_activity
+    )
+    monkeypatch.setattr(
+        routers.sequence_activities, "schedule_sequence_meeting_activity", fake_schedule_activity
+    )
+    monkeypatch.setattr(routers.sequence_definitions, "search_crm_prospects", fake_search_prospects)
+    monkeypatch.setattr(
+        routers.sequence_enrollments, "import_crm_prospect_to_sequence", fake_import_prospect
+    )
 
     client = TestClient(build_app(Settings(service_name="sequencing-service")))
     headers = {"Idempotency-Key": "idem-sequence", "X-Actor": "analyst@example.com"}
@@ -514,7 +528,7 @@ async def test_poll_inbound_uses_fake_imap_poller(monkeypatch) -> None:
         seen.append((event.event_type.value, idempotency_key))
         return _inbound_event().model_copy(update={"id": "reply-1", "event_type": "reply"})
 
-    monkeypatch.setattr(sequencing, "process_inbound_email_event", fake_process)
+    monkeypatch.setattr(sequencing.serializers, "process_inbound_email_event", fake_process)
 
     result = await sequencing.poll_inbound_email_events(
         limit=5,

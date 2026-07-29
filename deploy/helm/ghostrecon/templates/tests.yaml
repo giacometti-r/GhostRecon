@@ -25,7 +25,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: datastore-test
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          image: {{ include "ghostrecon.image" . | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           command:
             - python
@@ -61,9 +61,17 @@ spec:
                       await redis.aclose()
 
               asyncio.run(main())
-          envFrom:
-            - secretRef:
-                name: ghostrecon-secrets
+          env:
+            - name: GHOSTRECON_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ghostrecon-secrets
+                  key: GHOSTRECON_DATABASE_URL
+            - name: GHOSTRECON_REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: ghostrecon-secrets
+                  key: GHOSTRECON_REDIS_URL
           resources:
             requests:
               cpu: 25m

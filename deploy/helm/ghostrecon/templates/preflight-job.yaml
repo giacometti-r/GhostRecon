@@ -1,0 +1,50 @@
+{{- if .Values.preflight.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "ghostrecon.fullname" . }}-preflight
+  labels:
+    {{- include "ghostrecon.labels" . | nindent 4 }}
+    app.kubernetes.io/component: preflight
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.preflight.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "ghostrecon.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: preflight
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+{{- $processes := concat .Values.services (list "worker" "scheduler" "migration-job") }}
+{{- range $service := $processes }}
+        - name: {{ $service }}
+          image: {{ include "ghostrecon.image" $ | quote }}
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          command: ["python", "-m", "ghostrecon.common.preflight", "--format", "json"]
+          env:
+            - name: GHOSTRECON_SERVICE_NAME
+              value: {{ $service | quote }}
+            {{- include "ghostrecon.projectSecrets" (list $ $service) | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: ghostrecon-config
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+{{- end }}
+{{- end }}

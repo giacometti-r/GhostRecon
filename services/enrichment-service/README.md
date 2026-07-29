@@ -15,7 +15,7 @@ Resolves organizations and contact candidates, enriches domains, verifies candid
 ## Implementation Modules
 
 - `src/ghostrecon/services/enrichment.py`
-- `src/ghostrecon/services/enrichment_workflows.py`
+- `src/ghostrecon/services/enrichment_workflows/`
 - `src/ghostrecon/services/company_crawler.py`
 
 ## APIs And Jobs
@@ -68,3 +68,13 @@ GHOSTRECON_SERVICE_NAME=enrichment-service uvicorn ghostrecon.service_apps.runti
 ```bash
 pytest tests/unit/test_enrichment_routes.py tests/unit/test_enrichment_workflows.py
 ```
+
+## Runtime configuration
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database; live OpenSERP search, HTTP email verifier, and identifying crawler user agent. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

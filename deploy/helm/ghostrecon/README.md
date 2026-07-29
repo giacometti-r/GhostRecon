@@ -35,7 +35,11 @@ helm secrets upgrade --install ghostrecon deploy/helm/ghostrecon \
   --timeout 15m \
   -f deploy/helm/ghostrecon/secrets.sops.yaml \
   --set image.repository=registry.example.com/ghostrecon \
-  --set image.tag=0.1.0
+  --set profile=production \
+  --set image.digest=sha256:REPLACE_WITH_IMAGE_DIGEST \
+  --set postgresql.image.digest=sha256:REPLACE_WITH_POSTGRES_DIGEST \
+  --set redis.image.digest=sha256:REPLACE_WITH_REDIS_DIGEST \
+  --set emailVerifier.image.digest=sha256:REPLACE_WITH_VERIFIER_DIGEST
 ```
 
 Run `make helm-check` to lint and render both bundled and external datastore
@@ -73,13 +77,17 @@ Set non-secret defaults in `values.yaml`:
 ```yaml
 env:
   GHOSTRECON_GOOGLE_CALENDAR_ID: primary
+  GHOSTRECON_GOOGLE_CLIENT_EMAIL: calendar-bot@company.ch
   GHOSTRECON_GOOGLE_CALENDAR_SEND_UPDATES: "true"
+  # Optional for Workspace domain-wide delegation:
+  GHOSTRECON_GOOGLE_DELEGATED_SUBJECT: calendar-owner@company.ch
 ```
 
-Put the service-account email, escaped private key, and optional delegated
-Workspace subject in the encrypted values file under `secretEnv`. Production
-deployments should grant the service account direct calendar access or Workspace
-domain-wide delegation for the delegated subject.
+Put only the escaped private key in the encrypted values file under `secretEnv`.
+The service-account email and optional delegated Workspace subject are non-secret
+runtime identity values and belong under `env`. Production deployments should grant
+the service account direct calendar access or Workspace domain-wide delegation for
+the delegated subject.
 
 ## Datastore Modes
 
@@ -139,3 +147,15 @@ required by the Redis provider when connecting over TLS.
   hooks need a separate migration job in their deployment workflow.
 - NetworkPolicies require a cluster network plugin that enforces the Kubernetes
   NetworkPolicy API.
+
+## Profiles, Preflight, and Immutable Images
+
+Set top-level profile to local, test, staging, or production. Strict profiles require live provider
+values, complete owned credentials, identifying user agents, a SHA-256 application digest, and
+SHA-256 digests for each enabled bundled PostgreSQL, Redis, and email-verifier image. Image
+references render as repository@sha256:digest; latest and tag-only strict releases fail rendering.
+
+The pre-install/pre-upgrade preflight Job runs one redacted configuration container per service and
+process before migrations. Workloads consume the shared non-secret ConfigMap but receive only
+secret keys listed in secretProjection for their dependency ownership. Run make helm-check for
+local, external, immutable-production, and negative renders.

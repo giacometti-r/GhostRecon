@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, `src/ghostrecon/services/calendar_adapters.py`. It is exposed through `meeting_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting/`, `src/ghostrecon/services/calendar_adapters/`. It is exposed through `meeting_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 ## Route Surface
 
@@ -38,7 +38,7 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 
 ## Function Reference
 
-### `src/ghostrecon/services/meeting.py`
+### `src/ghostrecon/services/meeting/`
 
 #### Module Functions
 
@@ -82,7 +82,7 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 
 - Inputs: `meeting_id` (str), `actor` (str), `idempotency_key` (str | None), `settings` (Settings | None)
 - Output: Returns `MeetingHandoffOut | None`; callers must handle the documented not-found or unavailable path.
-- Why: `generate_meeting_prep_packet` provides the src/ghostrecon/services/meeting.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `generate_meeting_prep_packet` provides the src/ghostrecon/services/meeting/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `build_prep_packet`, `utcnow`, `MeetingPrepPacket`, `session.add`, `_enqueue_event`, `session.get`, `_latest_prep_packet`; uses database session queries, database writes, idempotency lookup, outbox/event emission, serialization/projection, time calculations.
 - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data.
@@ -91,7 +91,7 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 
 - Inputs: `meeting_id` (str), `request` (MeetingOutcomeRequest), `actor` (str), `idempotency_key` (str), `settings` (Settings | None), `crm_client` (CrmClient | None)
 - Output: Returns `MeetingHandoffOut | None`; callers must handle the documented not-found or unavailable path.
-- Why: `record_meeting_outcome` provides the src/ghostrecon/services/meeting.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `record_meeting_outcome` provides the src/ghostrecon/services/meeting/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_settings`, `session_scope`, `utcnow`, `_enqueue_event`, `session.get`, `session.scalar`, `_create_follow_up_tasks`, `meeting_to_api`; uses database session queries, idempotency lookup, outbox/event emission, serialization/projection, time calculations.
 - Side effects: adds outbox/event records; runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data.
@@ -109,7 +109,7 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 
 - Inputs: `meeting_id` (str), `request` (MeetingActionRequest), `actor` (str), `settings` (Settings | None), `calendar_client` (CalendarClient | None)
 - Output: Returns `MeetingHandoffOut | None`; callers must handle the documented not-found or unavailable path.
-- Why: `cancel_meeting` provides the src/ghostrecon/services/meeting.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `cancel_meeting` provides the src/ghostrecon/services/meeting/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_settings`, `calendar_client_for_settings`, `session_scope`, `utcnow`, `session.get`, `_meeting_to_model_with_children`, `client.cancel_event`; uses database session queries, serialization/projection, time calculations.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data.
@@ -325,12 +325,12 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 
 - Inputs: No external inputs.
 - Output: Returns `datetime`.
-- Why: `utcnow` provides the src/ghostrecon/services/meeting.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `utcnow` provides the src/ghostrecon/services/meeting/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `datetime.now`; uses time calculations.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 
-### `src/ghostrecon/services/calendar_adapters.py`
+### `src/ghostrecon/services/calendar_adapters/`
 
 #### Classes
 
@@ -368,14 +368,14 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 - `async update_event(provider_event_id: str, request: CalendarEventRequest) -> CalendarEventResult`
   - Inputs: `provider_event_id` (str), `request` (CalendarEventRequest)
   - Output: Returns `CalendarEventResult`.
-  - Why: `CalendarClient.update_event` provides the src/ghostrecon/services/calendar_adapters.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `CalendarClient.update_event` provides the src/ghostrecon/services/calendar_adapters/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It performs direct field checks, simple transformations, or object construction in-process.
   - Side effects: runs asynchronously and may await database or provider operations.
   - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 - `async cancel_event(provider_event_id: str, *, send_updates: bool = True) -> None`
   - Inputs: `provider_event_id` (str), `send_updates` (bool)
   - Output: Returns `None`; all useful effects occur through persistence, provider calls, mutation, or raised errors.
-  - Why: `CalendarClient.cancel_event` provides the src/ghostrecon/services/calendar_adapters.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `CalendarClient.cancel_event` provides the src/ghostrecon/services/calendar_adapters/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It performs direct field checks, simple transformations, or object construction in-process.
   - Side effects: runs asynchronously and may await database or provider operations.
   - Failures: may return `None` for not-found or unavailable data.
@@ -408,14 +408,14 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 - `async update_event(provider_event_id: str, request: CalendarEventRequest) -> CalendarEventResult`
   - Inputs: `provider_event_id` (str), `request` (CalendarEventRequest)
   - Output: Returns `CalendarEventResult`.
-  - Why: `FakeCalendarClient.update_event` provides the src/ghostrecon/services/calendar_adapters.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `FakeCalendarClient.update_event` provides the src/ghostrecon/services/calendar_adapters/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `_google_event_body`, `CalendarEventResult`.
   - Side effects: runs asynchronously and may await database or provider operations.
   - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 - `async cancel_event(provider_event_id: str, *, send_updates: bool = True) -> None`
   - Inputs: `provider_event_id` (str), `send_updates` (bool)
   - Output: Returns `None`; all useful effects occur through persistence, provider calls, mutation, or raised errors.
-  - Why: `FakeCalendarClient.cancel_event` provides the src/ghostrecon/services/calendar_adapters.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `FakeCalendarClient.cancel_event` provides the src/ghostrecon/services/calendar_adapters/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `pop`.
   - Side effects: runs asynchronously and may await database or provider operations.
   - Failures: may return `None` for not-found or unavailable data.
@@ -448,14 +448,14 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 - `async update_event(provider_event_id: str, request: CalendarEventRequest) -> CalendarEventResult`
   - Inputs: `provider_event_id` (str), `request` (CalendarEventRequest)
   - Output: Returns `CalendarEventResult`.
-  - Why: `GoogleCalendarClient.update_event` provides the src/ghostrecon/services/calendar_adapters.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `GoogleCalendarClient.update_event` provides the src/ghostrecon/services/calendar_adapters/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `_event_result`, `self._request`, `_google_event_body`, `_path`, `_send_updates`.
   - Side effects: runs asynchronously and may await database or provider operations.
   - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 - `async cancel_event(provider_event_id: str, *, send_updates: bool = True) -> None`
   - Inputs: `provider_event_id` (str), `send_updates` (bool)
   - Output: Returns `None`; all useful effects occur through persistence, provider calls, mutation, or raised errors.
-  - Why: `GoogleCalendarClient.cancel_event` provides the src/ghostrecon/services/calendar_adapters.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `GoogleCalendarClient.cancel_event` provides the src/ghostrecon/services/calendar_adapters/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `self._request`, `_path`, `_send_updates`.
   - Side effects: runs asynchronously and may await database or provider operations.
   - Failures: may return `None` for not-found or unavailable data.
@@ -494,7 +494,7 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 
 - Inputs: `settings` (Settings)
 - Output: Returns `CalendarClient`.
-- Why: `calendar_client_for_settings` provides the src/ghostrecon/services/calendar_adapters.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `calendar_client_for_settings` provides the src/ghostrecon/services/calendar_adapters/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `GoogleCalendarClient`, `FakeCalendarClient`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -582,3 +582,13 @@ Meeting Handoff Service is implemented by `src/ghostrecon/services/meeting.py`, 
 
 - `tests/unit/test_meeting.py`
 - `tests/unit/test_calendar_adapters.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database, Attio, and Google Calendar. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

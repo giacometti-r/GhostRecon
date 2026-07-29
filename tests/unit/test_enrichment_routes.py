@@ -226,10 +226,14 @@ def test_enrichment_routes_create_and_list_resolution_and_contacts(monkeypatch) 
     async def fake_list_contacts(**kwargs):
         return [_contact_candidate()]
 
-    monkeypatch.setattr(routers, "create_entity_resolution", fake_create_resolution)
-    monkeypatch.setattr(routers, "list_entity_resolutions", fake_list_resolutions)
-    monkeypatch.setattr(routers, "create_contact_enrichment_candidate", fake_create_contact)
-    monkeypatch.setattr(routers, "list_contact_enrichment_candidates", fake_list_contacts)
+    monkeypatch.setattr(routers.enrichment, "create_entity_resolution", fake_create_resolution)
+    monkeypatch.setattr(routers.enrichment, "list_entity_resolutions", fake_list_resolutions)
+    monkeypatch.setattr(
+        routers.enrichment, "create_contact_enrichment_candidate", fake_create_contact
+    )
+    monkeypatch.setattr(
+        routers.enrichment, "list_contact_enrichment_candidates", fake_list_contacts
+    )
 
     client = TestClient(build_app(Settings(service_name="enrichment-service")))
     resolution = client.post(
@@ -258,8 +262,8 @@ def test_email_routes_persist_and_verify_candidates(monkeypatch) -> None:
     async def fake_verify(*args, **kwargs):
         return [_email_candidate("verified")]
 
-    monkeypatch.setattr(routers, "persist_email_candidates", fake_persist)
-    monkeypatch.setattr(routers, "verify_email_candidates", fake_verify)
+    monkeypatch.setattr(routers.email, "persist_email_candidates", fake_persist)
+    monkeypatch.setattr(routers.email, "verify_email_candidates", fake_verify)
 
     client = TestClient(build_app(Settings(service_name="email-intelligence-service")))
     persisted = client.post(
@@ -296,7 +300,7 @@ def test_event_participant_enrich_target_route(monkeypatch) -> None:
             "review_reason": None,
         }
 
-    monkeypatch.setattr(routers, "enrich_event_participant_target", fake_enrich)
+    monkeypatch.setattr(routers.enrichment, "enrich_event_participant_target", fake_enrich)
 
     client = TestClient(build_app(Settings(service_name="enrichment-service")))
     response = client.post(
@@ -359,9 +363,11 @@ def test_watch_target_contact_and_domain_discovery_routes(monkeypatch) -> None:
         assert kwargs["idempotency_key"] == "idem-email"
         return [_email_candidate("verified")]
 
-    monkeypatch.setattr(routers, "discover_watch_target_contacts", fake_find_contacts)
-    monkeypatch.setattr(routers, "discover_contact_candidate_domain", fake_discover_domain)
-    monkeypatch.setattr(routers, "discover_contact_candidate_email", fake_discover_email)
+    monkeypatch.setattr(routers.enrichment, "discover_watch_target_contacts", fake_find_contacts)
+    monkeypatch.setattr(
+        routers.enrichment, "discover_contact_candidate_domain", fake_discover_domain
+    )
+    monkeypatch.setattr(routers.enrichment, "discover_contact_candidate_email", fake_discover_email)
 
     client = TestClient(build_app(Settings(service_name="enrichment-service")))
     contacts = client.post(
@@ -388,7 +394,7 @@ def test_review_candidates_route_is_read_only_queue(monkeypatch) -> None:
     async def fake_list_review_candidates(**kwargs):
         return [_review_candidate()]
 
-    monkeypatch.setattr(routers, "list_review_candidates", fake_list_review_candidates)
+    monkeypatch.setattr(routers.governance, "list_review_candidates", fake_list_review_candidates)
 
     client = TestClient(build_app(Settings(service_name="governance-service")))
     payload = client.get("/v1/review/candidates").json()
@@ -401,7 +407,7 @@ def test_scoring_candidate_route_persists_versioned_score(monkeypatch) -> None:
     async def fake_create_score(*args, **kwargs):
         return _candidate_score()
 
-    monkeypatch.setattr(routers, "create_candidate_score", fake_create_score)
+    monkeypatch.setattr(routers.scoring, "create_candidate_score", fake_create_score)
 
     client = TestClient(build_app(Settings(service_name="scoring-routing-service")))
     payload = client.post(
@@ -435,10 +441,10 @@ def test_review_decision_routes_and_crm_targets(monkeypatch) -> None:
     async def fake_targets(*args, **kwargs):
         return [_crm_target()]
 
-    monkeypatch.setattr(routers, "approve_review_candidate", fake_approve)
-    monkeypatch.setattr(routers, "reject_review_candidate", fake_reject)
-    monkeypatch.setattr(routers, "bulk_decide_review_candidates", fake_bulk)
-    monkeypatch.setattr(routers, "list_crm_targets", fake_targets)
+    monkeypatch.setattr(routers.governance, "approve_review_candidate", fake_approve)
+    monkeypatch.setattr(routers.governance, "reject_review_candidate", fake_reject)
+    monkeypatch.setattr(routers.governance, "bulk_decide_review_candidates", fake_bulk)
+    monkeypatch.setattr(routers.governance, "list_crm_targets", fake_targets)
 
     client = TestClient(build_app(Settings(service_name="governance-service")))
     approved = client.post(
@@ -495,8 +501,8 @@ def test_review_and_crm_target_update_routes(monkeypatch) -> None:
         target.version = 3
         return target
 
-    monkeypatch.setattr(routers, "update_review_candidate", fake_update_review_candidate)
-    monkeypatch.setattr(routers, "update_crm_target", fake_update_crm_target)
+    monkeypatch.setattr(routers.governance, "update_review_candidate", fake_update_review_candidate)
+    monkeypatch.setattr(routers.governance, "update_crm_target", fake_update_crm_target)
 
     client = TestClient(build_app(Settings(service_name="governance-service")))
     review = client.patch(
@@ -538,10 +544,10 @@ def test_suppression_and_incident_governance_routes(monkeypatch) -> None:
     async def fake_revert_incident(*args, **kwargs):
         return _review_decision("rejected")
 
-    monkeypatch.setattr(routers, "create_suppression", fake_create_suppression)
-    monkeypatch.setattr(routers, "corroborate_incident", fake_corroborate)
-    monkeypatch.setattr(routers, "reject_incident", fake_reject_incident)
-    monkeypatch.setattr(routers, "revert_incident", fake_revert_incident)
+    monkeypatch.setattr(routers.governance, "create_suppression", fake_create_suppression)
+    monkeypatch.setattr(routers.governance, "corroborate_incident", fake_corroborate)
+    monkeypatch.setattr(routers.governance, "reject_incident", fake_reject_incident)
+    monkeypatch.setattr(routers.governance, "revert_incident", fake_revert_incident)
 
     client = TestClient(build_app(Settings(service_name="gateway-service")))
     suppression = client.post(

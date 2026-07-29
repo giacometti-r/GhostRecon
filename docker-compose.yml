@@ -42,7 +42,7 @@ services:
           sleep 3
         done
     environment:
-      GHOSTRECON_ENVIRONMENT: local
+      GHOSTRECON_PROFILE: local
       GHOSTRECON_SERVICE_NAME: migration-job
       GHOSTRECON_DATABASE_URL: postgresql+asyncpg://ghostrecon:ghostrecon@postgres:5432/ghostrecon
       GHOSTRECON_REDIS_URL: redis://redis:6379/0
@@ -54,7 +54,7 @@ services:
   gateway-service:
     build: .
     environment: &service-env
-      GHOSTRECON_ENVIRONMENT: local
+      GHOSTRECON_PROFILE: local
       GHOSTRECON_SERVICE_NAME: gateway-service
       GHOSTRECON_DATABASE_URL: postgresql+asyncpg://ghostrecon:ghostrecon@postgres:5432/ghostrecon
       GHOSTRECON_REDIS_URL: redis://redis:6379/0

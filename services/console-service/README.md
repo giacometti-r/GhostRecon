@@ -18,8 +18,8 @@ Serves the Dash operator console, queries reporting/gateway APIs, renders pages,
 - `src/ghostrecon/console/app.py`
 - `src/ghostrecon/console/api.py`
 - `src/ghostrecon/console/components.py`
-- `src/ghostrecon/console/layouts.py`
-- `src/ghostrecon/console/callbacks.py`
+- `src/ghostrecon/console/layouts/`
+- `src/ghostrecon/console/callbacks/`
 - Related/shared: `src/ghostrecon/service_apps/factory.py`
 
 ## APIs And Jobs
@@ -74,3 +74,13 @@ GHOSTRECON_SERVICE_NAME=console-service uvicorn ghostrecon.service_apps.runtime:
 pytest tests/unit/test_console_dashboard.py
 pytest tests/browser/test_console_navigation_playwright.py
 ```
+
+## Runtime configuration
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns gateway URL only; it does not own or probe the database. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Console reports gateway configuration and never opens a direct database readiness connection.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

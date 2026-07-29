@@ -135,7 +135,7 @@ def test_console_service_renders_dash_and_preserves_existing_routes(monkeypatch)
         return []
 
     monkeypatch.setattr(
-        "ghostrecon.service_apps.routers.list_review_candidates",
+        "ghostrecon.service_apps.routers.governance.list_review_candidates",
         fake_review_candidates,
     )
 

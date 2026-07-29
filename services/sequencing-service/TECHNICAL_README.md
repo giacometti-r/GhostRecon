@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `src/ghostrecon/services/sequence_adapters.py`. It is exposed through `sequencing_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Sequencing Service is implemented by `src/ghostrecon/services/sequencing/`, `src/ghostrecon/services/sequence_adapters.py`. It is exposed through `sequencing_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 ## Route Surface
 
@@ -38,7 +38,7 @@ Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `s
 
 ## Function Reference
 
-### `src/ghostrecon/services/sequencing.py`
+### `src/ghostrecon/services/sequencing/`
 
 #### Classes
 
@@ -105,7 +105,7 @@ Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `s
 
 - Inputs: `enrollment_id` (str), `request` (SequenceEnrollmentActionRequest), `actor` (str), `settings` (Settings | None)
 - Output: Returns `SequenceEnrollmentOut | None`; callers must handle the documented not-found or unavailable path.
-- Why: `pause_sequence_enrollment` provides the src/ghostrecon/services/sequencing.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `pause_sequence_enrollment` provides the src/ghostrecon/services/sequencing/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_set_enrollment_status`; uses outbox/event emission.
 - Side effects: adds outbox/event records; runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data.
@@ -114,7 +114,7 @@ Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `s
 
 - Inputs: `enrollment_id` (str), `request` (SequenceEnrollmentActionRequest), `actor` (str), `settings` (Settings | None)
 - Output: Returns `SequenceEnrollmentOut | None`; callers must handle the documented not-found or unavailable path.
-- Why: `resume_sequence_enrollment` provides the src/ghostrecon/services/sequencing.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `resume_sequence_enrollment` provides the src/ghostrecon/services/sequencing/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `utcnow`, `session.get`, `ValueError`, `_enrollment_to_model_with_emails`; uses database session queries, serialization/projection, time calculations.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `ValueError`; may return `None` for not-found or unavailable data.
@@ -123,7 +123,7 @@ Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `s
 
 - Inputs: `enrollment_id` (str), `request` (SequenceEnrollmentActionRequest), `actor` (str), `settings` (Settings | None)
 - Output: Returns `SequenceEnrollmentOut | None`; callers must handle the documented not-found or unavailable path.
-- Why: `cancel_sequence_enrollment` provides the src/ghostrecon/services/sequencing.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `cancel_sequence_enrollment` provides the src/ghostrecon/services/sequencing/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_set_enrollment_status`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data.
@@ -141,7 +141,7 @@ Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `s
 
 - Inputs: `enrollment_id` (str), `settings` (Settings | None), `sender` (SmtpSender | None)
 - Output: Returns `dict[str, object]`.
-- Why: `send_next_sequence_step` provides the src/ghostrecon/services/sequencing.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `send_next_sequence_step` provides the src/ghostrecon/services/sequencing/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `get_settings`, `StdlibSmtpSender`, `session_scope`, `_domain_from_email`, `lower`, `utcnow`, `_enqueue_event`, `session.get`; uses database session queries, outbox/event emission, parsing/normalization, policy validation, serialization/projection, time calculations.
 - Side effects: adds outbox/event records; runs asynchronously and may await database or provider operations.
 - Failures: raises `ValueError`; catches provider or validation errors and maps them to the module contract.
@@ -168,7 +168,7 @@ Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `s
 
 - Inputs: `limit` (int), `settings` (Settings | None), `poller` (ImapPoller | None)
 - Output: Returns `dict[str, object]`.
-- Why: `poll_inbound_email_events` provides the src/ghostrecon/services/sequencing.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `poll_inbound_email_events` provides the src/ghostrecon/services/sequencing/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `imap_poller.poll`, `get_settings`, `StdlibImapPoller`, `processed.append`, `uuid4`, `process_inbound_email_event`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -420,7 +420,7 @@ Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `s
 
 - Inputs: No external inputs.
 - Output: Returns `datetime`.
-- Why: `utcnow` provides the src/ghostrecon/services/sequencing.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `utcnow` provides the src/ghostrecon/services/sequencing/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `datetime.now`; uses time calculations.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -530,3 +530,13 @@ Sequencing Service is implemented by `src/ghostrecon/services/sequencing.py`, `s
 
 - `tests/unit/test_sequence_eligibility.py`
 - `tests/unit/test_sequence_runtime.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database, Attio, SMTP, IMAP, and Google Calendar. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

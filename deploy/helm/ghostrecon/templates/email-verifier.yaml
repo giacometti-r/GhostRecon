@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
         - name: email-verifier
-          image: "{{ .Values.emailVerifier.image.repository }}:{{ .Values.emailVerifier.image.tag }}"
+          image: "{{ .Values.emailVerifier.image.repository }}{{ if .Values.emailVerifier.image.digest }}@{{ .Values.emailVerifier.image.digest }}{{ else }}:{{ .Values.emailVerifier.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.emailVerifier.image.pullPolicy }}
           ports:
             - containerPort: 8080

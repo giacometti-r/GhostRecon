@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Governance Service is implemented by `src/ghostrecon/services/governance.py`. It is exposed through `governance_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Governance Service is implemented by `src/ghostrecon/services/governance/`. It is exposed through `governance_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 ## Route Surface
 
@@ -41,7 +41,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 
 ## Function Reference
 
-### `src/ghostrecon/services/governance.py`
+### `src/ghostrecon/services/governance/`
 
 #### Module Functions
 
@@ -76,7 +76,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 
 - Inputs: `candidate_id` (str), `request` (ReviewDecisionRequest), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
 - Output: Returns `ReviewDecision | None`; callers must handle the documented not-found or unavailable path.
-- Why: `approve_review_candidate` provides the src/ghostrecon/services/governance.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `approve_review_candidate` provides the src/ghostrecon/services/governance/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `_existing_decision`, `session.get`, `_approve_review_candidate_in_session`; uses database session queries, idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data.
@@ -85,7 +85,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 
 - Inputs: `candidate_id` (str), `request` (ReviewDecisionRequest), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
 - Output: Returns `ReviewDecision | None`; callers must handle the documented not-found or unavailable path.
-- Why: `reject_review_candidate` provides the src/ghostrecon/services/governance.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reject_review_candidate` provides the src/ghostrecon/services/governance/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `_existing_decision`, `session.get`, `_reject_review_candidate_in_session`; uses database session queries, idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data.
@@ -94,7 +94,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 
 - Inputs: `request` (BulkReviewDecisionRequest), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
 - Output: Returns `list[ReviewDecision]`.
-- Why: `bulk_decide_review_candidates` provides the src/ghostrecon/services/governance.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `bulk_decide_review_candidates` provides the src/ghostrecon/services/governance/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `any`, `all`, `ValueError`, `current_policy_hash`, `get`, `ReviewDecisionRequest`, `_existing_decision`; uses database session queries, idempotency lookup, policy validation.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: raises `ValueError`.
@@ -112,7 +112,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 
 - Inputs: `incident_id` (str), `request` (IncidentDecisionRequest), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
 - Output: Returns `ReviewDecision | None`; callers must handle the documented not-found or unavailable path.
-- Why: `corroborate_incident` provides the src/ghostrecon/services/governance.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `corroborate_incident` provides the src/ghostrecon/services/governance/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `_create_decision`, `_audit`, `_enqueue_event`, `_existing_decision`, `session.get`, `ValueError`, `session.flush`; uses database session queries, database writes, idempotency lookup, outbox/event emission, policy validation, serialization/projection.
 - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
 - Failures: raises `ValueError`; may return `None` for not-found or unavailable data.
@@ -121,7 +121,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 
 - Inputs: `incident_id` (str), `request` (IncidentDecisionRequest), `actor` (str), `idempotency_key` (str), `settings` (Settings | None)
 - Output: Returns `ReviewDecision | None`; callers must handle the documented not-found or unavailable path.
-- Why: `reject_incident` provides the src/ghostrecon/services/governance.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `reject_incident` provides the src/ghostrecon/services/governance/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `_create_decision`, `_audit`, `_enqueue_event`, `_existing_decision`, `session.get`, `ValueError`, `session.flush`; uses database session queries, database writes, idempotency lookup, outbox/event emission, policy validation, serialization/projection.
 - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
 - Failures: raises `ValueError`; may return `None` for not-found or unavailable data.
@@ -130,7 +130,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 
 - Inputs: `candidate` (ReviewCandidate)
 - Output: Returns `str`.
-- Why: `current_policy_hash` provides the src/ghostrecon/services/governance.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `current_policy_hash` provides the src/ghostrecon/services/governance/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `policy_snapshot_hash`; uses policy validation.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -139,7 +139,7 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 
 - Inputs: `candidate` (ReviewCandidate)
 - Output: Returns `list[str]`.
-- Why: `review_policy_blockers` provides the src/ghostrecon/services/governance.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `review_policy_blockers` provides the src/ghostrecon/services/governance/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `lower`, `blockers.append`, `snapshot.get`; uses parsing/normalization, policy validation.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -298,3 +298,13 @@ Governance Service is implemented by `src/ghostrecon/services/governance.py`. It
 ## Tests
 
 - `tests/unit/test_governance.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database only. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

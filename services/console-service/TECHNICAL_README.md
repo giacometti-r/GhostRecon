@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Console Service is implemented by `src/ghostrecon/console/app.py`, `src/ghostrecon/console/api.py`, `src/ghostrecon/console/components.py`, `src/ghostrecon/console/layouts.py`, `src/ghostrecon/console/callbacks.py`. It is exposed through `console_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Console Service is implemented by `src/ghostrecon/console/app.py`, `src/ghostrecon/console/api.py`, `src/ghostrecon/console/components.py`, `src/ghostrecon/console/layouts/`, `src/ghostrecon/console/callbacks/`. It is exposed through `console_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 Related/shared modules referenced by this service: `src/ghostrecon/service_apps/factory.py`.
 
@@ -375,7 +375,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 
-### `src/ghostrecon/console/layouts.py`
+### `src/ghostrecon/console/layouts/`
 
 #### Module Functions
 
@@ -401,7 +401,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any])
 - Output: Returns `html.Div`.
-- Why: `overview_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `overview_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_errors`, `_page`, `_safe_get`, `summary_tile`, `isinstance`, `get`, `html.Div`, `detail_panel`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -410,7 +410,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any]), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `events_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `events_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `payload.get`, `_page`, `_filtered`, `query_badges`, `_event_calendar`, `_event_map`, `records_table`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -419,7 +419,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `event_id` (str), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `event_detail_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `event_detail_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `payload.get`, `_page`, `detail_panel`, `records_table`, `metadata_details`, `participants.get`, `event.get`; uses policy validation.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -428,7 +428,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any]), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `incidents_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `incidents_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `payload.get`, `_page`, `_filtered`, `query_badges`, `_incident_chart`, `records_table`, `_pagination`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -437,7 +437,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `incident_id` (str), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `incident_detail_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `incident_detail_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `payload.get`, `_page`, `detail_panel`, `html.Div`, `metadata_details`, `_incident_actions`, `incident.get`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -446,7 +446,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any]), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `watchlists_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `watchlists_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `_page`, `_filtered`, `query_badges`, `records_table`, `_pagination`, `payload.get`, `_watch_actions`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -455,7 +455,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any]), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `review_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `review_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `_page`, `_filtered`, `query_badges`, `dcc.Link`, `html.Div`, `records_table`, `_pagination`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -464,7 +464,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any])
 - Output: Returns `html.Div`.
-- Why: `enrichment_review_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `enrichment_review_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `_page`, `_filtered`, `records_table`, `contacts.get`, `cases.get`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -473,7 +473,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any]), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `crm_exports_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `crm_exports_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `_page`, `_filtered`, `query_badges`, `records_table`, `_pagination`, `payload.get`, `_crm_target_actions`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -482,7 +482,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `batch_id` (str), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `crm_export_detail_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `crm_export_detail_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `_page`, `detail_panel`, `html.Div`, `records_table`, `_crm_batch_actions`, `batch.get`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -491,7 +491,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any]), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `sequences_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `sequences_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `_page`, `_filtered`, `query_badges`, `records_table`, `html.Div`, `payload.get`, `_sequence_actions`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -500,7 +500,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any]), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `meetings_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meetings_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `_page`, `_filtered`, `query_badges`, `records_table`, `_pagination`, `payload.get`, `dcc.Link`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -509,7 +509,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `meeting_id` (str), `role` (str)
 - Output: Returns `html.Div`.
-- Why: `meeting_detail_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `meeting_detail_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `payload.get`, `_page`, `detail_panel`, `html.Div`, `records_table`, `_meeting_actions`, `meeting.get`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -518,7 +518,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `client` (ConsoleApiClient), `params` (dict[str, Any])
 - Output: Returns `html.Div`.
-- Why: `source_health_page` provides the src/ghostrecon/console/layouts.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `source_health_page` provides the src/ghostrecon/console/layouts/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `_safe_get`, `_page`, `_filtered`, `query_badges`, `records_table`, `html.Div`, `_pagination`, `payload.get`; uses policy validation.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -721,7 +721,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
 
-### `src/ghostrecon/console/callbacks.py`
+### `src/ghostrecon/console/callbacks/`
 
 #### Module Functions
 
@@ -729,7 +729,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `dash_app` (Any), `settings` (Settings)
 - Output: Returns `None`; all useful effects occur through persistence, provider calls, mutation, or raised errors.
-- Why: `register_callbacks` provides the src/ghostrecon/console/callbacks.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `register_callbacks` provides the src/ghostrecon/console/callbacks/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `dash_app.callback`, `render_page`, `Output`, `Input`, `State`, `isinstance`, `perform_dashboard_action`, `_success_notice`.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: may return `None` for not-found or unavailable data; catches provider or validation errors and maps them to the module contract.
@@ -738,7 +738,7 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - Inputs: `action_id` (dict[str, Any]), `actor` (str), `role` (str | None), `settings` (Settings), `client` (ConsoleApiClient | None), `client_factory` (type[httpx.Client])
 - Output: Returns `str`.
-- Why: `perform_dashboard_action` provides the src/ghostrecon/console/callbacks.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `perform_dashboard_action` provides the src/ghostrecon/console/callbacks/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `normalize_role`, `ConsoleApiError`, `ConsoleApiClient.from_settings`, `api.post`, `_perform_incident_action`, `api.patch`, `_perform_meeting_action`, `action_id.get`; uses HTTP/provider IO, idempotency lookup, parsing/normalization, policy validation.
 - Side effects: calls external HTTP, SMTP, IMAP, DNS, or provider APIs.
 - Failures: raises `ConsoleApiError`.
@@ -793,3 +793,13 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 ## Tests
 
 - `tests/unit/test_console_dashboard.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns gateway URL only; it does not own or probe the database. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Console reports gateway configuration and never opens a direct database readiness connection.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

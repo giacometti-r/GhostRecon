@@ -94,9 +94,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("completed_at", sa.DateTime(timezone=True)),
-        sa.UniqueConstraint(
-            "idempotency_key", name="uq_sequence_enrollments_idempotency_key"
-        ),
+        sa.UniqueConstraint("idempotency_key", name="uq_sequence_enrollments_idempotency_key"),
     )
     op.create_index(
         "ix_sequence_enrollments_status_next",
@@ -176,18 +174,14 @@ def upgrade() -> None:
         sa.Column("idempotency_key", sa.String(length=255), nullable=False),
         sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint(
-            "idempotency_key", name="uq_inbound_email_events_idempotency_key"
-        ),
+        sa.UniqueConstraint("idempotency_key", name="uq_inbound_email_events_idempotency_key"),
     )
     op.create_index(
         "ix_inbound_email_events_type_occurred",
         "inbound_email_events",
         ["event_type", "occurred_at"],
     )
-    op.create_index(
-        "ix_inbound_email_events_from_email", "inbound_email_events", ["from_email"]
-    )
+    op.create_index("ix_inbound_email_events_from_email", "inbound_email_events", ["from_email"])
 
     op.create_table(
         "sequence_suppression_events",

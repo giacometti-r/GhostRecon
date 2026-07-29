@@ -3,7 +3,7 @@
 
 ## Architecture
 
-Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `src/ghostrecon/services/enrichment_workflows.py`, `src/ghostrecon/services/company_crawler.py`. It is exposed through `enrichment_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
+Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `src/ghostrecon/services/enrichment_workflows/`, `src/ghostrecon/services/company_crawler.py`. It is exposed through `enrichment_router` and, where handlers also have `gateway_router` decorators, through `gateway-service` as the same handler function.
 
 ## Route Surface
 
@@ -63,7 +63,7 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 - Side effects: calls external HTTP, SMTP, IMAP, DNS, or provider APIs; runs asynchronously and may await database or provider operations.
 - Failures: may return `None` for not-found or unavailable data; catches provider or validation errors and maps them to the module contract.
 
-### `src/ghostrecon/services/enrichment_workflows.py`
+### `src/ghostrecon/services/enrichment_workflows/`
 
 #### Classes
 
@@ -109,14 +109,14 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 - `async persist_email_candidates(payload: EmailCandidatePersistRequest, idempotency_key: str) -> list[EmailCandidateRecord]`
   - Inputs: `payload` (EmailCandidatePersistRequest), `idempotency_key` (str)
   - Output: Returns `list[EmailCandidateRecord]`.
-  - Why: `EnrichmentWorkflowRepository.persist_email_candidates` provides the src/ghostrecon/services/enrichment_workflows.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `EnrichmentWorkflowRepository.persist_email_candidates` provides the src/ghostrecon/services/enrichment_workflows/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `generate_email_candidates`, `self._resolve_email_contact_context`, `ValueError`, `self._email_patterns`, `EmailCandidateRecord`, `add`, `self._enqueue_event`, `records.append`; uses database session queries, database writes, idempotency lookup, outbox/event emission, policy validation. Persisted records retain pattern and verification workflow fields, not pre-verification confidence.
   - Side effects: mutates database state; adds outbox/event records; runs asynchronously and may await database or provider operations.
   - Failures: raises `ValueError`.
 - `async verify_email_candidates(payload: EmailVerifyBatchRequest, verifier: EmailVerifierClient) -> list[EmailCandidateRecord]`
   - Inputs: `payload` (EmailVerifyBatchRequest), `verifier` (EmailVerifierClient)
   - Output: Returns `list[EmailCandidateRecord]`.
-  - Why: `EnrichmentWorkflowRepository.verify_email_candidates` provides the src/ghostrecon/services/enrichment_workflows.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+  - Why: `EnrichmentWorkflowRepository.verify_email_candidates` provides the src/ghostrecon/services/enrichment_workflows/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
   - How: It calls `execute`, `result.scalars`, `classify_verification_result`, `utcnow`, `where`, `self._fetch_verification_results`, `verification_results.get`, `self._enqueue_event`; uses database session queries, idempotency lookup, outbox/event emission, policy validation, serialization/projection, time calculations.
   - Side effects: adds outbox/event records; runs asynchronously and may await database or provider operations.
   - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -190,7 +190,7 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 
 - Inputs: No external inputs.
 - Output: Returns `datetime`.
-- Why: `utcnow` provides the src/ghostrecon/services/enrichment_workflows.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `utcnow` provides the src/ghostrecon/services/enrichment_workflows/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `datetime.now`; uses time calculations.
 - Side effects: No durable side effects; work is limited to computation, validation, or projection.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -262,7 +262,7 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 
 - Inputs: `payload` (EmailCandidatePersistRequest), `idempotency_key` (str), `settings` (Settings | None)
 - Output: Returns `list[EmailCandidateRecord]`.
-- Why: `persist_email_candidates` provides the src/ghostrecon/services/enrichment_workflows.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `persist_email_candidates` provides the src/ghostrecon/services/enrichment_workflows/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `persist_email_candidates`, `EnrichmentWorkflowRepository`; uses idempotency lookup.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -271,7 +271,7 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 
 - Inputs: `payload` (EmailVerifyBatchRequest), `settings` (Settings | None)
 - Output: Returns `list[EmailCandidateRecord]`.
-- Why: `verify_email_candidates` provides the src/ghostrecon/services/enrichment_workflows.py behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
+- Why: `verify_email_candidates` provides the src/ghostrecon/services/enrichment_workflows/ behavior named by the function and is called by routes, workers, repositories, or adjacent helpers.
 - How: It calls `session_scope`, `EmailVerifierClient`, `verify_email_candidates`, `Settings`, `EnrichmentWorkflowRepository`.
 - Side effects: runs asynchronously and may await database or provider operations.
 - Failures: No explicit raises in the implementation; upstream callers still need to handle dependency errors from invoked helpers.
@@ -458,3 +458,13 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 
 - `tests/unit/test_enrichment_routes.py`
 - `tests/unit/test_enrichment_workflows.py`
+
+## Startup and dependency contract
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database; live OpenSERP search, HTTP email verifier, and identifying crawler user agent. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.

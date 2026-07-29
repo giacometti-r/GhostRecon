@@ -137,14 +137,14 @@ def test_meeting_routes_cover_handoff_runtime(monkeypatch) -> None:
     async def fake_retry(*args, **kwargs):
         return _meeting()
 
-    monkeypatch.setattr(routers, "get_calendar_availability", fake_availability)
-    monkeypatch.setattr(routers, "create_meeting", fake_create)
-    monkeypatch.setattr(routers, "list_meetings", fake_list)
-    monkeypatch.setattr(routers, "get_meeting", fake_get)
-    monkeypatch.setattr(routers, "generate_meeting_prep_packet", fake_prep)
-    monkeypatch.setattr(routers, "record_meeting_outcome", fake_outcome)
-    monkeypatch.setattr(routers, "cancel_meeting", fake_cancel)
-    monkeypatch.setattr(routers, "retry_meeting_crm_sync", fake_retry)
+    monkeypatch.setattr(routers.meetings, "get_calendar_availability", fake_availability)
+    monkeypatch.setattr(routers.meetings, "create_meeting", fake_create)
+    monkeypatch.setattr(routers.meetings, "list_meetings", fake_list)
+    monkeypatch.setattr(routers.meetings, "get_meeting", fake_get)
+    monkeypatch.setattr(routers.meetings, "generate_meeting_prep_packet", fake_prep)
+    monkeypatch.setattr(routers.meetings, "record_meeting_outcome", fake_outcome)
+    monkeypatch.setattr(routers.meetings, "cancel_meeting", fake_cancel)
+    monkeypatch.setattr(routers.meetings, "retry_meeting_crm_sync", fake_retry)
 
     client = TestClient(build_app(Settings(service_name="meeting-handoff-service")))
     headers = {"Idempotency-Key": "idem-meeting", "X-Actor": "analyst@example.com"}

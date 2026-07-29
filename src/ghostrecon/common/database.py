@@ -1,7 +1,7 @@
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from ghostrecon.common.config import Settings, get_settings
+from ghostrecon.common.synthetic_guard import enable_synthetic_persistence_guard
 
 
 class Base(DeclarativeBase):
@@ -24,7 +25,7 @@ class SchemaReadiness:
     ready: bool
     reason: str | None = None
     missing_tables: tuple[str, ...] = ()
-    error: str | None = None
+    error: str | None = field(default=None, repr=False)
 
 
 _engine: AsyncEngine | None = None
@@ -55,8 +56,10 @@ def get_session_factory(settings: Settings | None = None) -> async_sessionmaker[
 
 @asynccontextmanager
 async def session_scope(settings: Settings | None = None) -> AsyncIterator[AsyncSession]:
-    factory = get_session_factory(settings)
+    resolved = settings or get_settings()
+    factory = get_session_factory(resolved)
     async with factory() as session:
+        enable_synthetic_persistence_guard(session.sync_session, resolved.profile)
         try:
             yield session
             await session.commit()

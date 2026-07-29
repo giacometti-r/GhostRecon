@@ -194,3 +194,56 @@ Attio interaction runs through the CRM service's Attio API adapter.
 ## Escalation Evidence
 
 Every escalation should include correlation ID, service/source ID, canonical entity ID, fetch or outbox watermark, idempotency key, policy version, audit ID, timestamps in UTC, and the operator action already attempted. Do not attach unlicensed article bodies or prohibited personal data.
+
+## Configuration Failure and Release Evidence
+
+Run python -m ghostrecon.common.preflight --format json with the target
+GHOSTRECON_PROFILE and GHOSTRECON_SERVICE_NAME. Exit 2 means configuration is invalid. The output
+contains `status`, `profile`, `service`, named `checks`, and redacted `issues`. Each issue contains
+the setting name, stable error code, and remediation; never copy raw credentials into incident
+notes. Correct the named owned setting and rerun preflight before restarting.
+
+A not-ready response includes profile and named checks. Investigate only failed owned dependencies.
+Console has no direct database check. For staging/production, do not bypass fake-provider,
+placeholder, HTTPS, identifying-user-agent, RSA-key, or synthetic-persistence failures.
+
+Release evidence consists of quality/security results, disposable PostgreSQL migration validation,
+Chromium browser tests, immutable Helm renders, a high/critical Trivy report, SPDX and CycloneDX
+SBOMs, and protected-staging read-only/no-op provider results. A missing artifact or failed job
+blocks promotion.
+
+### Protected Staging Provider Evidence
+
+Run the `staging-release-evidence` workflow manually after its protected GitHub `staging`
+environment is approved. Configure these environment secrets:
+
+- `GHOSTRECON_DATABASE_URL`
+- `GHOSTRECON_REDIS_URL`
+- `GHOSTRECON_ATTIO_ACCESS_TOKEN`
+- `GHOSTRECON_OPENSERP_API_KEY`
+- `GHOSTRECON_SERPAPI_API_KEY`
+- `GHOSTRECON_GOOGLE_CLIENT_EMAIL`
+- `GHOSTRECON_GOOGLE_PRIVATE_KEY`
+- `GHOSTRECON_SMTP_USERNAME`
+- `GHOSTRECON_SMTP_PASSWORD`
+- `GHOSTRECON_IMAP_USERNAME`
+- `GHOSTRECON_IMAP_PASSWORD`
+
+Configure these environment variables:
+
+- `GHOSTRECON_GOOGLE_CALENDAR_ID`
+- `GHOSTRECON_SMTP_HOST`
+- `GHOSTRECON_SMTP_FROM_ADDRESS`
+- `GHOSTRECON_IMAP_HOST`
+- `GHOSTRECON_NOMINATIM_USER_AGENT`
+- `GHOSTRECON_CRAWL_USER_AGENT`
+- `GHOSTRECON_EMAIL_VERIFIER_URL`
+- `GHOSTRECON_OPENSERP_BASE_URL`
+
+The workflow validates the worker dependency contract, then performs bounded database and Redis
+readiness checks, provider HTTP reads, Google authentication, SMTP `NOOP`, and IMAP `NOOP`. Each
+individual check has a 20-second timeout and the job has a 10-minute timeout. The workflow always
+uploads the `staging-release-evidence` artifact. A completed validation step writes
+`preflight.json`, and a completed provider-check step writes `provider-checks.json`; an earlier
+failure can leave only the evidence produced before that failure. Any failed check blocks
+promotion.

@@ -32,9 +32,7 @@ def upgrade() -> None:
         sa.Column("completed_at", sa.DateTime(timezone=True)),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.UniqueConstraint(
-            "idempotency_key", name="uq_crm_export_batches_idempotency_key"
-        ),
+        sa.UniqueConstraint("idempotency_key", name="uq_crm_export_batches_idempotency_key"),
     )
     op.create_index(
         "ix_crm_export_batches_provider_status",

@@ -14,7 +14,7 @@ Scores leads and enrichment candidates, snapshots scoring policy, routes candida
 
 ## Implementation Modules
 
-- `src/ghostrecon/services/scoring.py`
+- `src/ghostrecon/services/scoring/`
 
 ## APIs And Jobs
 
@@ -54,3 +54,13 @@ GHOSTRECON_SERVICE_NAME=scoring-routing-service uvicorn ghostrecon.service_apps.
 ```bash
 pytest tests/unit/test_scoring.py
 ```
+
+## Runtime configuration
+
+Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database only. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.
+
+Readiness returns status, service, profile, and named checks. Database-owning APIs verify the migrated schema; configured provider checks are named without exposing credentials.
+
+Synthetic/demo adapters and deterministic inferred domains are local-only. Tests may inject fakes under the test profile; staging and production reject fake injection and exact synthetic lineage markers before persistence.
+
+Run python -m ghostrecon.common.preflight --format json with GHOSTRECON_SERVICE_NAME set to this process before launch.
