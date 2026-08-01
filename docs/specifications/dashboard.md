@@ -13,7 +13,7 @@ Sprint 12 implements the UI with Python Dash mounted at `/` inside `console-serv
 - Host Python Dash from `console-service` so operators still use one internal dashboard service.
 - Keep Dash read callbacks on `/v1/reporting/*`, `/v1/reporting/kpis/catalog`, `/v1/kpis/catalog`, and documented owning read APIs such as `/v1/sequences/*`.
 - Route mutation callbacks through gateway/owning APIs, never reporting projections or canonical tables.
-- Propagate `X-Actor`, `X-Operator-Role`, idempotency keys, reason text, and optimistic versions to owning APIs.
+- In the current local/test demo, propagate legacy `X-Actor`, `X-Operator-Role`, idempotency keys, reason text, and optimistic versions to owning APIs. Strict staging/production profiles reject the identity headers; OIDC sessions and authenticated propagation remain Sprint 25b work.
 - Do not create an independent dashboard datastore or direct canonical-table access from UI callbacks.
 - Treat the dashboard as the operator control plane: stale source visibility, review safety, CRM-export separation, and auditability are required product behavior, not optional visual polish.
 
@@ -242,7 +242,7 @@ Sequencing write/read actions use the owning `/v1/sequences/*` APIs through the 
 
 Event create/edit actions use `POST /v1/intelligence/events/manual` and `PATCH /v1/intelligence/events/{event_id}` with idempotency keys and optimistic event versions. Incident actions use `POST /v1/intelligence/incidents/manual`, `POST /v1/governance/incidents/{incident_id}/corroborate`, `POST /v1/governance/incidents/{incident_id}/reject`, `POST /v1/governance/incidents/{incident_id}/revert`, and `POST /v1/intelligence/incidents/{incident_id}/promote-to-watchlist`, all through the gateway and owner services.
 
-Each response includes `generated_at`, source watermark(s), projection version, stale boolean, and degraded dependencies. Collection endpoints accept `limit`, `cursor`, stable filters, and operator role context through `X-Operator-Role`. Write actions call the owning feature service through the gateway, not reporting projections.
+Each response includes `generated_at`, source watermark(s), projection version, stale boolean, and degraded dependencies. Collection endpoints accept `limit`, `cursor`, and stable filters. The current local/test dashboard also sends legacy operator role context through `X-Operator-Role`; strict staging/production rejects it, and the new Sprint 25 permission model is not yet connected to route or projection enforcement. Write actions call the owning feature service through the gateway, not reporting projections.
 
 ## KPI Families
 
@@ -265,6 +265,16 @@ Each response includes `generated_at`, source watermark(s), projection version, 
 - Stale evidence or policy projection blocks approval/export when the owning policy requires current state.
 - Long-running actions return an operation/batch ID; the UI polls bounded status endpoints and can be safely refreshed.
 - A failed mutation displays correlation/audit ID and whether retry is safe; it never silently repeats a write.
+
+## Sprint 25a Security Boundary
+
+The shared HTTP perimeter now applies to the console and gateway. In staging/production it rejects
+legacy actor/role headers and reserved internal OBO/service-authorization headers, adds security
+response headers, and applies transport bounds. The dashboard still renders a demo role selector
+and sends the legacy headers, so the current UI authentication/authorization flow is local/test-only.
+The new role/permission and assurance primitives are not yet wired to Dash callbacks, API routes,
+sessions, or denied/expired/step-up UX. `/docs`, `/metrics`, readiness, and owner-service routes also
+remain outside operation-policy enforcement.
 
 ## Accessibility and Security
 

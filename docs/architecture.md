@@ -56,11 +56,11 @@ flowchart TD
 | Sequencing | Separate outreach approval, sequence templates/enrollments, SMTP/IMAP execution, reply/bounce/unsubscribe handling, send rate limits | CRM export, meeting handoff, source acquisition |
 | Meeting handoff | Google Calendar booking, AE/SE prep packets, meeting outcomes, follow-up tasks, CRM sync state | Source acquisition, CRM export approval, outreach execution |
 
-The existing `ingestion-service` remains for source imports and other compatibility intake. It is not the primary acquisition path. Attio interaction is handled through the CRM service's Attio API adapter. Sprint 3 implements the shared `SourceDefinition` / `RawSourceItem` foundation, adapter helpers, source-health API, source-ingestion events, and source-fetch Celery task. Sprint 4 implements event intelligence; Sprint 5 implements incident article discovery, candidate incident detection, corroboration inputs, and watchlists; Sprint 6 implements entity resolution, permitted contact enrichment, persisted email candidates, verification payloads, and minimal review routing; Sprint 7 implements versioned scoring, governance review decisions, incident analyst decisions, suppression persistence, and non-exported CRM targets; Sprint 8 implements query-backed reporting read APIs and dashboard freshness/degraded metadata; Sprint 9 implements CRM export batches/items; Sprint 10 implements sequencing and outbound state; Sprint 11 implements Google Calendar meeting handoff, prep packets, outcomes, follow-up tasks, and meeting reporting read APIs; Sprint 12 implements the Python Dash operator dashboard in `console-service`; Sprints 17 and 18 implement geocoded event create/edit workflows, durable participant enrichment queueing, company-specific incident governance, revert, and corroborated-only company watch promotion; Sprints 19 and 20 add watchlist detail/contact discovery/hourly monitoring plus realistic analyst-review demo data and company-domain discovery.
+The existing `ingestion-service` remains for source imports and other compatibility intake. It is not the primary acquisition path. Attio interaction is handled through the CRM service's Attio API adapter. Sprint 3 implements the shared `SourceDefinition` / `RawSourceItem` foundation, adapter helpers, source-health API, source-ingestion events, and source-fetch Celery task. Sprint 4 implements event intelligence; Sprint 5 implements incident article discovery, candidate incident detection, corroboration inputs, and watchlists; Sprint 6 implements entity resolution, permitted contact enrichment, persisted email candidates, verification payloads, and minimal review routing; Sprint 7 implements versioned scoring, governance review decisions, incident analyst decisions, suppression persistence, and non-exported CRM targets; Sprint 8 implements query-backed reporting read APIs and dashboard freshness/degraded metadata; Sprint 9 implements CRM export batches/items; Sprint 10 implements sequencing and outbound state; Sprint 11 implements Google Calendar meeting handoff, prep packets, outcomes, follow-up tasks, and meeting reporting read APIs; Sprint 12 implements the Python Dash operator dashboard in `console-service`; Sprints 17 and 18 implement geocoded event create/edit workflows, durable participant enrichment queueing, company-specific incident governance, revert, and corroborated-only company watch promotion; Sprints 19 and 20 add watchlist detail/contact discovery/hourly monitoring plus realistic analyst-review demo data and company-domain discovery. Sprint 25a adds shared security primitives, perimeter middleware, security persistence, expanded audit context, and dormant initial RLS policies without changing the existing service topology.
 
 ## Runtime Pattern
 
-- FastAPI services receive HTTP traffic and expose OpenAPI contracts.
+- FastAPI services receive HTTP traffic and currently expose OpenAPI contracts. The Sprint 25a policy registry does not yet restrict `/docs`, `/redoc`, or `/openapi.json`.
 - Celery workers process source fetches, parsing, enrichment, watchlist monitoring, verification, projection, export, sequence sends, inbound email polling, and replay.
 - Celery workers also expose meeting CRM-sync retry tasks for failed outcome/follow-up handoff syncs.
 - PostgreSQL stores canonical entities, source/evidence lineage, audit history, suppression state, export state, and transactional outbox rows.
@@ -68,9 +68,28 @@ The existing `ingestion-service` remains for source imports and other compatibil
 - `console-service` remains the only dashboard UI, mounts the Python Dash app at `/`, consumes reporting/gateway reads, and sends writes only through owning gateway APIs.
 - Helm deploys implemented microservices independently. Event, incident, enrichment, email-intelligence, CRM, sequencing, meeting-handoff, governance, console, reporting, gateway, and ingestion services are registered in the chart; the shared source registry foundation remains in the common package.
 
+## Security Foundation Pattern
+
+All FastAPI applications install the shared Sprint 25a perimeter. It assigns a bounded correlation
+ID, checks aggregate headers, query length, and declared `Content-Length`, rejects legacy identity
+and reserved internal headers in strict profiles, and adds security response headers. It is a
+transport boundary, not authentication or authorization middleware.
+
+The security package defines immutable normalized identity, additive permissions and assurance,
+OIDC/RSA and internal Ed25519 validation helpers, opaque session/CSRF secrets, and an initial
+operation-policy registry. None is yet bound end to end to gateway routes, owner services, workers,
+or repositories. The current console/gateway actor and role flow therefore remains local/test-only;
+staging/production rejects those headers before replacement OIDC/session propagation exists.
+
+PostgreSQL now has security principals, role bindings, sessions, emergency grants, replay markers,
+policy versions, and expanded audit identity/decision fields. Transaction-local context uses bound
+`set_config(..., true)` calls. Migration `0015_security_foundation` creates three SELECT policies but
+does not enable or force RLS, provision runtime roles, or cover application tables. See [the security
+foundation reference](security-foundation.md) for the exact boundary.
+
 ## Canonical and Contract Pattern
 
-- `SourceDefinition` and `RawSourceItem` are implemented as the shared ingestion foundation. Canonical intelligence and workflow entities now include `CyberEvent`, `EventParticipant`, `NewsArticle`, `SecurityIncident`, `WatchTarget`, `EntityResolutionCase`, `ContactEnrichmentCandidate`, `OrganizationEmailPattern`, `ReviewCandidate`, `CandidateScore`, `ReviewDecision`, `CrmTarget`, `CrmExportBatch`, `CrmExportItem`, `Sequence`, `SequenceStep`, `SequenceEnrollment`, `OutboundEmail`, `InboundEmailEvent`, `SequenceSuppressionEvent`, `MeetingHandoff`, `MeetingPrepPacket`, and `MeetingFollowUpTask`.
+- `SourceDefinition` and `RawSourceItem` are implemented as the shared ingestion foundation. Canonical intelligence and workflow entities now include `CyberEvent`, `EventParticipant`, `NewsArticle`, `SecurityIncident`, `WatchTarget`, `EntityResolutionCase`, `ContactEnrichmentCandidate`, `OrganizationEmailPattern`, `ReviewCandidate`, `CandidateScore`, `ReviewDecision`, `CrmTarget`, `CrmExportBatch`, `CrmExportItem`, `Sequence`, `SequenceStep`, `SequenceEnrollment`, `OutboundEmail`, `InboundEmailEvent`, `SequenceSuppressionEvent`, `MeetingHandoff`, `MeetingPrepPacket`, and `MeetingFollowUpTask`. Security foundation entities include `SecurityPrincipal`, `SecurityRoleBinding`, `SecuritySession`, `SecurityEmergencyGrant`, `SecurityReplayMarker`, and `SecurityPolicyVersion`.
 - All canonical entities retain GhostRecon IDs, source URLs, fetch timestamps, hashes, permission/licensing state, and evidence references.
 - Lead sources include `cyber_event` and `security_incident` in addition to existing sources.
 - Mutating APIs require an idempotency key; mutable event and incident workflows also use optimistic versions where the owning service can conflict.
@@ -115,4 +134,4 @@ production reject exact synthetic provider/lineage markers before flush.
 
 Helm mirrors service credential ownership with per-key projections. Strict chart profiles require
 digest-addressed application, datastore, and verifier images and run configuration preflight before
-migration/rollout hooks.
+migration/rollout hooks. Helm does not yet project OIDC/session keys or per-workload Ed25519 credentials, provision security database roles, or enforce the target gateway-only topology.

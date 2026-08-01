@@ -42,7 +42,16 @@ Serves the Dash operator console, queries reporting/gateway APIs, renders pages,
 - DashIconify.
 - httpx.
 - gateway/reporting APIs.
-- dashboard role headers.
+- legacy dashboard role headers in local/test only; strict profiles reject them.
+
+## Sprint 25a Security Boundary
+
+The console still renders demo role state and sends legacy actor/role context to the gateway. This is
+local/test compatibility behavior only: the shared perimeter rejects those headers in staging and
+production, while OIDC sessions, authenticated console workload identity, represented-user
+propagation, CSRF, and denied/expired/step-up UX remain Sprint 25b work. The console must not be
+described or exposed as a production-authenticated UI yet. See the [security foundation
+reference](../../docs/security-foundation.md).
 
 ## Operations
 

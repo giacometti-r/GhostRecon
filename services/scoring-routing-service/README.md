@@ -29,6 +29,15 @@ Scores leads and enrichment candidates, snapshots scoring policy, routes candida
 - outbox events.
 - review candidate table.
 
+## Shared Sprint 25a Security Perimeter
+
+This FastAPI service inherits the shared transport perimeter: correlation IDs, declared
+body/header/query bounds, security response headers, and strict-profile rejection of legacy identity
+or untrusted internal security headers. This is not owner-service authentication or route
+authorization. Direct service access, workload verification, OBO enforcement, complete operation
+classification, and active RLS remain Sprint 25b work. See the [security foundation
+reference](../../docs/security-foundation.md).
+
 ## Operations
 
 - Treat idempotency headers as required where route handlers declare `Idempotency-Key`.

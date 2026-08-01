@@ -124,6 +124,17 @@ Do not redirect decrypted Helm output to a tracked file. Helm stores rendered
 Kubernetes Secrets in release metadata, so cluster access to Helm release Secrets
 must be restricted with RBAC.
 
+## Sprint 25a Security Secrets Boundary
+
+No Helm values or application settings currently exist for OIDC client/session secrets, Ed25519
+workload private keys, trust bundles, OBO keys, security audit-integrity keys, Redis security ACLs,
+or separate database runtime roles. Sprint 25a defines code and schema primitives only. Do not add
+ad hoc names to encrypted values or reuse provider/database credentials as security keys.
+
+Sprint 25b must define per-workload ownership, file mounts or a replaceable credential provider,
+rotation overlap/removal, session-HMAC rotation, trust-bundle distribution, Redis namespaces/ACLs,
+database-role credentials, and redacted operational procedures before these secrets are deployable.
+
 ## Provider Credential Ownership
 
 Store provider tokens, passwords, private keys, and credential-bearing database/Redis URLs only in

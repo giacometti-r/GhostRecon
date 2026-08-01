@@ -398,6 +398,14 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 - `tests/unit/test_source_adapters.py`
 - `tests/unit/test_attio_signature.py`
 
+## Shared Sprint 25a Security Perimeter
+
+This service inherits correlation, transport bounds, security response headers, and strict-profile
+reserved-header rejection from `create_base_app`. These behaviors are not owner-service
+authentication or authorization. Direct-service restrictions, workload/OBO verification, complete
+operation classification, database context installation, and active RLS remain Sprint 25b work. See
+the [security foundation reference](../../docs/security-foundation.md).
+
 ## Startup and dependency contract
 
 Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database only. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.

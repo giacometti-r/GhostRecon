@@ -459,6 +459,14 @@ Enrichment Service is implemented by `src/ghostrecon/services/enrichment.py`, `s
 - `tests/unit/test_enrichment_routes.py`
 - `tests/unit/test_enrichment_workflows.py`
 
+## Shared Sprint 25a Security Perimeter
+
+This service inherits correlation, transport bounds, security response headers, and strict-profile
+reserved-header rejection from `create_base_app`. These behaviors are not owner-service
+authentication or authorization. Direct-service restrictions, workload/OBO verification, complete
+operation classification, database context installation, and active RLS remain Sprint 25b work. See
+the [security foundation reference](../../docs/security-foundation.md).
+
 ## Startup and dependency contract
 
 Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database; live OpenSERP search, HTTP email verifier, and identifying crawler user agent. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.

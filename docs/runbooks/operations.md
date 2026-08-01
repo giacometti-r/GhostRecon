@@ -1,12 +1,13 @@
 # Operations Runbook
 
-This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, Sprint 12 Dash console runtime, Sprint 17 event dashboard workflow, Sprint 18 incident governance/watchlist workflow, Sprint 19 watchlist monitoring/contact discovery, Sprint 20 domain discovery/demo data, and the remaining intelligence-first target state for later sprints.
+This runbook covers the implemented platform baseline, Sprint 3 source registry foundation, Sprint 4 event intelligence runtime, Sprint 5 incident intelligence/watchlist runtime, Sprint 9 CRM export runtime, Sprint 10 sequencing runtime, Sprint 11 Google Calendar meeting handoff runtime, Sprint 12 Dash console runtime, Sprint 17 event dashboard workflow, Sprint 18 incident governance/watchlist workflow, Sprint 19 watchlist monitoring/contact discovery, Sprint 20 domain discovery/demo data, Sprint 25a security-foundation behavior, and the remaining intelligence-first target state for later sprints.
 
 ## Health and Freshness
 
 - `/healthz`: process liveness.
-- `/readyz`: dependency readiness.
-- `/metrics`: Prometheus metrics.
+- `/readyz`: dependency readiness; currently mounted without Sprint 25 operation-policy enforcement.
+- `/metrics`: Prometheus metrics; currently mounted without metrics-collector authentication.
+- `/docs`, `/redoc`, and `/openapi.json`: currently mounted even though the target operation policy marks production documentation disabled.
 - `GET /v1/intelligence/sources/health`: source checkpoint, last-success, lag, error, freshness, enabled/degraded, and policy state for registered sources.
 - Dashboard responses must expose `generated_at`, data-window end, and stale/degraded markers.
 - Meeting reporting responses expose meeting watermarks and CRM sync failure state; process health does not prove Google Calendar or Attio meeting sync is current.
@@ -97,11 +98,27 @@ Do not equate process health with data freshness. A service can be live while it
 ### Dash Console Outage or Callback Failures
 
 1. Check `console-service` `/healthz`, `/readyz`, and pod/container logs separately from `gateway-service` and `reporting-service`.
-2. Confirm `GHOSTRECON_GATEWAY_BASE_URL`, `GHOSTRECON_CONSOLE_REQUEST_TIMEOUT_SECONDS`, and any ingress/proxy headers for `X-Actor` and `X-Operator-Role`.
-3. If pages render but actions fail, inspect the owning service route, status code, idempotency key, actor, role, optimistic version, and audit/correlation ID.
+2. Confirm `GHOSTRECON_GATEWAY_BASE_URL` and `GHOSTRECON_CONSOLE_REQUEST_TIMEOUT_SECONDS`. `X-Actor` and `X-Operator-Role` are legacy local/test inputs; strict staging/production profiles reject them.
+3. If pages render but actions fail locally, inspect the owning service route, status code, idempotency key, actor, role, optimistic version, and audit/correlation ID. In staging/production, a `reserved_identity_header` response means the replacement OIDC/session flow is not yet available; do not bypass the perimeter.
 4. If participant enrichment buttons do not disable after queueing, inspect `/v1/enrichment/contact-candidates?origin_type=event_participant&origin_id=...` for durable queue state.
 5. If reporting callbacks time out, keep the stale/degraded banner visible and avoid bypassing the console by mutating canonical tables.
 6. Source-health pause/replay/acknowledge controls are intentionally read-only until owning source-operations APIs are implemented.
+
+### Security Perimeter or Strict-Profile Identity Failure
+
+1. Record the returned `correlation_id` and stable error `code`; do not attach credential values.
+2. `headers_too_large` (431), `query_too_large` (414), and `body_too_large` (413) are transport
+   bounds. The body check covers declared `Content-Length`; do not assume streamed/chunked bodies
+   are fully bounded yet.
+3. `reserved_identity_header` (400) means a strict staging/production request supplied a legacy
+   actor or role header. Remove the header; do not allowlist it or downgrade the runtime profile.
+4. `reserved_internal_header` (400) means an OBO or service-authorization header arrived without a
+   trusted internal-request verifier. No verifier is wired in Sprint 25a, so internal signed traffic
+   is not production-ready.
+5. The presence of security response headers does not prove authentication, route authorization,
+   CSRF, CORS, rate limiting, or active RLS.
+6. Escalate production operator-flow failures as a Sprint 25b integration blocker rather than
+   bypassing identity checks or calling owner services directly.
 
 ### Attio API Export Failures
 
@@ -194,6 +211,18 @@ Attio interaction runs through the CRM service's Attio API adapter.
 ## Escalation Evidence
 
 Every escalation should include correlation ID, service/source ID, canonical entity ID, fetch or outbox watermark, idempotency key, policy version, audit ID, timestamps in UTC, and the operator action already attempted. Do not attach unlicensed article bodies or prohibited personal data.
+
+## Sprint 25a Migration and Rollback
+
+Migration `0015_security_foundation` creates six security tables, adds audit columns/indexes, and
+creates three dormant SELECT policies. It does not enable or force RLS, provision runtime database
+roles, or protect application tables. Validate the upgrade on disposable PostgreSQL before
+promotion.
+
+The current downgrade removes only the three policies; it does not drop the new tables, audit
+columns, or indexes. Treat the migration as roll-forward-only, preserve a verified database backup,
+and do not advertise or execute a schema downgrade as a complete rollback until the migration is
+fixed. Rollback to older application images must remain schema-compatible.
 
 ## Configuration Failure and Release Evidence
 

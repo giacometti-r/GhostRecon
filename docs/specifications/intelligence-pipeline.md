@@ -119,7 +119,7 @@ All IDs are GhostRecon-generated UUIDs unless an external identifier is explicit
 | `MeetingPrepPacket` | `id`, meeting ID, account summary, stakeholder map, security priorities, suggested questions, risks, source snapshot, generator, idempotency key, and timestamps. |
 | `MeetingFollowUpTask` | `id`, meeting ID, title, description, owner, due time, status, CRM sync status/provider task ID/error, idempotency key, and timestamps. |
 
-Existing `Account`, `Contact`, `Lead`, `Signal`, `Suppression`, and `AuditEvent` records remain canonical workflow entities. Lead-source taxonomy adds `cyber_event` and `security_incident`.
+Existing `Account`, `Contact`, `Lead`, `Signal`, `Suppression`, and `AuditEvent` records remain canonical workflow entities. Sprint 25a adds `SecurityPrincipal`, `SecurityRoleBinding`, `SecuritySession`, `SecurityEmergencyGrant`, `SecurityReplayMarker`, and `SecurityPolicyVersion`; `AuditEvent` also gains verified human/service/OBO identity, operation/permission/decision, assurance, policy/mapping version, environment, request/correlation, bounded network metadata, and integrity-HMAC fields. These fields are schema foundation and are not yet populated by a centralized security-audit writer. Lead-source taxonomy adds `cyber_event` and `security_incident`.
 
 ## Normalization and Deduplication
 
@@ -253,7 +253,16 @@ Incident promotion accepts a body with the current optimistic `version`, require
 - `POST /v1/review/candidates/{candidate_id}/reject`
 - `POST /v1/review/candidates/bulk-decision`
 
-Implemented Sprint 7 review mutations require `Idempotency-Key`, `X-Actor`, reason code, optimistic version, and current policy evidence. Approval creates `CrmTarget` rows with `export_status=not_exported`; it does not call CRM providers or sequencing.
+Implemented Sprint 7 review mutations require `Idempotency-Key`, legacy `X-Actor`, reason code, optimistic version, and current policy evidence in local/test workflows. Strict staging/production now rejects caller identity headers before route handling; replacement verified identity propagation remains Sprint 25b work. Approval creates `CrmTarget` rows with `export_status=not_exported`; it does not call CRM providers or sequencing.
+
+### Sprint 25a Security Persistence Boundary
+
+Migration `0015_security_foundation` adds security principals, role bindings, digest-only session
+state, emergency grants, replay markers, policy versions, and expanded audit fields. It also creates
+three SELECT policies for principal, session, and audit access, but does not enable or force RLS.
+Application-table classification, scope columns, database roles/grants, CRUD policies, automatic
+transaction-context installation, reporting/export equivalence, and complete downgrade support are
+not implemented. See [the security foundation reference](../security-foundation.md).
 
 ### CRM Export
 

@@ -13,6 +13,7 @@ from ghostrecon.common.configuration import (
 )
 from ghostrecon.common.database import check_database_schema_ready
 from ghostrecon.common.logging import configure_logging
+from ghostrecon.security.perimeter import SecurityPerimeterMiddleware
 
 REQUEST_COUNT = Counter(
     "ghostrecon_http_requests_total",
@@ -38,6 +39,7 @@ def create_base_app(settings: Settings) -> FastAPI:
         openapi_url="/openapi.json",
     )
     app.add_middleware(MetricsMiddleware, service_name=settings.service_name)
+    app.add_middleware(SecurityPerimeterMiddleware, strict=settings.strict_runtime)
 
     @app.get("/healthz", tags=["system"])
     async def healthz() -> dict[str, str]:

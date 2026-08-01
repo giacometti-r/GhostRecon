@@ -2,7 +2,7 @@
 
 ## Current Stage
 
-Stage: Sprint 24 production configuration, no-synthetic enforcement, and release gates complete; Sprint 25 identity and API-perimeter work is next. The local Compose stack now has repeatable reset, migration, linked deterministic fake data, dashboard workflow coverage, watchlist monitoring scheduling, sequence definition/import workflows, and health-check commands for validating a ready local demo without manual database commands.
+Stage: Sprint 25a security-foundation primitives are implemented and covered by focused unit tests; Sprint 25b production identity, workload trust, active RLS, and perimeter integration is next, followed by Sprint 25c shared-SaaS tenant isolation and privileged-support controls. The current gateway and console still use legacy local/test identity flows, while strict staging/production profiles reject caller-supplied identity headers before replacement OIDC and service-authentication middleware exists. GhostRecon remains local/synthetic-only: do not process real personal data, enable live providers, install production credentials, expose services externally, or market the runtime as enterprise-ready until the applicable enterprise security release gates below pass with recorded evidence.
 
 The repository contains the production-oriented microservice scaffold, shared Python package, Docker/Compose setup, Helm chart, canonical persistence schema, source registry foundation, tests, and service documentation. Runtime implementation of the intelligence-first roadmap now includes shared source ingestion primitives, event-domain intelligence discovery, incident-news monitoring with watchlists, entity resolution, contact enrichment, persisted email candidates, verification payloads, versioned scoring, incident corroboration/rejection, suppression persistence, approval/rejection decisions, audit/outbox events, CRM export batches/items, reporting-service dashboard read APIs with freshness/degraded metadata, the first persisted sequencing runtime for separately approved outreach, persisted Google Calendar meeting handoff with prep packets, outcomes, follow-up tasks, CRM sync state, meeting reporting read APIs, and the first Python Dash operator dashboard mounted in `console-service`.
 
@@ -232,6 +232,19 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Fixed the 26 visible MyPy failures and the Bandit OAuth constant finding without new ignores or widened exclusions.
 - Published ADR, architecture, operations, Helm/secrets, Kubernetes, root, and per-service runtime documentation.
 
+### Sprint 25a - Security Foundation Primitives
+
+- Added immutable normalized human/service/worker identity context, additive viewer/analyst/governance-reviewer/administrator permissions, assurance checks, recent-authentication checks, and default denial for unknown roles.
+- Added Ed25519 service-token and 45-second operation-bound on-behalf-of claim helpers plus strict issuer, subject, audience, purpose, lifetime, key-ID, and signature validation primitives.
+- Added generic RSA OIDC metadata, PKCE S256 transaction, safe return-path, bounded JSON/JWKS, and ID-token validation helpers without adding production login, callback, discovery, or session repositories.
+- Added opaque session and CSRF secret generation using 256-bit-or-stronger HMAC keys and host-only cookie names.
+- Added the initial code-owned `OperationPolicy` registry for authentication, session, security administration, audit, health, readiness, metrics, and documentation operations. The registry is declarative and is not yet bound to the route set.
+- Added application-wide transport perimeter middleware with correlation IDs, declared body/header/query bounds, reserved-header rejection in staging/production, and security response headers. It does not implement authentication, authorization, CSRF, CORS, distributed rate limiting, trusted-proxy validation, or chunked-body accounting.
+- Added security principal, role-binding, session, emergency-grant, replay-marker, and policy-version models, expanded audit identity/decision columns, and transaction-local PostgreSQL security context helpers.
+- Added migration `0015_security_foundation`. It creates three security-table/audit SELECT policies but intentionally does not enable or force RLS; its downgrade currently drops only those policies and is not a complete schema rollback.
+- Added 14 focused unit tests for roles, assurance, immutable identity, internal JWT/OBO primitives, session secrets, OIDC validation, perimeter behavior, and the initial operation registry.
+- Published the [security foundation reference](docs/security-foundation.md), [provisional ADR](docs/adr/0006-security-foundation.md), and [foundation evidence report](docs/reports/sprint-25a-security-foundation.md). The complete target requirements remain preserved in [SPRINT_25.md](SPRINT_25.md).
+
 ## Baseline Acceptance Criteria
 
 - `make test` passes in a fully provisioned Python environment.
@@ -240,45 +253,209 @@ The repository contains the production-oriented microservice scaffold, shared Py
 - Every documented service has a local `README.md` and `TECHNICAL_README.md`.
 - The runtime baseline remains provider-neutral above `CrmClient` and does not require a paid enrichment API.
 
+## Enterprise Security Release Gates
+
+These gates are cumulative and override individual sprint language that otherwise permits live-provider or real-data acceptance. A sprint is not enterprise evidence merely because unit tests, Bandit, Ruff, MyPy, Helm lint, image scanning, or the local demo pass. Each control requires production-shaped negative tests and criterion-to-evidence reporting.
+
+| Control | Current risk | Owner sprint | E1 live-data requirement | E2 enterprise-production requirement | Required evidence |
+| --- | --- | --- | --- | --- | --- |
+| Human authentication and operation authorization | Routes, sensitive reports, and mutations are not yet protected by verified identity and route-bound policy | 25b | Required | Required | Complete operation inventory; 401/403/step-up negative tests; no caller-controlled actor/role paths |
+| Workload, owner-service, and task trust | Owner services and Celery work do not yet enforce distinct authenticated callers, signed delegation, or replay protection | 25b | Required | Required | Service-boundary and task-signature tests; key rotation; replay and wrong-audience rejection |
+| Shared-SaaS tenant isolation | Only a default workspace identity field exists; domain records, sessions, caches, queues, integrations, and reports are not tenant-isolated | 25c | Required | Required | Forced-RLS and cross-boundary isolation suite for shared and dedicated placement |
+| Database least privilege and RLS | Runtime roles share owner-capable database access; policies are not enabled or forced | 25b-25c | Required | Required | Non-owner roles, missing-context denial, forced CRUD RLS, pooled-connection cleanup, query-plan evidence |
+| Authoritative verification and policy | Callers can currently supply favorable email-verification results and policy snapshots | 25b, 30, 34 | Minimum authoritative controls required | Complete policy administration, retention, DSR, holds, and integrity required | Forged-result/snapshot rejection and authoritative-version evidence |
+| Provider transport and outbound-request safety | Mail TLS does not explicitly verify certificates/hostnames; source/crawl paths lack complete SSRF and response bounds | 26, 28-30, 32 | Required before each affected provider is enabled | Required | Invalid-certificate, private-address, redirect, rebinding, content-type, timeout, and size-limit tests |
+| Rate, body, error, docs, and metrics perimeter | Chunked bodies, distributed rate limits, uniform redaction, protected system endpoints, and bounded path labels are incomplete | 25b, 33 | Required | Required | Abuse tests, streamed-body enforcement, protected docs/metrics, cardinality and redaction evidence |
+| Privacy, audit, and privileged access | Audit identity/integrity fields, tenant-aware DSR/retention, and time-bounded support access are incomplete | 25c, 34 | Enforced identity/audit/support baseline required | Full privacy and tamper-evidence workflows required | Tenant-bound audit, support-grant expiry, DSR/hold, alteration/gap detection, compliance review |
+| Platform, recovery, and software supply chain | Application NetworkPolicies, HA/restore evidence, reproducible dependencies, signed provenance, and product-security governance are incomplete | 35 | Staging-grade isolation and secret handling required | Required | Helm negative renders, SBOM/signature/provenance, vulnerability policy, restore/DR/load exercises, penetration test |
+
+### E0 - Local and synthetic only
+
+- Current state. Use deterministic local/test identities, providers, and data only.
+- Docker Compose, bundled stores, public development ports, placeholder secrets, mutable local images, and local demo roles are never production patterns.
+- No real personal data, production tenant data, customer credentials, live mail, live CRM, public-source crawling, externally reachable ingress, or customer-facing availability claim is allowed.
+
+### E1 - Controlled live-data staging
+
+- Complete Sprints 25b and 25c and the minimum authoritative verification/policy, provider TLS, outbound-request, audit, and perimeter controls in the matrix before any real personal data or live provider is enabled.
+- Enable a provider only after its capability-specific gate passes: source/search/crawl requires outbound-policy and SSRF evidence; CRM requires tenant-bound credentials/workspace/webhook/reconciliation evidence; mail requires verified TLS and at-most-once delivery claims; calendar requires tenant-bound credentials and reconciliation.
+- Use isolated staging tenants and provider sandboxes, bounded data, protected credentials, explicit data owners, retention limits, rollback criteria, and no production customer access.
+- Require zero unresolved Critical findings, documented disposition of every High finding, and signed security/data-owner approval for the exact staging exercise.
+
+### E2 - Enterprise production
+
+- Complete Sprints 25b-35, including privacy/DSR/retention, tamper-evident audit, managed recovery, workload isolation, immutable promotion, and shared/dedicated tenant-placement evidence.
+- Require zero unresolved Critical or High findings, an independent penetration test after the final security architecture is deployed, remediation verification, and an owner-signed residual-risk register.
+- Require tested backup/PITR/restore and regional-recovery objectives, load/soak results, incident and vulnerability-disclosure processes, dependency/SBOM/provenance evidence, and explicit launch/rollback criteria.
+- Local demo checks, deterministic providers, or scanner-only reports cannot satisfy E1 or E2.
+
 ## Future Sprints
 
-### Sprint 25 - OIDC Identity, Server-Side RBAC, and Secured API Perimeter
+### Sprint 25b - Complete Production Identity, Workload Trust, RLS, and Perimeter Rollout
 
 #### Objective and production outcome
 
-Replace caller-asserted demo identity with OIDC users, signed service identity, and one authoritative server-side permission model across console, gateway, owner services, system endpoints, and audit.
+Finish the production integration left out of the Sprint 25 security-foundation implementation. Convert the implemented identity, RBAC/assurance, OIDC/JWT validation, session-secret, operation-policy, perimeter, security-table, audit, and database-context primitives into an end-to-end enforced architecture. Completion requires real gateway mediation, authenticated owner/worker boundaries, authoritative revocable sessions, complete route/table matrices, staged forced RLS, hardened deployment topology, and acceptance evidence.
 
-#### Current implementation and dependencies
+#### Implemented foundation and explicit gaps
 
-- src/ghostrecon/common/security.py has static token comparison but no application-wide middleware.
-- Routers under src/ghostrecon/service_apps/routers/ accept caller-controlled X-Actor/X-Operator-Role; src/ghostrecon/console/ exposes and forwards demo roles. Authorization differs across callbacks, reporting, mutations, metrics, docs, and owner APIs.
-- Requires Sprint 24 validation for issuer/client/session/service credentials. Local role selection may remain only behind a local/test backend impossible to start in staging/production.
+- Implemented: immutable normalized identity, additive human roles, assurance checks, Ed25519 service JWT/OBO primitives, generic RSA OIDC ID-token validation, opaque session/CSRF secret helpers, perimeter middleware, initial operation registry, security models, expanded audit columns, transaction-local database context, and additive migration `0015_security_foundation`.
+- Missing: production login/callback/refresh/step-up/logout/session/user-administration/audit-query routes and their PostgreSQL/Redis repositories.
+- Missing: gateway-to-owner HTTP proxying, gateway-only ingress, console reverse proxy, authenticated console-to-gateway calls, and removal of owner handlers from console/gateway processes.
+- Missing: removal of caller-controlled identity headers, demo role UI/callback checks, static-token configuration, raw actor parameters, role-name comparisons, and `ReportingOperatorContext` defaults. Strict profiles currently reject these headers before a replacement identity flow is available.
+- Current exposure: the generated gateway contract contains 51 mutation operations with no declared security scheme, while sensitive reporting can project contact email and meeting/attendee/provider data to an unauthenticated default viewer.
+- Current integrity risk: unauthenticated callers can reach governance decisions, sequence enrollment/activity actions, and real provider side effects when business-state preconditions happen to pass.
+- Missing: workload trust-bundle/key loading, request middleware, caller allowlists, replay storage, key rotation, OBO propagation, signed Celery delivery, and split worker identities/queues.
+- Missing: complete operation/RLS matrices, database roles/grants, scope columns/backfills, CRUD policies, shadow validation, grouped RLS enablement, final `FORCE ROW LEVEL SECURITY`, and a complete reversible migration path for `0015`.
+- Missing: CSRF enforcement, restrictive CORS, trusted-proxy/TLS handling, Redis rate limits, streamed-body/query/cookie bounds, Dash CSP, docs/metrics authorization, and uniform redacted errors. `/docs`, `/redoc`, `/openapi.json`, `/readyz`, and `/metrics` remain mounted without policy enforcement.
+- Missing: deterministic local OIDC, Auth0 staging validation, Helm/NetworkPolicy/key/credential changes, browser/service/database integration tests, documentation, and criterion-to-evidence reporting.
 
-#### Implementation and interface requirements
+#### Gateway OIDC and authoritative sessions
 
-- Implement OIDC authorization-code flow with state, nonce, and PKCE. Store browser authentication in bounded, rotated, secure, HTTP-only, same-site sessions.
-- Validate API JWT algorithm/signature, issuer, audience, expiry, not-before, subject, and required claims against trusted metadata with safe key rotation.
-- Derive actor, subject, email, and roles only from verified claims. Reject external actor/role headers; permit normalized forwarding only from authenticated trusted services.
-- Centralize permissions for viewer, analyst, governance reviewer, administrator, and named service identities. Cover every read, mutation, bulk/source action, governance field, metrics/docs, and system endpoint.
-- Authenticate service-to-service calls; owner APIs accept only gateway or explicitly authorized worker identities.
-- Add CSRF, secure response headers, restrictive CORS, TLS ingress expectations, request-size limits, endpoint rate limits, and explicit production metrics/docs policy.
-- Audit allowed and denied privileged actions with verified identity, permission, resource, correlation, and outcome, without tokens or unnecessary claims.
-- Publish login/callback/logout/session-expiry routes, normalized internal identity context, claim/role mapping, scopes/audiences, issuer/JWKS/session settings, and consistent 401 versus 403 semantics. Persist only necessary session/security-audit state, never raw tokens.
+- Add gateway-owned login, callback, session, logout, logout-all, provider logout callback, reauthentication/step-up, role-claim refresh, security user/session administration, and audit-query routes.
+- Fetch discovery/JWKS only from configured HTTPS issuers with five-second timeouts, one-MiB bounds, bounded caches, an asymmetric algorithm allowlist, rate-limited unknown-`kid` refresh, rotation overlap, and fail-closed behavior.
+- Complete code exchange and validate state, nonce, PKCE S256, redirect URI, issuer, audience, authorized party, purpose, required claims, authentication method/time, and safe relative return paths. Never retain codes, provider tokens, OTPs, or raw claim sets.
+- Store encrypted one-time OIDC transactions in Redis for ten minutes, atomically consume them, bind them to a separate host-only HttpOnly cookie, and test replay, supersession, expiry, browser binding, and open redirects.
+- Implement PostgreSQL-authoritative opaque sessions containing only HMAC digests, with Redis cache subordinate to revocation. Enforce normal/remembered idle and absolute limits plus 15-minute rotation.
+- Rotate atomically after login, step-up, privilege/policy/mapping changes, and periodically. Implement local and subject-wide logout, disablement, role/policy invalidation, self-service revocation, and step-up-protected other-user revocation.
+- Recheck local provisioning/mapping on every request with no more than 60 seconds of disablement caching. Refresh provider role claims every five minutes; stale claims grant only session self-service.
+- Require recent phishing-resistant assurance for governance decisions/overrides, bulk review, sensitive export, destructive work, security administration, role changes, and other-user session revocation.
+- Add one-time administrator bootstrap and bounded emergency-grant CLI operations with verified issuer/subject, reason, approver evidence, expiry, step-up, and audit, with no bypass of RBAC/RLS/service authentication.
 
-#### Safety, tests, and acceptance
+#### Gateway topology, authorization, and console migration
 
-- Verification must explicitly cover unit, database/integration, public/event contract, browser/operator UI, deployment/Helm, and bounded staging/live-provider layers affected by this sprint; ordinary CI stays deterministic and any inapplicable layer must be justified in the test plan.
-- Never trust client-supplied identity, weaken issuer/audience validation, or log tokens/codes/cookies. V1 remains single-workspace; multi-tenancy is excluded.
-- Test missing, expired, future, wrong-audience/issuer/signature/algorithm/key, malformed tokens, and key rotation.
-- Generate a permission-matrix test for every route and protected endpoint. Prove spoofed actor/role/forwarding headers cannot affect authorization or audit identity.
-- Add browser tests for login/logout, callback validation, CSRF, session expiry, viewer limits, governance-only data, and denied UX.
-- Prove direct unauthenticated owner-service calls fail and every denied privileged operation creates a redacted traceable audit record.
-- Acceptance: identity is verified cryptographically, all authorization is server-side, every exposed route is in the matrix, and privileged success/denial is safely auditable.
+- Make `gateway-service` the sole ingress and reverse proxy `/` to internal `console-service`; keep console and owner services internal-only.
+- Replace gateway decorator reuse/in-process owner execution with authenticated forwarding that preserves public `/v1/...` paths and schemas.
+- Make Dash call gateway only through a console workload JWT and represented-user envelope; gateway independently reauthorizes and signs an owner-audience OBO envelope.
+- Remove the role selector plus all `X-Actor`, `X-Operator-Role`, actor, and role propagation from clients, callbacks, routers, services, repositories, reports, audits, and task payloads.
+- Replace role-name checks and reporting defaults with verified permissions and server-projected permitted actions. Add denied, expired, stale-role, and step-up-required UX.
+- Classify every FastAPI route, Dash action, service operation, Celery task, CLI, docs/metrics/system endpoint, and auth/security action in one code-owned `OperationPolicy` registry.
+- Generate operation and RLS matrices plus documentation; CI fails for missing/stale entries, duplicate IDs, unknown permissions/callers, missing tests, and unclassified routes/tables.
+- Preserve public contracts while returning uniform redacted `code`, `message`, and `correlation_id` errors with consistent 401/403/existence-sensitive 404 semantics.
+- Bind a required operation policy and verified identity dependency to every current and future route; CI compares the route inventory to the registry and rejects a route with no authentication, permission, assurance, caller, resource, body, and rate policy.
+- Protect CRM targets, review queues, meetings, source health, KPI reports, exports, and record details against enumeration and IDOR; project fields only after server-side resource authorization.
+- Remove the unused permissive static-token helper and bearer-token configuration rather than retaining a second authentication path. Strict profiles fail startup if legacy identity or unclassified routes remain.
+
+#### Workload identity, replay, and worker isolation
+
+- Load distinct Ed25519 private keys and trust bundles from read-only files through replaceable credential-provider, signer/verifier, OBO, and replay-detector interfaces.
+- Give gateway, console, each owner, metrics collector, scheduler, migration job, and each worker queue a distinct environment-scoped identity/key. Never share private keys or accept migration identity for runtime traffic.
+- Independently validate direct service JWT and OBO. Enforce service permission AND caller allowlist AND human permission AND assurance freshness AND RLS.
+- Store bounded Redis replay markers until expiry for every OBO and privileged/mutation/governance/bulk/destructive/export service call, with documented fail-closed behavior.
+- Split workers into source fetch, event parser, incident parser, watch monitor, enrichment, email intelligence, governance, CRM export, sequencing, meeting sync, and scheduler identities/queues.
+- Sign task headers over task name, canonical argument digest, audience, correlation/causation, expiry, and `jti`; reject unsigned, altered, replayed, expired, wrong-audience, and unauthorized tasks before business/database access.
+- Test wrong issuer/subject/audience/key/purpose, key overlap/removal, browser/user tokens at owners, modified/replayed OBO, caller-operation mismatch, unsigned tasks, and credential absence from logs.
+
+#### Audit, database roles, and staged RLS
+
+- Persist append-only audit from verified identity for privileged successes/denials, auth/session/security events, and service-auth failures, including operation, permission, resource, assurance, policy versions, environment, correlation/request IDs, bounded network metadata, and integrity HMAC.
+- Add deterministic redaction and denial-flood aggregation. Fail privileged mutations with 503 if audit persistence fails; emit only redacted emergency security logs.
+- Provision separate schema owner, migration, gateway security store, owner runtime, per-worker, reporting, session, audit writer/reader, retention, and test roles. Runtime roles are never table owners, superusers, or `BYPASSRLS`.
+- Complete the 37-table classification. Initially exclude only `cyber_events` and `organization_email_patterns`, with strict grants, sensitive-column review, operation tests, and CI schema-change triggers.
+- Add indexed classification, verified owner/assignee, owning workload, and policy-version scope fields only where required. Preserve display names but backfill ambiguous legacy ownership as restricted/unassigned.
+- Define separate SELECT/INSERT/UPDATE/DELETE policies using `USING` and `WITH CHECK`, including reassignment/reclassification, governance state, foreign-key scope, reports/exports, bulk paths, workers, and pooled connection cleanup.
+- Stage migrations for scope/backfill, roles/grants, disabled policies, shadow validation, grouped `ENABLE ROW LEVEL SECURITY`, then grouped `FORCE ROW LEVEL SECURITY`.
+- Do not force a table until production-shaped tests cover missing context, allowed/denied CRUD, transitions, rollback/exception cleanup, connection reuse, worker isolation, reporting/export, and query-plan/latency evidence.
+- Never use security-definer bypass, allow-all policies, superuser rollback, `BYPASSRLS`, or caller-supplied database context.
+- Install verified transaction-local security context before every protected repository operation; deny absent context and prove rollback, exception, cancellation, and pooled-connection reuse cannot retain identity.
+- Complete migration `0015` downgrade/roll-forward behavior and test it with schema-owner and non-owner runtime roles; the runtime connection used by any service or worker may not own protected tables.
+
+#### CSRF, perimeter, deployment, and acceptance
+
+- Enforce session-bound CSRF on every browser unsafe method; Dash obtains it from `/auth/session` and attaches it only to same-origin unsafe requests.
+- Add Redis distributed limits for auth, callbacks, sessions, step-up, reads, mutations, bulk/export, and owner calls. Rate-limit denials before persistent audit and define fail-closed classes.
+- Enforce exact/no CORS origins, trusted ingress CIDRs, TLS-only production ingress, JSON-only unsafe APIs, header/query/cookie/body/bulk bounds, authenticated `no-store`, HSTS/no-sniff/frame denial, and nonce/hash Dash CSP without `unsafe-eval`.
+- Count streamed and chunked request bytes independently of `Content-Length`; reject missing, conflicting, malformed, compressed-over-limit, or overrun bodies and stop downstream processing at the declared operation limit.
+- Apply route-class limits before expensive database/provider work and test replica-coordinated abuse, unavailable Redis behavior, bulk amplification, slow bodies, and retry storms.
+- Keep minimal unauthenticated liveness; expose readiness only inside the cluster. Disable docs/OpenAPI/Redoc by default; require administrator step-up when enabled and metrics-collector identity for metrics.
+- Update Helm for gateway-only TLS ingress, NetworkPolicies, distinct service accounts, per-workload key/trust mounts, distinct database credentials, Redis ACL/namespaces, and strict positive/negative rendering.
+- Add a guarded deterministic local OIDC provider that cannot render/start in staging or production.
+- Add complete unit, operation-contract, PostgreSQL/Redis, service-boundary, worker, browser, Helm, static/security, migration, and RLS-performance tests.
+- Make Ruff, Bandit, full MyPy, tests, migration checks, Helm negative rendering, route/operation coverage, and security evidence mandatory. Resolve the OIDC hash-algorithm typing failure without weakening validation or adding a security-file exclusion.
+- Run bounded Auth0 email-OTP and phishing-resistant step-up staging validation. Report live state only as passed, failed with redacted evidence, or blocked by missing environment access.
+- Roll out by provisioning schema/roles/keys, deploying compatible service-auth topology with shadow RLS, enabling/forcing tested table groups, canarying Auth0 users, exposing gateway only, then revoking static credentials and removing legacy identity behavior.
+- Roll back only to Sprint-25-compatible images or roll forward. Never restore caller-asserted identity, disable audit/RLS, add allow-all policies, or grant bypass roles.
+- Acceptance requires zero unapproved legacy identity/static-token/demo-role references, complete generated matrices, deterministic/live/deployment evidence, refreshed graphify output, full documentation, and a criterion-to-evidence report.
+- E1 cannot pass until anonymous requests are limited to minimal liveness and intentional authentication entry points, every protected operation denies missing/forged/stale identity, privileged audit failure blocks the mutation, owner services reject direct browser/user tokens, and Sprint 25c tenant context is enforced end to end.
 
 #### Documentation requirements
 
-- Update affected root README, architecture, dashboard specification, runbook, gateway/console and owner-service docs, Helm README/secrets guide, and an ADR for OIDC, sessions, propagation, service auth, and RBAC.
-- Apply Sprint 24's complete scoped documentation rule, completion update, historical-research preservation, and final consistency search.
+- Update root README, architecture, dashboard/pipeline specifications, operations/incident runbooks, affected service/worker READMEs and technical READMEs, Helm/secrets guide, local/staging guides, testing strategy, API/service authentication, key rotation, database/RLS, permission/RLS matrices, audit/retention, bootstrap/recovery, Auth0 validation, and metrics/docs policy.
+- Add an ADR for generic OIDC/Auth0 reference, email-OTP assurance limits, sessions/step-up, additive RBAC, gateway/owner trust, Ed25519/OBO, signed tasks, risk-based RLS, database roles/context, audit behavior, deterministic local-provider isolation, recovery, rejected alternatives, and future SPIFFE migration.
+- Preserve the authoritative [Sprint 25 research input](SPRINT_25.md) and distinguish [Sprint 25a foundation evidence](docs/reports/sprint-25a-security-foundation.md) from future Sprint 25b production-completion evidence.
+
+### Sprint 25c - Shared SaaS Tenant Isolation and Privileged Support Access
+
+#### Objective and production outcome
+
+Make each enterprise an isolated tenant and make the active tenant a server-verified part of every human, service, worker, data, cache, queue, provider, export, analytics, and AI execution context. The default production topology uses a shared schema with mandatory tenant keys and forced PostgreSQL RLS; customers with contractual, regulatory, residency, or enhanced-isolation requirements can receive a dedicated database through the same logical authorization and evidence model. Platform operators have no ambient customer-data access.
+
+#### Current implementation and explicit gaps
+
+- `IdentityContext.workspace_id` defaults to `default`, CRM export has an optional provider workspace field, and the security principal/session/role-binding tables are not tenant-scoped.
+- Domain tables, unique constraints, foreign keys, repositories, reports, caches, queues, outbox records, provider credentials, exports, and audit records do not yet enforce an enterprise tenant boundary.
+- Multi-workspace/multi-tenant authorization and cross-workspace access were explicit Sprint 25 non-goals; shared SaaS is therefore prohibited until this sprint passes.
+- There is no separate platform-operator identity plane, tenant-bound support grant, tenant switch protocol, dedicated placement model, or negative cross-tenant test suite.
+- Requires Sprint 25b identity, service trust, operation authorization, database roles/context, replay protection, and gateway-only topology. Every later production sprint requires Sprint 25c.
+
+#### Tenant, membership, role, and session contracts
+
+- Add immutable opaque `Tenant` identifiers, tenant status, display metadata, policy references, created/disabled timestamps, and isolation mode. Slugs, domains, provider workspaces, IdP organization claims, and client-supplied values never become authorization identifiers.
+- Add `TenantMembership` with tenant, principal, status, tenant-scoped roles/permissions, grantor, reason, policy/mapping versions, created/updated/disabled timestamps, and optional expiry. Enforce one active membership row per tenant/principal and audit every transition.
+- Define additive tenant roles `enterprise_member`, `enterprise_manager`, and `enterprise_administrator`. A principal may hold different roles in explicitly granted tenants; normal users have one tenant by default and never gain another membership through discovery, email domain, provider claims, or platform employment.
+- Add `GET /auth/tenants` to list only the authenticated principal's explicit active memberships and permitted tenant-switch targets.
+- Add `POST /auth/tenant/switch` accepting a target tenant only as a requested transition. Revalidate membership, tenant status, assurance, and policy server-side; revoke the old session; create a new tenant-bound session and CSRF secret; rotate every OBO/service/task capability; and audit source tenant, destination tenant, reason, session IDs, and outcome.
+- Bind every ordinary session to exactly one active tenant and membership version. Revalidate membership during login, switch, rotation, privilege change, and with no more than 60 seconds of cache staleness; high-risk operations revalidate synchronously.
+- Derive active tenant from the verified session or signed service/OBO/task context. Reject `X-Tenant`, query/body tenant selectors on ordinary domain operations, mismatched resource tenants, stale membership versions, and tokens created for another tenant.
+- IdP organization claims may propose login mapping only. A local active membership and tenant policy remain authoritative; ambiguous or unknown mappings deny access and enter an audited provisioning/review flow.
+
+#### Database, placement, and migration requirements
+
+- Add non-null indexed `tenant_id` to every tenant-owned security, identity, source, raw item, event, incident, account, contact, email, score, review, governance, audit, outbox, CRM, sequence, mail, meeting, policy, and operational record.
+- Inventory every table as tenant-owned, platform-control, global-reference, or prohibited. CI rejects unclassified tables, schema changes without tenant policy, and tenant-owned relationships without tenant-safe keys.
+- Use composite tenant-aware unique constraints and foreign keys where records relate across tables so inserts, updates, reassignment, bulk operations, and cascades cannot form cross-tenant relationships even if application checks fail.
+- Extend transaction-local PostgreSQL context with tenant, actor type, membership/support grant, operation, and policy versions. Missing, malformed, stale, or mismatched context denies before repository access.
+- Define separate forced SELECT/INSERT/UPDATE/DELETE RLS policies with `USING` and `WITH CHECK` for every tenant-owned table. Runtime, reporting, worker, retention, migration, support, and platform roles are never table owners, superusers, or `BYPASSRLS`.
+- Default to shared-schema forced RLS. Add server-controlled `TenantPlacement` for shared pool or dedicated database, region/residency, storage/index namespaces, key references, migration version, health, and move state. Clients and ordinary tokens cannot select or override placement.
+- Keep tenant keys and forced RLS in dedicated databases as defense in depth. Apply identical logical schema, migrations, backup/restore, audit, and negative isolation tests to shared and dedicated placements.
+- Migrate in stages: create platform and deterministic local/demo tenants; add nullable tenant keys; backfill only provable ownership; quarantine ambiguous records; add tenant-aware keys/indexes; shadow-check repositories; make keys non-null; enable then force RLS; revoke legacy grants and default-workspace behavior.
+- Provide a restartable, audited placement-move workflow with source freeze/checkpoint, copy and validation, cutover, rollback window, old-copy retention/deletion policy, and proof that no request, event, or provider action crosses placement during migration.
+
+#### Non-database isolation requirements
+
+- Namespace Redis sessions, caches, replay markers, locks, quotas, schedules, and idempotency keys by immutable tenant ID. Prevent key construction from unverified request input and test collisions/eviction across tenants.
+- Include tenant, placement version, operation, audience, canonical argument digest, correlation/causation, expiry, and `jti` in signed outbox, queue, scheduler, worker, and AI job envelopes. Reject missing/altered tenant context before database, cache, search, object, model, or provider access.
+- Scope search and vector indexes, retrieval filters, object-storage prefixes/buckets, exports, temporary files, analytics datasets, feature stores, model context, prompts, tool calls, and results to one tenant. Future stores or AI features cannot ship until their isolation adapter and negative tests are registered.
+- Never batch raw records from different tenants into one provider request, AI execution context, export, file, trace, or support operation. Platform-wide telemetry may use only explicitly approved de-identified aggregates through a separate non-support pathway.
+- Store CRM, mail, calendar, search, verifier, webhook, signing, and other provider configuration/credentials per tenant and placement. Resolve inbound webhook tenant from authenticated provider configuration and workspace identity, never from a caller header or payload alone.
+- Apply tenant-specific quotas, rate limits, retention, suppression, legal basis, source permissions, integration enablement, data residency, encryption-key references, and egress policy at the final service boundary as well as the gateway.
+- Propagate tenant audit context through HTTP, OBO, tasks, database, cache, provider, export, support, and AI boundaries without using tenant IDs or customer identifiers as unbounded metric labels.
+
+#### Platform administration, support, and emergency access
+
+- Use a separate platform issuer/audience, roles, sessions, keys, routes, and operation policies for SaaS maintenance. Platform identities receive no tenant membership, tenant-data permission, search/export capability, or RLS bypass by default.
+- Add `SupportAccessGrant` with platform principal, one tenant, support case/ticket, reason, requested permissions, tenant approval evidence/policy, approvers, start, expiry, revocation, assurance, session, status, and immutable audit references.
+- Add platform-only request/approve/activate/status/revoke support operations. Activation requires phishing-resistant step-up and creates a separate delegated support session that identifies the platform actor and tenant; it never impersonates a customer principal.
+- Default a support grant to one hour and cap it at four hours. Write, export, integration, automation, security, policy, or destructive scopes require explicit tenant approval; tenant policy may pre-authorize narrowly defined read-only diagnostics.
+- Bind support access to one tenant and the minimum operation set. It cannot switch tenants, create memberships, search/compare/aggregate/export across tenants, use ordinary platform sessions for tenant data, or continue after grant/session/tenant expiry, revocation, disablement, or policy change.
+- Record actor identity/type, active tenant, ticket/reason, approval, start/expiry, records viewed/modified, exports/downloads, automation/integration/administrative actions, denials, session creation/termination, and every privilege change in tamper-evident audit.
+- Add a separately controlled break-glass path only for critical incidents when ordinary tenant approval is unavailable. Require separate credentials, two distinct security approvers, phishing-resistant authentication, an incident reference, explicit scopes, a maximum 60-minute expiry, immediate high-severity alerts, immutable audit, post-incident review, and customer notification within 24 hours after closure.
+- Break-glass is not a global superuser: it creates one tenant-bound delegated session, cannot disable/alter RLS, cannot browse other tenants, and must be exited before another tenant can be accessed.
+
+#### Safety, tests, rollout, and acceptance
+
+- Generate tenant table, relationship, operation, store, queue, provider, export, analytics, support, and placement matrices. CI fails for missing ownership, context propagation, policy, test, or evidence.
+- Prove tenant A cannot list, read, infer existence, mutate, relate, search, retrieve, cache-collide, enqueue, export, reconcile, administer, or supply AI context for tenant B through APIs, direct owner calls, repositories, bulk paths, foreign keys, pooled connections, retries, dead letters, reports, or provider callbacks.
+- Prove changing a client-supplied tenant/header/query/body value cannot change authorization; tenant switching invalidates the old session/CSRF/OBO/task chain; disabled/expired membership fails within the declared bound; ambiguous legacy rows remain inaccessible.
+- Prove platform administrators have no tenant-data access without an active grant; support access is one-tenant and scope-bound; unapproved/expired/revoked access fails immediately; support cannot switch/export/aggregate; break-glass generates required approvals, alerts, expiry, audit, review, and notification evidence.
+- Run the same CRUD, relationship, report, export, job, cache, provider, backup/restore, failover, and penetration tests against shared-schema and dedicated-database placements.
+- Roll out one isolated test tenant at a time, then multiple adversarial tenants, then dedicated placement. Never enable an allow-all compatibility policy, default tenant fallback, platform bypass role, or caller-selected placement during rollout or rollback.
+- Acceptance: every request and asynchronous action has exactly one verified tenant; every tenant-owned record and non-database artifact is isolated; all RLS is forced under non-owner roles; support is explicit and temporary; no permanent global tenant-data superuser exists; and E1 tenant-isolation evidence is signed.
+
+#### Documentation requirements
+
+- Publish the tenant and placement model, membership/role/session contracts, tenant switch protocol, trust boundaries, RLS/table/store matrices, support and break-glass flows, migration/rollback, dedicated-database/residency operations, provider isolation, AI/data-use constraints, audit fields, incident response, and residual risks.
+- Update architecture, security ADRs, permission/RLS matrices, API/service/task authentication, Helm/secrets, operations/runbook, testing strategy, privacy/retention, provider, export, analytics, AI, and every affected service/worker document.
 
 ### Sprint 26 - Source Operations Control Plane and Durable Source Scheduling
 
@@ -290,7 +467,7 @@ Make the persisted source registry an operable control plane and continuously sc
 
 - SourceDefinition in src/ghostrecon/models/db/sources.py stores adapter, polling/rate policy, checkpoint, freshness, retry budget, policy, and operating state; contracts begin in src/ghostrecon/models/api/source_contracts.py.
 - source_registry.py, source_adapters.py, workers.py, and worker_runtime.py can fetch/parse one source, but beat schedules watch monitoring rather than every due source. Reporting/console health is read-only while the runbook describes unsupported pause/replay/acknowledge actions.
-- Requires Sprint 24 profiles and Sprint 25 identity/audit. Preserve checkpoints/policy; Sprint 27 consumes lifecycle events but is not needed for scheduling.
+- Requires Sprint 24 profiles, Sprints 25b-25c identity/tenant isolation, and the E1 outbound-provider gate. Preserve checkpoints/policy; Sprint 27 consumes lifecycle events but is not needed for scheduling.
 
 #### Implementation and interface requirements
 
@@ -298,6 +475,9 @@ Make the persisted source registry an operable control plane and continuously sc
 - Require optimistic versions and idempotency keys on mutations; replay/policy changes require confirmation, reason, and audit.
 - Query persisted due enabled sources by interval/next-run state. Use distributed finite leases so one source/checkpoint has at most one active fetch.
 - Enforce per-source concurrency, request rate, retry budget, exponential backoff/jitter, timeouts, size/crawl bounds, and failure isolation.
+- Before any request, require the source to be enabled, operationally eligible, tenant-authorized, and permitted by an authoritative effective policy; test/run-now/replay cannot bypass this decision.
+- Centralize outbound URL validation for source/search/crawl clients: allow only configured schemes/ports/registrable domains; resolve and reject loopback, private, link-local, multicast, reserved, and cloud-metadata targets; re-resolve and reauthorize every redirect; defend against DNS rebinding and mixed public/private answers.
+- Stream responses under compressed and decompressed byte limits; bound redirects, DNS answers, headers, JSON/XML nesting/items, parser work, and total wall time; validate content type/encoding before parsing and discard/quarantine over-limit bodies without persisting raw provider errors.
 - Persist raw data before atomically advancing a normal checkpoint. Support conditional requests; keep replay watermarks separate and never move normal checkpoints backward.
 - Keep policy fail-closed: unreviewed/prohibited sources may be connectivity-tested with quarantined output but cannot feed downstream work.
 - Add versioned /v1/intelligence/sources collection/detail/action/run-history contracts exposing optimistic version and permitted actions.
@@ -312,6 +492,7 @@ Make the persisted source registry an operable control plane and continuously sc
 - Database/broker tests cover concurrent schedulers, scheduler-to-worker execution, crashes, durable ingestion before checkpoint, and poison-source isolation.
 - Contract/browser tests cover all actions, role limits, confirmation, stale versions, and status refresh.
 - Acceptance: sources run continuously; operators need no database edits; replay cannot regress checkpoints or duplicate raw items; run/event/reporting state is durable and correlated.
+- E1 source enablement additionally requires negative tests for prohibited source state, every private/reserved address family, redirect-to-private, rebinding, oversized/chunked/compressed responses, unexpected content, timeout, quota exhaustion, and redacted exceptions.
 
 #### Documentation requirements
 
@@ -328,7 +509,7 @@ Turn persisted outbox intent and task islands into a reliable, observable, idemp
 
 - Workflows write OutboxEvent rows, primarily modeled in src/ghostrecon/models/db/governance.py, but no dispatcher claims/publishes them. Persistence mainly exposes published_at, without full lease/retry/dead-letter state.
 - src/ghostrecon/workers.py and worker_runtime.py expose ingestion, parsing, enrichment, scoring, governance, CRM, sequencing, and meeting tasks as callable islands; due sequence and inbound-mail work is unscheduled.
-- Requires Sprints 24-26 and Sprint 25 service identities. Existing approval boundaries remain authoritative.
+- Requires Sprints 24-26, Sprint 25b service identities, and Sprint 25c tenant isolation. Existing approval boundaries remain authoritative.
 
 #### Implementation and interface requirements
 
@@ -338,6 +519,9 @@ Turn persisted outbox intent and task islands into a reliable, observable, idemp
 - Implement versioned idempotent consumers for source ingestion, event/incident parsing, resolution, scoring, review creation, CRM, sequences, inbound mail, and meetings.
 - Encode the automatic-versus-analyst/governance/CRM/outreach/meeting transition table. Never infer export, enrollment, or sending from upstream approval.
 - Propagate request/correlation, causation, schema, source-definition/run/item, and outbox IDs through rows, messages, tasks, and logs.
+- Persist tenant and placement version on outbox/inbox rows and sign tenant, operation, audience, canonical argument digest, correlation/causation, expiry, and `jti` in every broker/task envelope. Reject absent, altered, replayed, expired, wrong-tenant, or wrong-placement context before business or data access.
+- Namespace idempotency, leases, routing keys, dead letters, result metadata, quotas, and replay authorization by tenant. Never store sensitive task results in Redis by default; define bounded result retention and minimize payloads.
+- Reauthorize current tenant membership/support grant, policy, resource, and provider eligibility when a delayed/replayed consumer performs a side effect; producer-time authorization alone is insufficient.
 - Schedule due sequence steps, inbound mail, retryable CRM, and meeting sync with workload isolation.
 - Migrate outbox state and add a consumer inbox/idempotency ledger where needed. Publish envelope schemas, compatibility, ownership, routing/queue/dead-letter topology, size limits, and retention.
 - Add authorized dead-letter/stalled-work inspect/replay APIs with optimistic/idempotent mutations and audit. Report oldest outbox age, due/leased/retry/dead counts, queue age/depth, failures, and stage lag.
@@ -350,6 +534,7 @@ Turn persisted outbox intent and task islands into a reliable, observable, idemp
 - Add event-contract tests and a real database/broker end-to-end test from raw item to the correct review queue.
 - Replay every supported event and prove canonical/external operation plans remain duplicate-free; dead letters must be operable without database access.
 - Acceptance: committed intent is published or terminally dead-lettered with evidence; all consumers are versioned/idempotent; real data advances automatically only to the correct gate; lag is measurable.
+- Prove a tenant cannot observe, claim, replay, dead-letter, route, or consume another tenant's work and that an unsigned or tenant-mismatched job creates no database, cache, provider, audit-success, or AI side effect.
 
 #### Documentation requirements
 
@@ -366,7 +551,7 @@ Acquire useful real cybersecurity events and permitted participant evidence from
 
 - Seeded DEF CON, Black Hat, BSides, OWASP, and FIRST sources use generic http_page extraction, retaining mostly title/description and producing unknown dates, timezone, venue, or format.
 - Participant extraction in src/ghostrecon/services/event_intelligence/ works mainly for Schema.org data. NOTES.txt requests scraping a manually supplied event URL.
-- Requires Sprints 24 and 26-27 for safe live configuration, scheduling, and orchestration, plus Sprint 25 actor/governance controls.
+- Requires Sprints 24 and 26-27 for safe live configuration, scheduling, and orchestration, plus Sprints 25b-25c identity, governance, and tenant isolation. Live canaries require the applicable E1 source/provider gate.
 
 #### Implementation and interface requirements
 
@@ -374,6 +559,8 @@ Acquire useful real cybersecurity events and permitted participant evidence from
 - Extract canonical name/URL, local dates/timezone and UTC instants, venue/structured address, format/virtual URL, topics, organizers, speakers, sponsors, and permitted public profiles.
 - Manual URL submission must enqueue the same fetch/parse workflow and preserve manual actor, submitted URL, source run/item, parser version, and correlation lineage.
 - Discover detail/participant pages only within allowlisted domains, depth/page/size/time budgets, robots/terms policy, and configured reuse permission.
+- Apply Sprint 26 outbound validation to every discovered URL, DNS resolution, redirect hop, asset/API request, geocoder call, and parser fetch. A public starting URL never authorizes a private or different-domain redirect.
+- Scope source definitions, manual submissions, fetch leases, caches, raw items, parser diagnostics, participant evidence, and geocoder results to the active tenant; deduplication may not merge or reveal records across tenants.
 - Persist parser version, extraction diagnostics, selector/structured-format path, missing-field reasons, and drift state.
 - Maintain real-shape fixtures and bounded protected staging canaries for every official source. Merge duplicate editions without deleting source lineage.
 - Geocode structured addresses through configured Nominatim-compatible service with cache, identification user agent, rate limit, and reviewable failures.
@@ -386,7 +573,7 @@ Acquire useful real cybersecurity events and permitted participant evidence from
 - Do not crawl outside allowlists, treat unknown reuse as permission, infer unpublished dates/locations, or use unstable live text as deterministic CI evidence.
 - Fixture tests cover every source plus degraded/malformed pages, timezone/DST, recurring series, cancellations/reschedules, hybrid events, duplicate editions, participant reuse, and geocoding limits/cache.
 - Contract/integration tests prove scheduled and manual submissions share pipeline/event schemas and lineage. Browser tests cover manual URL status, diagnostics, merge/review, and roles.
-- Bounded staging canaries fetch official sites without asserting presentation text.
+- Bounded staging canaries fetch official sites without asserting presentation text and run only after E1, in an isolated tenant, with authoritative source policy, fixed budgets, recorded egress, retention, and cleanup.
 - Acceptance: scheduled sources create real events with dates and location/format whenever published; manual ingestion has identical parser/lineage metadata; no participant enters enrichment with unknown/prohibited reuse.
 
 #### Documentation requirements
@@ -404,11 +591,13 @@ Continuously acquire trustworthy incident, advisory, vulnerability, and watch si
 
 - GDELT, CISA news RSS, and The Hacker News are seeded; CISA KEV/NVD clients exist outside scheduled canonical workflows.
 - Company extraction relies heavily on metadata/regex. Syndicated copies may appear independent. SerpAPI watch monitoring exists but lacks complete production configuration/data-quality operation.
-- Requires Sprints 24, 26, and 27; uses Sprint 25 identity and Sprint 28's source/parser operational patterns.
+- Requires Sprints 24, 26, and 27; uses Sprints 25b-25c identity/tenant isolation and Sprint 28's source/parser operational patterns. Live canaries require the applicable E1 provider gate.
 
 #### Implementation and interface requirements
 
 - Schedule GDELT, CISA advisories/RSS, trusted RSS, CISA KEV, NVD, and SerpAPI watch queries through the registry with durable checkpoints, quotas, deduplication, and evidence retention.
+- Apply Sprint 26 outbound/response controls to configured provider endpoints and every returned/followed URL. Keep API keys out of query/error/audit telemetry and resolve provider configuration, quota, cache, checkpoint, and watch scope per tenant.
+- Prevent cross-tenant watch aggregation, evidence deduplication, incident grouping, search results, reports, exports, and provider batches unless an explicitly approved de-identified platform aggregate contract applies.
 - Treat CVE/advisory items as security signals unless evidence identifies an affected organization; never fabricate a company incident from a vulnerability.
 - Resolve companies/domains using publisher metadata, verified domains/accounts, evidence URLs, and preserved alternative matches routed to review.
 - Persist publisher identity, canonical/original URL, syndication cluster, evidence family, authoritative status, independence, language, and explicit translation provider/version/lineage.
@@ -422,7 +611,7 @@ Continuously acquire trustworthy incident, advisory, vulnerability, and watch si
 - Do not equate repetition with independence, translate without provenance, assign a company from weak name coincidence, or promote stale/uncorroborated evidence automatically.
 - Add real-shape fixtures for GDELT, CISA RSS/advisories, KEV, NVD, trusted news, syndicated copies, multilingual metadata, and SerpAPI.
 - Test ambiguity, false-positive rejection, multi-company splitting, syndication clusters, independence, time-window dedupe, translations, checkpoint/quota behavior, and outages.
-- Add bounded staging canaries for each provider and browser/contract tests for review, evidence, watch status, and governance decisions.
+- Add bounded staging canaries for each provider only after E1 and browser/contract tests for review, evidence, watch status, governance decisions, tenant separation, credential isolation, and redacted provider failures.
 - Acceptance: incidents are company-specific only when supported, otherwise unassigned; syndicated copies never satisfy independence; watch watermarks advance durably and degradation is visible.
 
 #### Documentation requirements
@@ -440,7 +629,7 @@ Resolve organizations and contacts from observed, permitted evidence; operate cr
 
 - OpenSERP adapters support official-domain and LinkedIn discovery, but live participant enrichment can fall back to an invented domain.
 - The Scrapy company crawler does not return/persist discoveries through the canonical workflow. Persistence-backed resolution has limited real evidence/alternatives. The verifier sidecar is callable but not fully operated.
-- Requires Sprints 24 and 27, consumes event/incident evidence from Sprints 28-29, and respects Sprint 25/26 policy and controls.
+- Requires Sprints 24 and 27, consumes event/incident evidence from Sprints 28-29, and respects Sprints 25b-25c identity/tenant isolation plus Sprint 26 outbound policy and controls. Live enrichment requires the applicable E1 verifier/search/crawl gate.
 
 #### Implementation and interface requirements
 
@@ -449,6 +638,9 @@ Resolve organizations and contacts from observed, permitted evidence; operate cr
 - Persist crawler discoveries and feed canonical candidates; retain multiple plausible organizations/domains and route ambiguity to analyst review.
 - Enforce allowlists, robots/terms policy, crawl budgets, prohibited sources, timeouts, and content-retention limits.
 - Generate email candidates only from verified domains and person names with permitted lineage. Batch verifier calls with health, bounded concurrency/retries, and explicit valid/invalid/catch-all/ambiguous/unknown outcomes.
+- Remove caller-provided `verification_results` from production contracts. Production verification outcomes must come from an authenticated configured verifier response bound to tenant, candidate, request/attempt, provider, and time; deterministic injected results are test/local-only and cannot render or start in strict profiles.
+- Never allow `valid`, `deliverable`, or similar caller-authored fields to update canonical contact email/status, learn organization patterns, satisfy outreach eligibility, or emit verified events. Persist only bounded/redacted provider evidence with defined retention.
+- Scope discovered domains, accounts, contacts, candidates, learned patterns, search/crawl/DNS evidence, verifier batches/results, caches, review queues, and any retrieval/AI context by tenant. A pattern learned in one tenant cannot score or verify another tenant's address.
 - Learn organization email patterns only from verified evidence; a generated pattern match is never itself verification.
 - Extend candidate/evidence contracts and persistence for observed versus generated origin, search/crawl/DNS/redirect lineage, alternatives, selection decision, verifier provider/attempt/outcome, and pattern evidence. Expose provider health and ambiguity through reporting/review UI.
 
@@ -457,8 +649,9 @@ Resolve organizations and contacts from observed, permitted evidence; operate cr
 - Verification must explicitly cover unit, database/integration, public/event contract, browser/operator UI, deployment/Helm, and bounded staging/live-provider layers affected by this sprint; ordinary CI stays deterministic and any inapplicable layer must be justified in the test plan.
 - Never present generated domains/profiles/emails as observed provider data, crawl denied sources, or classify pattern-only addresses as verified.
 - Prove missing domains stay missing when discovery fails. Test suspicious/conflicting domains, redirects, public suffixes, outages, denied crawl, budgets, catch-all, verifier timeout/retry, and ambiguous alternatives.
+- Test forged caller verification payloads, candidate/tenant mismatch, replayed/stale provider results, wrong verifier identity, oversized provider responses, raw-payload redaction/retention, and attempts to unlock outreach or pattern learning without authoritative verification.
 - Add OpenSERP/verifier contract tests, database workflow tests, browser review tests, and bounded staging canaries with protected credentials.
-- Acceptance: a real participant/watch target reaches review with complete search/crawl lineage; all candidate origins are explicit; absence and ambiguity remain honest.
+- Acceptance: a real participant/watch target reaches review with complete search/crawl lineage; all candidate origins are explicit; absence and ambiguity remain honest; no caller or other tenant can manufacture a verified canonical email or policy-eligible contact.
 
 #### Documentation requirements
 
@@ -475,14 +668,16 @@ Operate Attio as the approved sales-record system with preflighted schema, idemp
 
 - CrmClient implementations in src/ghostrecon/services/crm_attio.py and crm_exports/ support Attio export/search and idempotent batch planning, but assume objects, attributes, and lists exist.
 - There is no continuous reconciliation or authenticated webhook intake; credentials can fail late without Sprint 24.
-- Requires Sprints 24-25 and 27; consumes approved records from Sprint 30. CRM export remains distinct from outreach approval.
+- Requires Sprints 24, 25b-25c, and 27; consumes tenant-scoped approved records from Sprint 30. CRM export remains distinct from outreach approval and live Attio work requires the E1 CRM gate.
 
 #### Implementation and interface requirements
 
 - Add read-only schema preflight for required objects, attributes, lists, permissions, workspace identity, and supported API capabilities.
 - Add an explicitly invoked administrator-only provisioning/migration plan and apply operation only where supported; preview changes and require version/idempotency/confirmation/audit.
 - Persist provider configuration version and workspace identity with batches/items.
-- Add signed webhook intake for supported record/list changes, verify timestamp/signature/workspace, retain provider event IDs, and prevent replay.
+- Store Attio credentials, workspace identity, schema/config version, lists, rate/circuit state, batches/items, idempotency, reconciliation, repair, and webhook keys per tenant. Resolve them from verified tenant context and never accept a client-selected workspace as authority.
+- Bind every export batch to exactly one tenant and provider workspace; reject mixed-tenant selections before planning and reauthorize every item before provider write.
+- Add signed webhook intake for supported record/list changes, verify timestamp/signature/workspace, retain provider event IDs, and prevent replay. Derive tenant from the authenticated webhook key/configuration plus verified provider workspace; payload/header tenant IDs cannot select the tenant.
 - Schedule reconciliation for missing records, changed stable IDs, partial list membership, and meeting/outcome drift; make each discrepancy visible and repairable.
 - Coordinate read/write rate limits across replicas, honor retry metadata, classify terminal/retryable failures, expose token health/rotation/circuit/degraded state.
 - GhostRecon remains authority for intelligence lineage/approval; Attio remains authority for approved sales records. Export never grants outreach approval or sequence enrollment.
@@ -494,14 +689,14 @@ Operate Attio as the approved sales-record system with preflighted schema, idemp
 - Provisioning is never automatic at startup; reject invalid signatures, stale/replayed events, and wrong workspaces. Never overwrite intelligence lineage from provider data.
 - Contract tests cover preflight, provisioning plans, upserts/list entries, pagination/rates, webhook signature/replay/workspace, reconciliation, circuit, and rotation.
 - Database/integration tests prove retries/reconciliation are idempotent; browser tests cover preflight, drift, repair, roles, and degradation.
-- Use an isolated staging workspace for bounded live acceptance.
+- Use one isolated provider workspace per staging tenant for bounded live acceptance after E1; prove wrong-workspace, wrong-key, cross-tenant record IDs, mixed batches, webhook confusion, reconciliation drift, and support-session export are denied.
 - Acceptance: repeats create no duplicate people/companies/custom objects/list entries; drift is visible/repairable without database edits; export cannot activate outreach.
 
 #### Documentation requirements
 
 - Update affected CRM, governance, reporting, console, sequencing-import, meeting, gateway docs plus architecture, pipeline/dashboard specs, runbook, Attio ADR, Helm secrets guide, and root README.
 - Apply Sprint 24's complete scoped documentation rule and final consistency search.
-+
+
 ### Sprint 32 - Production Sequencing, Mail Delivery, and Google Calendar Handoff
 
 #### Objective and production outcome
@@ -510,15 +705,19 @@ Operate approved outreach and meeting handoff with at-most-once business outcome
 
 #### Current implementation and dependencies
 
-- SMTP/IMAP adapters exist in src/ghostrecon/services/sequence_adapters.py; due-step and inbound-poll tasks exist but are not scheduled. IMAP relies on UNSEEN and simple sender/subject classification.
+- SMTP/IMAP adapters exist in src/ghostrecon/services/sequence_adapters.py; due-step and inbound-poll tasks exist but are not scheduled. IMAP relies on UNSEEN and simple sender/subject classification. SMTP STARTTLS and IMAP SSL currently omit an explicitly verifying TLS context; IMAP also lacks a connection timeout and message-byte limit.
 - Google Calendar service-account support and a fake fallback live under src/ghostrecon/services/calendar_adapters/; sender-domain readiness, durable mailbox checkpoints, and provider reconciliation are incomplete.
-- Requires Sprints 24-25, 27, 30, and 31. Meeting booking, CRM export, and outreach approvals remain independent.
+- Requires Sprints 24, 25b-25c, 27, 30, and 31. Meeting booking, CRM export, and outreach approvals remain independent; live mail/calendar use requires the applicable E1 gate.
 
 #### Implementation and interface requirements
 
 - Run due-step and inbound-mail schedules through Sprint 27 orchestration, isolating sender, mailbox, sequence, and provider failures.
 - Persist mailbox checkpoints and stable message/provider IDs independently of UNSEEN. Correlate replies/bounces with Message-ID, In-Reply-To, References, envelope/provider IDs, and stored outbound lineage.
 - Add bounded retries, timeout/error classes, terminal delivery states, operator-visible recovery, and transactional/idempotent send claims.
+- Build SMTP and IMAP with `ssl.create_default_context`, certificate-chain validation, hostname verification, current minimum TLS policy, and explicit timeouts. Strict profiles reject disabled SMTP TLS, insecure contexts, plaintext authentication, invalid certificates, hostname mismatch, and unsupported downgrade.
+- Bound IMAP search/fetch counts, individual and cumulative message bytes, headers, MIME depth/parts, attachment handling, parsing work, and mailbox poll time. Do not persist or log raw bodies unless an explicit tenant retention policy requires a minimal protected artifact.
+- Claim/lock delivery transactionally before SMTP, use stable message/provider idempotency identifiers where available, reconcile ambiguous outcomes, and make crashes before/after network send unable to produce an untracked or silently duplicated business outcome.
+- Scope senders, mailboxes, credentials, templates, contacts, suppressions, quotas, messages, checkpoints, replies/bounces, calendar identities/events, retries, reconciliation, and operator controls to one tenant.
 - Immediately before send, re-evaluate current verification, lawful basis, outreach approval, suppression, evidence freshness, sequence/sender limits, and unsubscribe requirements.
 - Validate SPF, DKIM, DMARC, envelope sender, reply mailbox, unsubscribe configuration, and provider identity before enabling a sender.
 - Reconcile Google Calendar create/update/cancel via stable meeting IDs; validate credentials and delegated access at meeting-service startup/readiness.
@@ -529,9 +728,9 @@ Operate approved outreach and meeting handoff with at-most-once business outcome
 
 - Verification must explicitly cover unit, database/integration, public/event contract, browser/operator UI, deployment/Helm, and bounded staging/live-provider layers affected by this sprint; ordinary CI stays deterministic and any inapplicable layer must be justified in the test plan.
 - Never send without fresh approval/policy checks, use UNSEEN as the sole checkpoint, treat auto-replies as positive replies, or couple booking/export/outreach approval.
-- SMTP/IMAP integration tests use isolated servers/sandboxes and cover duplicate/rescanned messages, delayed bounces, auto-replies, unsubscribe, suppression races, sender limits, timeouts, and worker crashes.
+- SMTP/IMAP integration tests use isolated servers/sandboxes and cover valid/private CA chains, invalid/expired certificates, hostname mismatch, STARTTLS downgrade, plaintext configuration, duplicate/rescanned/oversized messages, delayed bounces, auto-replies, unsubscribe, suppression races, sender limits, timeouts, concurrent sends, ambiguous outcomes, and worker crashes.
 - Google Calendar contract tests cover authentication, delegated access, booking, free/busy, update/cancel, rates, reconciliation, rotation, and outages. Add browser recovery/status tests.
-- Acceptance: approved outbound email sends at most once; inbound state changes at most once across polls; booked meetings reconcile consistently across GhostRecon, Google Calendar, and Attio.
+- Acceptance: approved outbound email sends at most once; inbound state changes at most once across polls; booked meetings reconcile consistently across GhostRecon, Google Calendar, and Attio; transport identity is verified; and no mail/calendar record, credential, quota, or action crosses tenants.
 
 #### Documentation requirements
 
@@ -546,15 +745,18 @@ Give operators one correlation entry point to trace real data across HTTP, datab
 
 #### Current implementation and dependencies
 
-- Basic Prometheus request count/latency exists and OpenTelemetry packages are installed, but tracing is incomplete. Structured logs do not consistently bind context across HTTP, Celery, outbox, SQL, and providers.
+- Basic Prometheus request count/latency exists and OpenTelemetry packages are installed, but tracing is incomplete. Structured logs do not consistently bind context across HTTP, Celery, outbox, SQL, and providers. HTTP metrics currently select the path before routing and can label arbitrary unmatched raw URL paths, creating unbounded cardinality and possible identifier leakage.
 - The runbook names queue/outbox/projection/source-quality metrics not fully emitted; readiness often checks only schema availability.
-- Requires Sprints 24-32 so all production workflows expose stable identifiers and operational states.
+- Requires Sprints 24-32, including Sprint 25c tenant context, so all production workflows expose stable identifiers and operational states.
 
 #### Implementation and interface requirements
 
 - Instrument FastAPI, SQLAlchemy, Celery, Redis, outbox dispatch, source scheduling, and outbound HTTP clients with OpenTelemetry and consistent sampling/export failure behavior.
 - Propagate request, correlation, causation, source-run/item, outbox/message, provider-operation, CRM, mail, and meeting identifiers across all boundaries.
 - Emit API RED metrics and bounded-cardinality workflow metrics for sources/parsers, queues/outbox, review, providers, mail, CRM, and meetings.
+- Resolve metric route templates only after routing and use one fixed label for unmatched/unknown paths. Never label metrics with raw paths, tenant IDs/slugs, record IDs, URLs, emails, provider messages, queries, exception text, or other attacker/customer-controlled values.
+- Protect `/metrics` with metrics-collector workload identity, keep readiness cluster-internal, and disable docs/OpenAPI/Redoc by default as required by Sprint 25b.
+- Centralize structured exception classification and redaction before logs, audit, persisted health/error fields, events, traces, metrics, or API responses; specifically strip credentials, authorization/cookies, query secrets, mail content, provider payloads, and personal data.
 - Emit quality metrics for parse yield, required-field completeness, duplicates, suspicious domains, resolution ambiguity, and corroboration quality, with defined denominators.
 - Add service-specific readiness for mandatory local dependencies; remote provider health affects degraded state, not liveness.
 - Add alerts with severity, owner, threshold/window, investigation, safe mitigation, escalation, and recovery evidence.
@@ -565,8 +767,8 @@ Give operators one correlation entry point to trace real data across HTTP, datab
 #### Safety, tests, and acceptance
 
 - Verification must explicitly cover unit, database/integration, public/event contract, browser/operator UI, deployment/Helm, and bounded staging/live-provider layers affected by this sprint; ordinary CI stays deterministic and any inapplicable layer must be justified in the test plan.
-- Never use unbounded IDs/URLs/emails as metric labels, expose sensitive payloads, or make liveness depend on remote providers.
-- Test trace propagation across HTTP/outbox/worker/database/provider, sampling context, label cardinality, redaction, readiness, and telemetry-export outages.
+- Never use unbounded IDs/URLs/emails/tenant identifiers as metric labels, expose sensitive payloads, persist raw provider exceptions, or make liveness depend on remote providers. Cross-tenant operational views use approved de-identified aggregates, not raw shared traces or support access.
+- Test trace propagation across HTTP/outbox/worker/database/provider, sampling context, tenant separation, raw/404/dynamic path floods, label cardinality budgets, exception and provider-secret redaction, protected metrics, readiness, and telemetry-export outages.
 - Exercise alerts for stale source, backlog, dead letter, provider outage, parser drift, CRM drift, mail failure, and calendar failure; conduct documented recovery drills.
 - Deployment tests prove one provider/source outage degrades only dependent workflows.
 - Acceptance: an operator traces one real record end-to-end from one correlation entry point; alerts are actionable/owned; sensitive data is absent from telemetry.
@@ -586,17 +788,18 @@ Make policy authoritative and versioned, automate retention and data-subject wor
 
 - Governance under src/ghostrecon/services/governance/ checks suppression, lineage, reuse, lawful basis, evidence age, and snapshots, but some policy values are caller-supplied rather than resolved from an authoritative store.
 - There is no complete retention, data-subject request, anonymization, legal-hold, or audit-integrity workflow; audit rows are not tamper-evident or externally anchored.
-- Requires Sprints 25 and 27 plus persisted lineage/provider states from Sprints 28-33.
+- Requires Sprints 25b-25c and 27 plus tenant-scoped lineage/provider states from Sprints 28-33.
 
 #### Implementation and interface requirements
 
-- Add authoritative versioned policy records for source permission, lawful basis, participant reuse, retention, suppression, approval, and outreach eligibility, with effective dates and immutable hashes.
+- Add tenant-scoped authoritative versioned policy records for source permission, lawful basis, participant reuse, retention, suppression, approval, outreach eligibility, provider enablement, support approval, residency, export, analytics, and AI/data use, with effective dates and immutable hashes.
 - Resolve policy server-side at decision time and persist exact version/hash. Caller snapshots are advisory input only and cannot override authority.
 - Add administrator/governance policy APIs with optimistic versions, idempotency, effective dates, preview/validation, permissions, and complete audit history.
 - Add retention evaluation and deletion/anonymization jobs for raw items, evidence, contacts, email payloads, and provider responses. Preserve only legally required minimal suppression identifiers.
 - Add data-subject request intake, identity/authorization verification, discovery, export, restriction, deletion, provider action/reference tracking, and completion evidence.
 - Add scoped legal holds preventing deletion while allowing reporting of held-expired data.
-- Hash-chain or sign audit entries, protect signing keys, periodically verify continuity/signatures, and anchor summaries externally when configured.
+- Hash-chain or sign audit entries, protect tenant/environment-scoped signing keys, periodically verify continuity/signatures, and anchor summaries externally when configured.
+- Include tenant, actor type, membership/support/break-glass grant, session/tenant switch, record reads and writes, export/download, automation/integration/policy changes, denial, placement, and provider action in immutable audit. Integrity verification must detect deletion, reordering, alteration, cross-tenant substitution, and missing expected events.
 - Add governance reports for violations, retention failures, stale evidence, prohibited reuse, unauthorized activation attempts, subject-request status, holds, and audit integrity.
 - Publish policy/DSR/hold/integrity APIs and event schemas, migrations, retention schedules, deletion/anonymization semantics, provider coordination, signature/key rotation, and failure recovery.
 
@@ -606,7 +809,7 @@ Make policy authoritative and versioned, automate retention and data-subject wor
 - Do not accept favorable caller policy, delete held data, erase required suppression protection, expose one subject's data to another, or rewrite audit history.
 - Test policy-version races/retroactivity, effective boundaries, retention clocks, holds, cascades, anonymization, suppression preservation, signing/key rotation, altered/missing audit entries, and job crashes/retries.
 - End-to-end DSR tests span canonical records, CRM references, sequencing, meetings, raw evidence, provider actions, and audit evidence. Browser/contract tests cover all admin/governance roles and optimistic conflicts.
-- Acceptance: callers cannot bypass policy; expired data is removed/anonymized on schedule while holds remain; DSRs produce complete evidence; integrity verification detects alterations and gaps.
+- Acceptance: callers cannot bypass policy; expired data is removed/anonymized on schedule while holds remain; DSRs produce complete tenant-complete evidence without exposing another tenant; support/break-glass activity is attributable; integrity verification detects alterations and gaps.
 
 #### Documentation requirements
 
@@ -622,16 +825,19 @@ Deliver a hardened Kubernetes/Helm production profile with recoverable data serv
 #### Current implementation and dependencies
 
 - deploy/helm/ghostrecon/ deploys APIs, one worker, one scheduler, bundled PostgreSQL/Redis, and CPU-based API HPAs.
-- TLS ingress, application network policies, disruption budgets, topology spreading, workload autoscaling, backups, and tested restore/regional recovery are absent. Secrets remain SOPS/Age placeholders; no load/soak/rollback evidence proves readiness.
-- Requires completion of Sprints 24-34. Kubernetes/Helm is production; Compose remains local/pilot troubleshooting.
+- TLS ingress, application network policies, disruption budgets, topology spreading, workload autoscaling, backups, and tested restore/regional recovery are absent. Application pods share one service account and do not disable token automount; the third-party email-verifier deployment lacks the main workload security context. Secrets remain SOPS/Age placeholders; no load/soak/rollback evidence proves readiness.
+- Requires completion of Sprints 24-34, including Sprint 25c shared/dedicated tenant placement, and signed E1 evidence before staging burn-in. Kubernetes/Helm is production; Compose remains local-only troubleshooting.
 
 #### Implementation and interface requirements
 
-- Recommend managed PostgreSQL/Redis for production while retaining bundled stores only for local/pilot profiles; make durability/HA capability differences explicit and validated.
-- Add TLS ingress, restrictive application network policies, pod disruption budgets, anti-affinity/topology spreading, least-privilege service accounts/RBAC, security contexts, and resource budgets.
+- Require managed PostgreSQL/Redis for E2 while retaining bundled stores only for local/test profiles; make durability/HA capability differences explicit and validated.
+- Implement Sprint 25c `TenantPlacement`: shared managed pools by default and dedicated databases/regions/storage/index namespaces for contractual, regulatory, residency, or enhanced-isolation tenants. Automate placement provisioning, migration, backup/PITR/restore, failover, key/secret rotation, capacity, deletion, and evidence.
+- Add TLS ingress, default-deny application/egress NetworkPolicies, pod disruption budgets, anti-affinity/topology spreading, distinct least-privilege service accounts/RBAC, `automountServiceAccountToken: false` by default, RuntimeDefault seccomp, security contexts for every first/third-party workload including email verifier, and resource/ephemeral-storage budgets.
 - Separate queues/workers by workload and scale by queue lag/work metrics rather than API CPU alone. Guarantee one active scheduler through leader election or equivalent durable scheduling.
 - Add PostgreSQL backups, PITR, automated restore verification, and migration rollback/roll-forward procedures. Define Redis persistence/recovery for its queue/coordination role.
 - Enforce immutable image provenance/signing, vulnerability policy, SBOM linkage, secret rotation, and controlled environment promotion.
+- Lock and hash Python production/dev dependencies; build reproducibly with a multi-stage minimal runtime that excludes compilers/download tools; add `.dockerignore`; scan dependencies, secrets, source, manifests, and images; fail policy on supported exploitable vulnerabilities rather than relying only on Bandit or `ignore-unfixed` image results.
+- Add `SECURITY.md`, security contact, coordinated disclosure/intake, severity and remediation SLAs, supported-version policy, customer advisory process, CODEOWNERS for security/release paths, dependency-update automation, protected release approvals, and signed attestations linking source, tests, image, SBOM, manifests, and promotion.
 - Add load tests for APIs, ingestion, outbox, review, CRM batching, sequence scheduling, and reporting; add failure injection for pod loss, broker outage, database failover, provider timeout, scheduler restart, and partial deployment.
 - Run a bounded staging burn-in with real sources/provider staging accounts and no synthetic inputs.
 - Define measurable SLIs/SLOs, RPO/RTO, capacity, ownership/on-call, launch and rollback criteria, deployment waves, and post-launch monitoring.
@@ -644,8 +850,8 @@ Deliver a hardened Kubernetes/Helm production profile with recoverable data serv
 - Helm lint/render tests cover managed and bundled profiles, TLS, policies, identities, scaling, and invalid combinations.
 - Migration tests cover upgrade, failed recovery, supported rollback, and forward-fix. Restore/regional drills demonstrate documented RPO/RTO.
 - Load/soak tests meet latency, throughput, freshness, and queue-lag SLOs; failure injection proves dependent-only degradation and safe recovery.
-- Go-live requires successful security, recovery, load, staging-soak, and real-data end-to-end exercises with signed owners and explicit rollback criteria.
-- Acceptance: production topology is hardened and observable, data recovery meets objectives, deployment is promotable/rollback-capable, and outages remain isolated.
+- Go-live requires successful security, recovery, tenant-isolation, load, staging-soak, and real-data end-to-end exercises with signed owners and explicit rollback criteria, plus an independent penetration test against the final shared-SaaS architecture and verified remediation.
+- Acceptance: production topology is hardened and observable, shared and dedicated tenant data recovery meets objectives, deployment is reproducible/promotable/rollback-capable, outages remain isolated, no unresolved Critical or High findings remain, and E2 evidence is owner-signed.
 
 #### Documentation requirements
 
@@ -669,4 +875,5 @@ Deliver a hardened Kubernetes/Helm production profile with recoverable data serv
 - Use `SPRINTS.md`, not a new `SPRINT.md`.
 - Fake data is acceptable and must be deterministic.
 - The demo target is local Docker Compose, not Kubernetes or production.
+- Local demo, Compose, deterministic-provider, and scanner results never satisfy E1 or E2 and must not be presented as enterprise-readiness evidence.
 - The first implementation priority is fixing the missing migration/schema problem because it blocks all reporting-backed dashboard pages.

@@ -794,6 +794,13 @@ Related/shared modules referenced by this service: `src/ghostrecon/service_apps/
 
 - `tests/unit/test_console_dashboard.py`
 
+## Sprint 25a Security Boundary
+
+The console still sends legacy demo actor/role state. Strict profiles reject those headers, while
+OIDC sessions, console workload identity, represented-user propagation, CSRF, and security-state UX
+are not implemented. The current console is local/test-only from an identity perspective. See the
+[security foundation reference](../../docs/security-foundation.md).
+
 ## Startup and dependency contract
 
 Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns gateway URL only; it does not own or probe the database. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.

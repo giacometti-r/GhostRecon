@@ -729,6 +729,15 @@ No classes or functions are defined in this module.
 - `tests/unit/test_reporting_routes.py`
 - `tests/unit/test_enrichment_routes.py`
 
+## Sprint 25a Security Boundary
+
+`create_base_app` installs the shared transport perimeter, but the gateway remains an aggregate
+in-process/service-router application rather than the sole authenticated reverse proxy. Strict
+profiles reject legacy caller identity and untrusted OBO/service-authorization headers. No OIDC,
+session, workload-authentication, route-policy, or audit-query middleware is wired, and the initial
+operation registry is not a complete or enforced route matrix. See the [security foundation
+reference](../../docs/security-foundation.md).
+
 ## Startup and dependency contract
 
 Set GHOSTRECON_PROFILE explicitly. In staging and production this process owns database; live geocoder, search, news, email verifier, Attio CRM, Google Calendar, SMTP, IMAP, and crawler identity. Startup exits non-zero with redacted setting/error/remediation records when an owned dependency is missing, fake, disabled, unsafe, or placeholder.

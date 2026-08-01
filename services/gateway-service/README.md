@@ -95,6 +95,16 @@ Mounts the aggregate API surface and forwards gateway routes to the same impleme
 - common Settings.
 - service_name routing.
 
+## Sprint 25a Security Boundary
+
+The gateway currently aggregates existing in-process/service-router handlers; it is not yet the sole
+authenticated reverse proxy. The shared perimeter applies transport bounds and, in staging or
+production, rejects legacy caller identity headers and untrusted internal OBO/service-authorization
+headers. Login, callback, session, logout, security-administration, and audit-query routes do not yet
+exist. The initial operation registry is declarative and does not classify or enforce the full route
+set. Existing actor/role parameters remain local/test compatibility behavior only. See the
+[security foundation reference](../../docs/security-foundation.md).
+
 ## Operations
 
 - Treat idempotency headers as required where route handlers declare `Idempotency-Key`.

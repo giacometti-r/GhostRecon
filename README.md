@@ -114,8 +114,8 @@ Sprint 9, Sprint 10, and Sprint 11 add review-gated sales activation after gover
 
 Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 
-- Dash is mounted at `/` while FastAPI keeps `/healthz`, `/readyz`, `/metrics`, `/docs`, and existing `/v1/*` review APIs.
-- Dashboard reads use `gateway-service`/`reporting-service` APIs with `X-Actor` and `X-Operator-Role` context; callbacks never query canonical tables.
+- Dash is mounted at `/` while FastAPI keeps `/healthz`, `/readyz`, `/metrics`, `/docs`, and existing `/v1/*` review APIs. These system endpoints remain mounted without Sprint 25 policy enforcement.
+- Dashboard reads currently use `gateway-service`/`reporting-service` APIs with legacy `X-Actor` and `X-Operator-Role` context in local/test workflows; callbacks never query canonical tables. Strict staging/production profiles reject those headers, and replacement OIDC/session propagation is Sprint 25b work.
 - Mutating controls call owning feature-service APIs through the gateway for review decisions, bounded bulk review, event create/edit, participant enrichment queueing, incident corroborate/reject/revert, CRM export/retry, company watchlist promotion/toggle/contact discovery, contact-domain discovery, sequence pause/resume/cancel, and meeting handoff actions.
 - Event routes use coordinate-backed maps from structured venue address fields, and detail metadata is limited to governance reviewers.
 - Incident routes use company-specific rows, inline evidence/company rendering, corroborated-only watch promotion, and governance-reviewer-only metadata.
@@ -123,6 +123,21 @@ Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 - Sidebar, detail, and pagination navigation use Dash client-side routing with visible active section state.
 - Failed dashboard reads render endpoint/status context on the page so gateway/reporting issues are visible during local demos.
 - Source-health operations are visible but read-only until source-operations APIs are implemented during hardening/pilot work.
+
+## Implemented Sprint 25a Security Foundation
+
+Sprint 25a adds shared, unit-tested primitives for normalized identity, additive RBAC and assurance,
+OIDC and short-lived Ed25519 service/OBO token validation, opaque session/CSRF secrets, an initial
+operation-policy registry, transport-level perimeter middleware, security persistence, expanded
+audit fields, and transaction-local PostgreSQL security context.
+
+This is not production authentication or authorization. There are no login/session routes,
+authoritative session repositories, route-policy binding, workload credential loading, authenticated
+service calls, active application RLS, or protected docs/metrics. In strict staging/production
+profiles the perimeter rejects legacy caller identity headers, so the current demo-oriented console
+flow is not a deployable production identity path. See the [security foundation
+reference](docs/security-foundation.md) and [Sprint 25a evidence
+report](docs/reports/sprint-25a-security-foundation.md).
 
 ## Source Policy
 
@@ -135,7 +150,7 @@ Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 ## Production Defaults
 
 - Python 3.12, FastAPI, Dash, Plotly, Pydantic, SQLAlchemy, Alembic, Celery, Redis, and PostgreSQL.
-- Structured JSON logs, Prometheus metrics at `/metrics`, liveness at `/healthz`, and readiness at `/readyz`.
+- Structured JSON logs, Prometheus metrics at `/metrics`, liveness at `/healthz`, and readiness at `/readyz`. These endpoints are currently mounted directly; the stricter Sprint 25 operation policies are not yet enforced.
 - Kubernetes deployment through Helm in `deploy/helm/ghostrecon`.
 - SOPS + Age secret management for Helm values.
 - Attio is implemented behind `CrmClient` so future CRMs can provide equivalent object, list, and reconciliation mappings.
@@ -257,6 +272,10 @@ GhostRecon stores source lineage, source-reuse policy, idempotency keys, evidenc
 - [Operations runbook](docs/runbooks/operations.md)
 - [Intelligence-first acquisition ADR](docs/adr/0004-intelligence-first-acquisition.md)
 - [Runtime profiles and no-synthetic production ADR](docs/adr/0005-runtime-profiles-and-no-synthetic-production.md)
+- [Sprint 25a security foundation](docs/security-foundation.md)
+- [Security foundation ADR](docs/adr/0006-security-foundation.md)
+- [Sprint 25a evidence report](docs/reports/sprint-25a-security-foundation.md)
+- [Sprint 25 research requirements](SPRINT_25.md)
 
 Every service directory under `services/` contains an operator `README.md` and an engineering `TECHNICAL_README.md`.
 
@@ -269,7 +288,7 @@ and named dependency checks, and console-service owns only the gateway URL.
 
 Local Compose is explicitly local and retains deterministic demo data. Staging and production
 require explicit live providers and owned credentials, reject synthetic adapters/inference and
-placeholder identities, and guard persisted provider/lineage fields against exact demo sentinels.
+placeholder identities, and guard persisted provider/lineage fields against exact demo sentinels. Strict profiles also reject caller-supplied identity and reserved internal headers; because replacement OIDC and workload authentication are not yet wired, this is a fail-closed foundation boundary rather than a production-ready login path.
 
 Production Helm releases must set `image.digest` and a SHA-256 digest for every enabled bundled
 PostgreSQL, Redis, or email-verifier image. The chart runs service-scoped preflight hooks and
