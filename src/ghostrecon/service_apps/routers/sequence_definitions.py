@@ -19,6 +19,7 @@ from ghostrecon.services.sequencing import (
     update_sequence,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import gateway_router, sequencing_router
 
 
@@ -27,7 +28,7 @@ from .registry import gateway_router, sequencing_router
 async def sequence_create(
     request: SequenceCreateRequest,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceOut:
     try:
         return await create_sequence(
@@ -88,7 +89,7 @@ async def sequence_detail(sequence_id: str) -> SequenceOut:
 async def sequence_update(
     sequence_id: str,
     request: SequenceUpdateRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceOut:
     try:
         sequence = await update_sequence(
@@ -108,7 +109,7 @@ async def sequence_update(
 @sequencing_router.delete("/v1/sequences/{sequence_id}", response_model=SequenceOut)
 async def sequence_delete(
     sequence_id: str,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceOut:
     sequence = await archive_sequence(sequence_id, actor=actor, settings=get_settings())
     if sequence is None:

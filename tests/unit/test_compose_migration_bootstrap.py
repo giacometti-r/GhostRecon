@@ -136,7 +136,7 @@ def test_compose_runs_migrations_before_demo_services() -> None:
     assert "GHOSTRECON_SERVICE_NAME: migration-job" in compose
     assert compose.count("condition: service_completed_successfully") >= 3
 
-    for service_name in ("gateway-service", "console-service", "worker"):
+    for service_name in ("gateway-service", "console-service", "source-fetch-worker"):
         service_block = compose.split(f"  {service_name}:", maxsplit=1)[1].split("\n\n", 1)[0]
         assert "migrate:" in service_block
         assert "condition: service_completed_successfully" in service_block

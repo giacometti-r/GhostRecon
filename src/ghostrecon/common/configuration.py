@@ -106,7 +106,7 @@ CRAWLER = ServiceRequirement("crawl_user_agent", "crawler_identity")
 ALL_LIVE_PROVIDERS = (GEOCODER, SEARCH, NEWS, VERIFIER, CRM, CALENDAR, SMTP, IMAP, CRAWLER)
 
 SERVICE_REQUIREMENTS: dict[ServiceName, tuple[ServiceRequirement, ...]] = {
-    ServiceName.GATEWAY: (DATABASE, *ALL_LIVE_PROVIDERS),
+    ServiceName.GATEWAY: (DATABASE, REDIS),
     ServiceName.EVENT_INTELLIGENCE: (DATABASE, GEOCODER),
     ServiceName.INCIDENT_INTELLIGENCE: (DATABASE, NEWS),
     ServiceName.ENRICHMENT: (DATABASE, SEARCH, VERIFIER, CRAWLER),
@@ -281,6 +281,61 @@ def validate_configuration(
         value = getattr(settings, name)
         if isinstance(value, str) and _is_placeholder(value):
             issue(name, "placeholder", f"set a non-placeholder value for {name}")
+    gateway_security = selected is ServiceName.GATEWAY
+    runtime_workload = selected is not ServiceName.MIGRATION
+    if gateway_security and settings.authentication_backend == "local_oidc":
+        issue(
+            "authentication_backend",
+            "local_auth_forbidden",
+            "select the oidc backend in staging and production",
+        )
+    security_names: tuple[str, ...] = ()
+    if runtime_workload:
+        security_names += (
+            "service_identity",
+            "service_private_key_path",
+            "service_private_key_id",
+            "service_trust_bundle_path",
+        )
+    if DATABASE in requirements_for(selected):
+        security_names += ("audit_hmac_key",)
+    if gateway_security:
+        security_names += (
+            "oidc_issuer",
+            "oidc_client_id",
+            "oidc_redirect_uri",
+            "oidc_post_logout_redirect_uri",
+            "session_hmac_key",
+            "oidc_transaction_encryption_key",
+        )
+    for name in security_names:
+        value = getattr(settings, name)
+        if value is None or (isinstance(value, str) and not value.strip()):
+            issue(name, "missing_security_configuration", f"set GHOSTRECON_{name.upper()}")
+
+    if gateway_security and settings.oidc_issuer:
+        issuer = urlsplit(settings.oidc_issuer)
+        if issuer.scheme != "https" or not issuer.hostname or issuer.query or issuer.fragment:
+            issue("oidc_issuer", "unsafe_issuer", "configure an exact HTTPS issuer URL")
+    if gateway_security:
+        for name in ("oidc_redirect_uri", "oidc_post_logout_redirect_uri"):
+            value = getattr(settings, name)
+            if value:
+                parsed = urlsplit(value)
+                if parsed.scheme != "https" or not parsed.hostname or parsed.fragment:
+                    issue(name, "unsafe_redirect_uri", "configure an exact HTTPS redirect URI")
+        if not settings.secure_cookies:
+            issue("secure_cookies", "insecure_cookie", "enable Secure host-only cookies")
+        if any(origin == "*" for origin in settings.allowed_cors_origins):
+            issue("allowed_cors_origins", "wildcard_cors", "configure exact browser origins")
+        if not settings.trusted_proxy_cidrs:
+            issue("trusted_proxy_cidrs", "missing", "configure trusted ingress proxy CIDRs")
+    for name in ("session_hmac_key", "oidc_transaction_encryption_key", "audit_hmac_key"):
+        value = getattr(settings, name)
+        if value and len(value.encode()) < 32:
+            issue(name, "weak_key", "provide at least 256 bits of secret material")
+    if settings.docs_enabled:
+        issue("docs_enabled", "strict_docs_enabled", "disable docs by default in strict profiles")
     return tuple(_deduplicate(issues))
 
 

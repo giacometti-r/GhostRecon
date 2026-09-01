@@ -31,6 +31,12 @@ def create_session_secrets(hmac_key: bytes) -> SessionSecrets:
     )
 
 
+def csrf_token_for_session(identifier: str, hmac_key: bytes) -> str:
+    if len(hmac_key) < 32:
+        raise ValueError("session HMAC key must contain at least 256 bits")
+    return hmac.new(hmac_key, f"{identifier}:csrf".encode(), hashlib.sha256).hexdigest()
+
+
 def digest_secret(value: str, hmac_key: bytes) -> str:
     return hmac.new(hmac_key, value.encode("utf-8"), hashlib.sha256).hexdigest()
 

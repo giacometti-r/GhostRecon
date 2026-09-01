@@ -292,7 +292,7 @@ def test_event_participant_enrich_target_route(monkeypatch) -> None:
     async def fake_enrich(participant_id, request, **kwargs):
         assert participant_id == "participant-1"
         assert request.domain == "example.com"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         return {
             "contact_candidate": _contact_candidate().__dict__,
             "email_candidates": [_email_candidate("verified").__dict__],
@@ -305,7 +305,7 @@ def test_event_participant_enrich_target_route(monkeypatch) -> None:
     client = TestClient(build_app(Settings(service_name="enrichment-service")))
     response = client.post(
         "/v1/enrichment/event-participants/participant-1/enrich-target",
-        headers={"Idempotency-Key": "enrich-1", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "enrich-1", "X-Test-Metadata": "analyst@example.com"},
         json={"domain": "example.com", "role_scope": "security"},
     )
 
@@ -318,7 +318,7 @@ def test_watch_target_contact_and_domain_discovery_routes(monkeypatch) -> None:
 
     async def fake_find_contacts(watch_target_id, **kwargs):
         assert watch_target_id == "watch-1"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         return {
             "watch_target": {
                 "id": "watch-1",
@@ -346,7 +346,7 @@ def test_watch_target_contact_and_domain_discovery_routes(monkeypatch) -> None:
 
     async def fake_discover_domain(candidate_id, **kwargs):
         assert candidate_id == "contact-candidate-1"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         return {
             "contact_candidate": _contact_candidate().__dict__,
             "query": "Example Corp official website",
@@ -359,7 +359,7 @@ def test_watch_target_contact_and_domain_discovery_routes(monkeypatch) -> None:
 
     async def fake_discover_email(candidate_id, **kwargs):
         assert candidate_id == "contact-candidate-1"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         assert kwargs["idempotency_key"] == "idem-email"
         return [_email_candidate("verified")]
 
@@ -372,15 +372,15 @@ def test_watch_target_contact_and_domain_discovery_routes(monkeypatch) -> None:
     client = TestClient(build_app(Settings(service_name="enrichment-service")))
     contacts = client.post(
         "/v1/enrichment/watch-targets/watch-1/find-contact",
-        headers={"X-Actor": "analyst@example.com"},
+        headers={"X-Test-Metadata": "analyst@example.com"},
     )
     domain = client.post(
         "/v1/enrichment/contact-candidates/contact-candidate-1/discover-domain",
-        headers={"X-Actor": "analyst@example.com"},
+        headers={"X-Test-Metadata": "analyst@example.com"},
     )
     email = client.post(
         "/v1/enrichment/contact-candidates/contact-candidate-1/discover-email",
-        headers={"X-Actor": "analyst@example.com", "Idempotency-Key": "idem-email"},
+        headers={"X-Test-Metadata": "analyst@example.com", "Idempotency-Key": "idem-email"},
     )
 
     assert contacts.status_code == 200
@@ -449,17 +449,17 @@ def test_review_decision_routes_and_crm_targets(monkeypatch) -> None:
     client = TestClient(build_app(Settings(service_name="governance-service")))
     approved = client.post(
         "/v1/review/candidates/review-1/approve",
-        headers={"Idempotency-Key": "idem-approve", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "idem-approve", "X-Test-Metadata": "analyst@example.com"},
         json={"version": 1, "reason_code": "approved_by_analyst"},
     ).json()
     rejected = client.post(
         "/v1/review/candidates/review-1/reject",
-        headers={"Idempotency-Key": "idem-reject", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "idem-reject", "X-Test-Metadata": "analyst@example.com"},
         json={"version": 1, "reason_code": "false_positive"},
     ).json()
     bulk = client.post(
         "/v1/review/candidates/bulk-decision",
-        headers={"Idempotency-Key": "idem-bulk", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "idem-bulk", "X-Test-Metadata": "analyst@example.com"},
         json={
             "candidate_ids": ["review-1"],
             "decision": "approved",
@@ -478,7 +478,7 @@ def test_review_decision_routes_and_crm_targets(monkeypatch) -> None:
 def test_review_and_crm_target_update_routes(monkeypatch) -> None:
     async def fake_update_review_candidate(candidate_id, request, **kwargs):
         assert candidate_id == "review-1"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         candidate = _review_candidate()
         candidate.evidence_summary = {
             "published_name": request.name,
@@ -491,7 +491,7 @@ def test_review_and_crm_target_update_routes(monkeypatch) -> None:
 
     async def fake_update_crm_target(crm_target_id, request, **kwargs):
         assert crm_target_id == "crm-target-1"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         target = _crm_target()
         target.approval_snapshot = {
             "name": request.name,
@@ -507,7 +507,7 @@ def test_review_and_crm_target_update_routes(monkeypatch) -> None:
     client = TestClient(build_app(Settings(service_name="governance-service")))
     review = client.patch(
         "/v1/review/candidates/review-1",
-        headers={"X-Actor": "analyst@example.com"},
+        headers={"X-Test-Metadata": "analyst@example.com"},
         json={
             "name": "Ada Updated",
             "company": "Example Industries",
@@ -517,7 +517,7 @@ def test_review_and_crm_target_update_routes(monkeypatch) -> None:
     ).json()
     crm = client.patch(
         "/v1/review/crm-targets/crm-target-1",
-        headers={"X-Actor": "analyst@example.com"},
+        headers={"X-Test-Metadata": "analyst@example.com"},
         json={
             "name": "Ada Updated",
             "company": "Example Industries",

@@ -1,0 +1,90 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ghostrecon-default-deny
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ghostrecon.name" . }}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ghostrecon-gateway-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: gateway-service
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - {port: 8080, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ghostrecon-owner-ingress
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [{{ include "ghostrecon.name" . }}]
+      - key: app.kubernetes.io/component
+        operator: NotIn
+        values: [gateway-service]
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: gateway-service
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/component: console-service
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/component
+                operator: In
+                values:
+                  - source-fetch-worker
+                  - event-parser-worker
+                  - incident-parser-worker
+                  - watch-monitor-worker
+                  - enrichment-worker
+                  - email-intelligence-worker
+                  - governance-worker
+                  - crm-export-worker
+                  - sequencing-worker
+                  - meeting-sync-worker
+      ports:
+        - {port: 8080, protocol: TCP}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ghostrecon-controlled-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "ghostrecon.name" . }}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: {}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - {port: 443, protocol: TCP}
+{{- end }}

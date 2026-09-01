@@ -1,0 +1,508 @@
+[
+  {
+    "table": "accounts",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "audit_events",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "candidate_scores",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "contact_enrichment_candidates",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "contacts",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "crm_export_batches",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "crm_export_items",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "crm_targets",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "email_candidates",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "entity_resolution_cases",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "event_participants",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "inbound_email_events",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "leads",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "meeting_follow_up_tasks",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "meeting_handoffs",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "meeting_prep_packets",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "news_articles",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "outbound_emails",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "outbox_events",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "raw_source_items",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "review_candidates",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "review_decisions",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "security_emergency_grants",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "security_incident_evidence",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "security_incidents",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "security_policy_versions",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "security_principals",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "security_replay_markers",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "security_role_bindings",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "security_sessions",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "sequence_email_alerts",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "sequence_enrollments",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "sequence_step_activities",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "sequence_steps",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "sequence_suppression_events",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "sequences",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "signals",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "source_definitions",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "suppressions",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "watch_target_monitoring_runs",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "watch_targets",
+    "classification": "protected",
+    "enable_revision": "0018_enable_grouped_rls",
+    "force_revision": "0019_force_grouped_rls",
+    "crud_policies": [
+      "select",
+      "insert",
+      "update",
+      "delete"
+    ]
+  },
+  {
+    "table": "cyber_events",
+    "classification": "explicit_exclusion",
+    "enable_revision": null,
+    "force_revision": null,
+    "crud_policies": []
+  },
+  {
+    "table": "organization_email_patterns",
+    "classification": "explicit_exclusion",
+    "enable_revision": null,
+    "force_revision": null,
+    "crud_policies": []
+  }
+]

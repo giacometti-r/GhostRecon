@@ -287,7 +287,7 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
     )
 
     client = TestClient(build_app(Settings(service_name="sequencing-service")))
-    headers = {"Idempotency-Key": "idem-sequence", "X-Actor": "analyst@example.com"}
+    headers = {"Idempotency-Key": "idem-sequence", "X-Test-Metadata": "analyst@example.com"}
     sequence = client.post(
         "/v1/sequences",
         headers=headers,
@@ -396,7 +396,7 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         "sequence_name": "Incident follow-up",
         "sequence_key": "idem-sequence",
         "crm_target_id": "crm-target-1",
-        "actor": "analyst@example.com",
+        "actor": "Local development administrator",
         "list_status": "active",
         "sequence_list_status": "active",
         "updated_sequence": "sequence-1",
@@ -404,14 +404,14 @@ def test_sequence_routes_create_enroll_manage_and_unsubscribe(monkeypatch) -> No
         "unsubscribe_email": "ada@example.com",
         "unsubscribe_key": "idem-unsub",
         "alert_enrollment": "enrollment-1",
-        "alert_actor": "analyst@example.com",
+        "alert_actor": "Local development administrator",
         "activity_status": "pending_approval",
         "activity_channel": "email",
         "prospect_query": "taylor",
         "imported_prospect": "demo-crm-prospect-taylor-ng",
         "import_key": "idem-sequence",
         "approved_activity": "activity-1",
-        "approved_actor": "system",
+        "approved_actor": "Local development administrator",
         "completed_activity": "activity-1",
         "scheduled_activity": "activity-1",
     }

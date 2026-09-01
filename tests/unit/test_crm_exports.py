@@ -94,7 +94,7 @@ def test_crm_export_routes_start_detail_and_retry(monkeypatch) -> None:
     monkeypatch.setattr(routers.crm, "retry_failed_crm_export_items", fake_retry)
 
     client = TestClient(build_app(Settings(service_name="crm-service")))
-    headers = {"Idempotency-Key": "idem-export", "X-Actor": "analyst@example.com"}
+    headers = {"Idempotency-Key": "idem-export", "X-Test-Metadata": "analyst@example.com"}
     started = client.post(
         "/v1/crm/exports",
         headers=headers,
@@ -103,7 +103,7 @@ def test_crm_export_routes_start_detail_and_retry(monkeypatch) -> None:
     detail = client.get("/v1/crm/exports/batch-1").json()
     retried = client.post(
         "/v1/crm/exports/batch-1/retry-failed",
-        headers={"Idempotency-Key": "idem-retry", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "idem-retry", "X-Test-Metadata": "analyst@example.com"},
         json={"item_ids": ["item-1"]},
     ).json()
 
@@ -113,7 +113,7 @@ def test_crm_export_routes_start_detail_and_retry(monkeypatch) -> None:
     assert retried["items"][0]["retry_after_seconds"] == 30
     assert seen == {
         "start_ids": ["crm-target-1"],
-        "actor": "analyst@example.com",
+        "actor": "Local development administrator",
         "idempotency_key": "idem-export",
         "retry_key": "idem-retry",
     }

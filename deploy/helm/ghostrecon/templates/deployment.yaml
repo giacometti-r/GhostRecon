@@ -18,7 +18,8 @@ spec:
         app.kubernetes.io/name: {{ include "ghostrecon.name" $ }}
         app.kubernetes.io/component: {{ $service }}
     spec:
-      serviceAccountName: {{ $.Values.serviceAccount.name }}
+      serviceAccountName: {{ $service }}
+      automountServiceAccountToken: false
       securityContext:
         {{- toYaml $.Values.podSecurityContext | nindent 8 }}
       containers:
@@ -31,6 +32,14 @@ spec:
           env:
             - name: GHOSTRECON_SERVICE_NAME
               value: {{ $service | quote }}
+            - name: GHOSTRECON_SERVICE_IDENTITY
+              value: {{ $service | quote }}
+            - name: GHOSTRECON_SERVICE_PRIVATE_KEY_PATH
+              value: "/var/run/ghostrecon/identity/private-key.pem"
+            - name: GHOSTRECON_SERVICE_PRIVATE_KEY_ID
+              value: {{ $.Values.workloadKeyId | quote }}
+            - name: GHOSTRECON_SERVICE_TRUST_BUNDLE_PATH
+              value: "/var/run/ghostrecon/identity/trust-bundle.json"
             {{- include "ghostrecon.projectSecrets" (list $ $service) | nindent 12 }}
           envFrom:
             - configMapRef:
@@ -47,9 +56,18 @@ spec:
               port: http
             initialDelaySeconds: 10
             periodSeconds: 20
+          volumeMounts:
+            - name: workload-identity
+              mountPath: /var/run/ghostrecon/identity
+              readOnly: true
           resources:
             {{- toYaml $.Values.resources | nindent 12 }}
           securityContext:
             {{- toYaml $.Values.securityContext | nindent 12 }}
+      volumes:
+        - name: workload-identity
+          secret:
+            secretName: ghostrecon-{{ $service }}-identity
+            defaultMode: 0400
 ---
 {{- end }}

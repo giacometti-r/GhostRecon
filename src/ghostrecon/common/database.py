@@ -14,10 +14,15 @@ from sqlalchemy.orm import DeclarativeBase
 
 from ghostrecon.common.config import Settings, get_settings
 from ghostrecon.common.synthetic_guard import enable_synthetic_persistence_guard
+from ghostrecon.security.context import current_identity, current_operation
+from ghostrecon.security.database import set_security_context
 
 
 class Base(DeclarativeBase):
     pass
+
+
+from ghostrecon.security import audit as _security_audit  # noqa: E402, F401
 
 
 @dataclass(frozen=True)
@@ -61,6 +66,12 @@ async def session_scope(settings: Settings | None = None) -> AsyncIterator[Async
     async with factory() as session:
         enable_synthetic_persistence_guard(session.sync_session, resolved.profile)
         try:
+            identity = current_identity.get()
+            operation = current_operation.get()
+            if resolved.strict_runtime and (identity is None or operation is None):
+                raise PermissionError("verified database security context is required")
+            if identity is not None and operation is not None:
+                await set_security_context(session, identity, operation=operation)
             yield session
             await session.commit()
         except Exception:

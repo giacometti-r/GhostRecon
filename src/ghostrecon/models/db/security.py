@@ -36,9 +36,7 @@ class SecurityPrincipal(Base):
 
 class SecurityRoleBinding(Base):
     __tablename__ = "security_role_bindings"
-    __table_args__ = (
-        UniqueConstraint("principal_id", "role", name="uq_security_role_binding"),
-    )
+    __table_args__ = (UniqueConstraint("principal_id", "role", name="uq_security_role_binding"),)
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid4())
@@ -76,12 +74,11 @@ class SecuritySession(Base):
     provider_roles_refreshed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
+    provider_roles: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     rotate_after: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     idle_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    absolute_expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    absolute_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     remembered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     revocation_reason: Mapped[str | None] = mapped_column(String(255))

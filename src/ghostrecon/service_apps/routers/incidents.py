@@ -27,6 +27,7 @@ from ghostrecon.services.incident_intelligence import (
     watch_target_to_api,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import gateway_router, incident_intelligence_router
 
 
@@ -55,7 +56,7 @@ async def intelligence_incidents(
 async def intelligence_create_manual_incident(
     request: ManualIncidentCreate,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SecurityIncidentList:
     incidents = await create_manual_incident(
         request,
@@ -93,7 +94,7 @@ async def intelligence_patch_incident(
     incident_id: str,
     request: IncidentUpdateRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SecurityIncidentOut:
     try:
         incident = await update_incident(
@@ -145,7 +146,7 @@ async def intelligence_watch_target_detail(watch_target_id: str) -> WatchTargetO
 async def intelligence_create_watch_target(
     payload: WatchTargetCreate,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> WatchTargetOut:
     target = await create_watch_target(
         payload, actor=actor, idempotency_key=idempotency_key, settings=get_settings()
@@ -163,7 +164,7 @@ async def intelligence_patch_watch_target(
     watch_target_id: str,
     payload: WatchTargetPatch,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> WatchTargetOut:
     try:
         target = await patch_watch_target(
@@ -196,7 +197,7 @@ async def intelligence_promote_incident_to_watchlist(
     incident_id: str,
     request: IncidentWatchPromotionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> WatchTargetOut:
     try:
         target = await promote_incident_to_watchlist(

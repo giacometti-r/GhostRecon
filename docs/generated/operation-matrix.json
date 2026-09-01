@@ -1,0 +1,2494 @@
+[
+  {
+    "operation_id": "auth.bootstrap_proof",
+    "owner": "gateway-service",
+    "permission": "security.admin",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 65536,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "security",
+    "test_ids": [
+      "route:auth.bootstrap_proof"
+    ]
+  },
+  {
+    "operation_id": "auth.callback",
+    "owner": "gateway-service",
+    "permission": null,
+    "authentication": "public",
+    "assurance": null,
+    "rls": false,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "auth",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "auth.claims.refresh",
+    "owner": "gateway-service",
+    "permission": "session.self.read",
+    "authentication": "human",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "auth",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "security",
+    "test_ids": [
+      "route:auth.claims.refresh"
+    ]
+  },
+  {
+    "operation_id": "auth.login",
+    "owner": "gateway-service",
+    "permission": null,
+    "authentication": "public",
+    "assurance": null,
+    "rls": false,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "auth",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "auth.logout",
+    "owner": "gateway-service",
+    "permission": "session.self.revoke",
+    "authentication": "human",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "session",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "auth.logout_all",
+    "owner": "gateway-service",
+    "permission": "session.self.revoke",
+    "authentication": "human",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "session",
+    "maximum_body_bytes": 65536,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "security",
+    "test_ids": [
+      "route:auth.logout_all"
+    ]
+  },
+  {
+    "operation_id": "auth.provider_logout.callback",
+    "owner": "gateway-service",
+    "permission": null,
+    "authentication": "public",
+    "assurance": null,
+    "rls": false,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "auth",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "security",
+    "test_ids": [
+      "route:auth.provider_logout.callback"
+    ]
+  },
+  {
+    "operation_id": "auth.session.read",
+    "owner": "gateway-service",
+    "permission": "session.self.read",
+    "authentication": "human",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "session",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "auth.sessions.list",
+    "owner": "gateway-service",
+    "permission": "session.self.read",
+    "authentication": "human",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "session",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "security",
+    "test_ids": [
+      "route:auth.sessions.list"
+    ]
+  },
+  {
+    "operation_id": "auth.sessions.revoke",
+    "owner": "gateway-service",
+    "permission": "session.self.revoke",
+    "authentication": "human",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "session",
+    "maximum_body_bytes": 65536,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "security",
+    "test_ids": [
+      "route:auth.sessions.revoke"
+    ]
+  },
+  {
+    "operation_id": "auth.step_up",
+    "owner": "gateway-service",
+    "permission": "session.self.read",
+    "authentication": "human",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "auth",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "security",
+    "test_ids": [
+      "route:auth.step_up"
+    ]
+  },
+  {
+    "operation_id": "domain.calendar_availability",
+    "owner": "meeting-handoff-service",
+    "permission": "meeting.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/calendar/availability",
+    "test_ids": [
+      "contract:POST:/v1/calendar/availability"
+    ]
+  },
+  {
+    "operation_id": "domain.candidate_score",
+    "owner": "scoring-routing-service",
+    "permission": "scoring.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/scoring/candidates",
+    "test_ids": [
+      "contract:POST:/v1/scoring/candidates"
+    ]
+  },
+  {
+    "operation_id": "domain.crm_export_detail",
+    "owner": "crm-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/crm/exports/{batch_id}",
+    "test_ids": [
+      "contract:GET:/v1/crm/exports/{batch_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.crm_export_retry_failed",
+    "owner": "crm-service",
+    "permission": "crm.export",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/crm/exports/{batch_id}/retry-failed",
+    "test_ids": [
+      "contract:POST:/v1/crm/exports/{batch_id}/retry-failed"
+    ]
+  },
+  {
+    "operation_id": "domain.crm_export_start",
+    "owner": "crm-service",
+    "permission": "crm.export",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/crm/exports",
+    "test_ids": [
+      "contract:POST:/v1/crm/exports"
+    ]
+  },
+  {
+    "operation_id": "domain.crm_sync_account",
+    "owner": "crm-service",
+    "permission": "crm.export",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/crm/sync/account",
+    "test_ids": [
+      "contract:POST:/v1/crm/sync/account"
+    ]
+  },
+  {
+    "operation_id": "domain.domain_enrichment",
+    "owner": "event-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/domain",
+    "test_ids": [
+      "contract:POST:/v1/enrichment/domain"
+    ]
+  },
+  {
+    "operation_id": "domain.email_candidates",
+    "owner": "email-intelligence-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/email/candidates",
+    "test_ids": [
+      "contract:POST:/v1/email/candidates"
+    ]
+  },
+  {
+    "operation_id": "domain.email_persist_candidates",
+    "owner": "email-intelligence-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/email/candidates/persist",
+    "test_ids": [
+      "contract:POST:/v1/email/candidates/persist"
+    ]
+  },
+  {
+    "operation_id": "domain.email_verify",
+    "owner": "email-intelligence-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/email/verify",
+    "test_ids": [
+      "contract:POST:/v1/email/verify"
+    ]
+  },
+  {
+    "operation_id": "domain.email_verify_batch",
+    "owner": "email-intelligence-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/email/verify-batch",
+    "test_ids": [
+      "contract:POST:/v1/email/verify-batch"
+    ]
+  },
+  {
+    "operation_id": "domain.enrichment_contact_candidate_discover_domain",
+    "owner": "enrichment-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/contact-candidates/{candidate_id}/discover-domain",
+    "test_ids": [
+      "contract:POST:/v1/enrichment/contact-candidates/{candidate_id}/discover-domain"
+    ]
+  },
+  {
+    "operation_id": "domain.enrichment_contact_candidate_discover_email",
+    "owner": "enrichment-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/contact-candidates/{candidate_id}/discover-email",
+    "test_ids": [
+      "contract:POST:/v1/enrichment/contact-candidates/{candidate_id}/discover-email"
+    ]
+  },
+  {
+    "operation_id": "domain.enrichment_contact_candidates",
+    "owner": "enrichment-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/contact-candidates",
+    "test_ids": [
+      "contract:GET:/v1/enrichment/contact-candidates"
+    ]
+  },
+  {
+    "operation_id": "domain.enrichment_create_contact_candidate",
+    "owner": "enrichment-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/contact-candidates",
+    "test_ids": [
+      "contract:POST:/v1/enrichment/contact-candidates"
+    ]
+  },
+  {
+    "operation_id": "domain.enrichment_create_entity_resolution",
+    "owner": "enrichment-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/entity-resolutions",
+    "test_ids": [
+      "contract:POST:/v1/enrichment/entity-resolutions"
+    ]
+  },
+  {
+    "operation_id": "domain.enrichment_entity_resolutions",
+    "owner": "enrichment-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/entity-resolutions",
+    "test_ids": [
+      "contract:GET:/v1/enrichment/entity-resolutions"
+    ]
+  },
+  {
+    "operation_id": "domain.enrichment_event_participant_enrich_target",
+    "owner": "enrichment-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/event-participants/{participant_id}/enrich-target",
+    "test_ids": [
+      "contract:POST:/v1/enrichment/event-participants/{participant_id}/enrich-target"
+    ]
+  },
+  {
+    "operation_id": "domain.enrichment_watch_target_find_contact",
+    "owner": "enrichment-service",
+    "permission": "enrichment.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/enrichment/watch-targets/{watch_target_id}/find-contact",
+    "test_ids": [
+      "contract:POST:/v1/enrichment/watch-targets/{watch_target_id}/find-contact"
+    ]
+  },
+  {
+    "operation_id": "domain.governance_corroborate_incident",
+    "owner": "governance-service",
+    "permission": "governance.decide",
+    "authentication": "human_or_service",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "/v1/governance/incidents/{incident_id}/corroborate",
+    "test_ids": [
+      "contract:POST:/v1/governance/incidents/{incident_id}/corroborate"
+    ]
+  },
+  {
+    "operation_id": "domain.governance_reject_incident",
+    "owner": "governance-service",
+    "permission": "governance.decide",
+    "authentication": "human_or_service",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "/v1/governance/incidents/{incident_id}/reject",
+    "test_ids": [
+      "contract:POST:/v1/governance/incidents/{incident_id}/reject"
+    ]
+  },
+  {
+    "operation_id": "domain.governance_revert_incident",
+    "owner": "governance-service",
+    "permission": "governance.decide",
+    "authentication": "human_or_service",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "/v1/governance/incidents/{incident_id}/revert",
+    "test_ids": [
+      "contract:POST:/v1/governance/incidents/{incident_id}/revert"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_create_event_participant",
+    "owner": "event-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/events/{event_id}/participants",
+    "test_ids": [
+      "contract:POST:/v1/intelligence/events/{event_id}/participants"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_create_manual_event",
+    "owner": "event-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/events/manual",
+    "test_ids": [
+      "contract:POST:/v1/intelligence/events/manual"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_create_manual_incident",
+    "owner": "incident-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/incidents/manual",
+    "test_ids": [
+      "contract:POST:/v1/intelligence/incidents/manual"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_create_watch_target",
+    "owner": "incident-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/watch-targets",
+    "test_ids": [
+      "contract:POST:/v1/intelligence/watch-targets"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_event_detail",
+    "owner": "event-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/events/{event_id}",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/events/{event_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_event_participants",
+    "owner": "event-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/events/{event_id}/participants",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/events/{event_id}/participants"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_events",
+    "owner": "event-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/events",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/events"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_incident_detail",
+    "owner": "incident-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/incidents/{incident_id}",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/incidents/{incident_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_incidents",
+    "owner": "incident-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/incidents",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/incidents"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_monitor_watch_targets",
+    "owner": "incident-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/watch-targets/monitor",
+    "test_ids": [
+      "contract:POST:/v1/intelligence/watch-targets/monitor"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_participants",
+    "owner": "event-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/participants",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/participants"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_patch_event",
+    "owner": "event-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/events/{event_id}",
+    "test_ids": [
+      "contract:PATCH:/v1/intelligence/events/{event_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_patch_incident",
+    "owner": "incident-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/incidents/{incident_id}",
+    "test_ids": [
+      "contract:PATCH:/v1/intelligence/incidents/{incident_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_patch_watch_target",
+    "owner": "incident-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/watch-targets/{watch_target_id}",
+    "test_ids": [
+      "contract:PATCH:/v1/intelligence/watch-targets/{watch_target_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_promote_incident_to_watchlist",
+    "owner": "incident-intelligence-service",
+    "permission": "intelligence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/incidents/{incident_id}/promote-to-watchlist",
+    "test_ids": [
+      "contract:POST:/v1/intelligence/incidents/{incident_id}/promote-to-watchlist"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_watch_target_detail",
+    "owner": "incident-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/watch-targets/{watch_target_id}",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/watch-targets/{watch_target_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.intelligence_watch_targets",
+    "owner": "incident-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/watch-targets",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/watch-targets"
+    ]
+  },
+  {
+    "operation_id": "domain.kpi_catalog",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/kpis/catalog",
+    "test_ids": [
+      "contract:GET:/v1/kpis/catalog"
+    ]
+  },
+  {
+    "operation_id": "domain.lead_score",
+    "owner": "scoring-routing-service",
+    "permission": "scoring.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/scoring/lead",
+    "test_ids": [
+      "contract:POST:/v1/scoring/lead"
+    ]
+  },
+  {
+    "operation_id": "domain.meeting_cancel",
+    "owner": "meeting-handoff-service",
+    "permission": "meeting.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/meetings/{meeting_id}/cancel",
+    "test_ids": [
+      "contract:POST:/v1/meetings/{meeting_id}/cancel"
+    ]
+  },
+  {
+    "operation_id": "domain.meeting_create",
+    "owner": "meeting-handoff-service",
+    "permission": "meeting.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/meetings",
+    "test_ids": [
+      "contract:POST:/v1/meetings"
+    ]
+  },
+  {
+    "operation_id": "domain.meeting_detail",
+    "owner": "meeting-handoff-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/meetings/{meeting_id}",
+    "test_ids": [
+      "contract:GET:/v1/meetings/{meeting_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.meeting_generate_prep_packet",
+    "owner": "meeting-handoff-service",
+    "permission": "meeting.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/meetings/{meeting_id}/prep-packet",
+    "test_ids": [
+      "contract:POST:/v1/meetings/{meeting_id}/prep-packet"
+    ]
+  },
+  {
+    "operation_id": "domain.meeting_list",
+    "owner": "meeting-handoff-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/meetings",
+    "test_ids": [
+      "contract:GET:/v1/meetings"
+    ]
+  },
+  {
+    "operation_id": "domain.meeting_record_outcome",
+    "owner": "meeting-handoff-service",
+    "permission": "meeting.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/meetings/{meeting_id}/outcome",
+    "test_ids": [
+      "contract:POST:/v1/meetings/{meeting_id}/outcome"
+    ]
+  },
+  {
+    "operation_id": "domain.meeting_retry_sync",
+    "owner": "meeting-handoff-service",
+    "permission": "meeting.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/meetings/{meeting_id}/retry-sync",
+    "test_ids": [
+      "contract:POST:/v1/meetings/{meeting_id}/retry-sync"
+    ]
+  },
+  {
+    "operation_id": "domain.prep_packet",
+    "owner": "meeting-handoff-service",
+    "permission": "meeting.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/meetings/prep-packet",
+    "test_ids": [
+      "contract:POST:/v1/meetings/prep-packet"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_crm_target_detail",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/crm-targets/{crm_target_id}",
+    "test_ids": [
+      "contract:GET:/v1/reporting/crm-targets/{crm_target_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_crm_targets",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/crm-targets",
+    "test_ids": [
+      "contract:GET:/v1/reporting/crm-targets"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_event_detail",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/events/{event_id}",
+    "test_ids": [
+      "contract:GET:/v1/reporting/events/{event_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_events",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/events",
+    "test_ids": [
+      "contract:GET:/v1/reporting/events"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_incident_detail",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/incidents/{incident_id}",
+    "test_ids": [
+      "contract:GET:/v1/reporting/incidents/{incident_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_incidents",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/incidents",
+    "test_ids": [
+      "contract:GET:/v1/reporting/incidents"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_kpi_catalog",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/kpis/catalog",
+    "test_ids": [
+      "contract:GET:/v1/reporting/kpis/catalog"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_meeting_detail",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/meetings/{meeting_id}",
+    "test_ids": [
+      "contract:GET:/v1/reporting/meetings/{meeting_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_meetings",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/meetings",
+    "test_ids": [
+      "contract:GET:/v1/reporting/meetings"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_review_queue",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/review-queue",
+    "test_ids": [
+      "contract:GET:/v1/reporting/review-queue"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_source_health",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/source-health",
+    "test_ids": [
+      "contract:GET:/v1/reporting/source-health"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_watch_target_detail",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/watch-targets/{watch_target_id}",
+    "test_ids": [
+      "contract:GET:/v1/reporting/watch-targets/{watch_target_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.reporting_watch_targets",
+    "owner": "reporting-service",
+    "permission": "reporting.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/reporting/watch-targets",
+    "test_ids": [
+      "contract:GET:/v1/reporting/watch-targets"
+    ]
+  },
+  {
+    "operation_id": "domain.review_candidate_approve",
+    "owner": "governance-service",
+    "permission": "governance.decide",
+    "authentication": "human_or_service",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "/v1/review/candidates/{candidate_id}/approve",
+    "test_ids": [
+      "contract:POST:/v1/review/candidates/{candidate_id}/approve"
+    ]
+  },
+  {
+    "operation_id": "domain.review_candidate_detail",
+    "owner": "governance-service",
+    "permission": "governance.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/review/candidates/{candidate_id}",
+    "test_ids": [
+      "contract:GET:/v1/review/candidates/{candidate_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.review_candidate_reject",
+    "owner": "governance-service",
+    "permission": "governance.decide",
+    "authentication": "human_or_service",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "/v1/review/candidates/{candidate_id}/reject",
+    "test_ids": [
+      "contract:POST:/v1/review/candidates/{candidate_id}/reject"
+    ]
+  },
+  {
+    "operation_id": "domain.review_candidate_update",
+    "owner": "governance-service",
+    "permission": "governance.annotate",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/review/candidates/{candidate_id}",
+    "test_ids": [
+      "contract:PATCH:/v1/review/candidates/{candidate_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.review_candidates",
+    "owner": "governance-service",
+    "permission": "governance.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/review/candidates",
+    "test_ids": [
+      "contract:GET:/v1/review/candidates"
+    ]
+  },
+  {
+    "operation_id": "domain.review_candidates_bulk_decision",
+    "owner": "governance-service",
+    "permission": "governance.decide",
+    "authentication": "human_or_service",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "/v1/review/candidates/bulk-decision",
+    "test_ids": [
+      "contract:POST:/v1/review/candidates/bulk-decision"
+    ]
+  },
+  {
+    "operation_id": "domain.review_crm_target_update",
+    "owner": "governance-service",
+    "permission": "governance.annotate",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/review/crm-targets/{crm_target_id}",
+    "test_ids": [
+      "contract:PATCH:/v1/review/crm-targets/{crm_target_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.review_crm_targets",
+    "owner": "governance-service",
+    "permission": "governance.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/review/crm-targets",
+    "test_ids": [
+      "contract:GET:/v1/review/crm-targets"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_activity_approve_email",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/activities/{activity_id}/approve-email",
+    "test_ids": [
+      "contract:POST:/v1/sequences/activities/{activity_id}/approve-email"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_activity_complete",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/activities/{activity_id}/complete",
+    "test_ids": [
+      "contract:POST:/v1/sequences/activities/{activity_id}/complete"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_activity_detail",
+    "owner": "sequencing-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/activities/{activity_id}",
+    "test_ids": [
+      "contract:GET:/v1/sequences/activities/{activity_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_activity_list",
+    "owner": "sequencing-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/activities",
+    "test_ids": [
+      "contract:GET:/v1/sequences/activities"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_activity_schedule_meeting",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/activities/{activity_id}/schedule-meeting",
+    "test_ids": [
+      "contract:POST:/v1/sequences/activities/{activity_id}/schedule-meeting"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_create",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences",
+    "test_ids": [
+      "contract:POST:/v1/sequences"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_crm_prospect_list",
+    "owner": "sequencing-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/crm-prospects",
+    "test_ids": [
+      "contract:GET:/v1/sequences/crm-prospects"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_delete",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/{sequence_id}",
+    "test_ids": [
+      "contract:DELETE:/v1/sequences/{sequence_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_detail",
+    "owner": "sequencing-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/{sequence_id}",
+    "test_ids": [
+      "contract:GET:/v1/sequences/{sequence_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_eligibility",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/evaluate",
+    "test_ids": [
+      "contract:POST:/v1/sequences/evaluate"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_enrollment_alert_create",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/enrollments/{enrollment_id}/alerts",
+    "test_ids": [
+      "contract:POST:/v1/sequences/enrollments/{enrollment_id}/alerts"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_enrollment_cancel",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/enrollments/{enrollment_id}/cancel",
+    "test_ids": [
+      "contract:POST:/v1/sequences/enrollments/{enrollment_id}/cancel"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_enrollment_create",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/enrollments",
+    "test_ids": [
+      "contract:POST:/v1/sequences/enrollments"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_enrollment_detail",
+    "owner": "sequencing-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/enrollments/{enrollment_id}",
+    "test_ids": [
+      "contract:GET:/v1/sequences/enrollments/{enrollment_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_enrollment_import_crm_prospect",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/enrollments/import-crm-prospect",
+    "test_ids": [
+      "contract:POST:/v1/sequences/enrollments/import-crm-prospect"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_enrollment_list",
+    "owner": "sequencing-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/enrollments",
+    "test_ids": [
+      "contract:GET:/v1/sequences/enrollments"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_enrollment_pause",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/enrollments/{enrollment_id}/pause",
+    "test_ids": [
+      "contract:POST:/v1/sequences/enrollments/{enrollment_id}/pause"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_enrollment_resume",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/enrollments/{enrollment_id}/resume",
+    "test_ids": [
+      "contract:POST:/v1/sequences/enrollments/{enrollment_id}/resume"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_list",
+    "owner": "sequencing-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences",
+    "test_ids": [
+      "contract:GET:/v1/sequences"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_unsubscribe",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/unsubscribe",
+    "test_ids": [
+      "contract:POST:/v1/sequences/unsubscribe"
+    ]
+  },
+  {
+    "operation_id": "domain.sequence_update",
+    "owner": "sequencing-service",
+    "permission": "sequence.write",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/sequences/{sequence_id}",
+    "test_ids": [
+      "contract:PATCH:/v1/sequences/{sequence_id}"
+    ]
+  },
+  {
+    "operation_id": "domain.service_map",
+    "owner": "event-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/service-map",
+    "test_ids": [
+      "contract:GET:/v1/service-map"
+    ]
+  },
+  {
+    "operation_id": "domain.source_health",
+    "owner": "event-intelligence-service",
+    "permission": "canonical.read",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/intelligence/sources/health",
+    "test_ids": [
+      "contract:GET:/v1/intelligence/sources/health"
+    ]
+  },
+  {
+    "operation_id": "domain.suppression_check",
+    "owner": "governance-service",
+    "permission": "governance.annotate",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/suppressions/evaluate",
+    "test_ids": [
+      "contract:POST:/v1/suppressions/evaluate"
+    ]
+  },
+  {
+    "operation_id": "domain.suppression_create",
+    "owner": "governance-service",
+    "permission": "governance.annotate",
+    "authentication": "human_or_service",
+    "assurance": "aal1",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 1048576,
+    "exposure": "gateway",
+    "allowed_callers": [
+      "console-service",
+      "gateway-service"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "/v1/suppressions",
+    "test_ids": [
+      "contract:POST:/v1/suppressions"
+    ]
+  },
+  {
+    "operation_id": "security.audit.read",
+    "owner": "gateway-service",
+    "permission": "security.audit.read",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "expensive_read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "security.emergency_grants.proof",
+    "owner": "gateway-service",
+    "permission": "security.admin",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 65536,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "security",
+    "test_ids": [
+      "route:security.emergency_grants.proof"
+    ]
+  },
+  {
+    "operation_id": "security.users.list",
+    "owner": "gateway-service",
+    "permission": "security.admin",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "security",
+    "test_ids": [
+      "route:security.users.list"
+    ]
+  },
+  {
+    "operation_id": "security.users.manage",
+    "owner": "gateway-service",
+    "permission": "security.admin",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 65536,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "security.users.read",
+    "owner": "gateway-service",
+    "permission": "security.admin",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "security",
+    "test_ids": [
+      "route:security.users.read"
+    ]
+  },
+  {
+    "operation_id": "security.users.sessions.list",
+    "owner": "gateway-service",
+    "permission": "security.admin",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "security",
+    "test_ids": [
+      "route:security.users.sessions.list"
+    ]
+  },
+  {
+    "operation_id": "security.users.sessions.revoke",
+    "owner": "gateway-service",
+    "permission": "security.admin",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": true,
+    "audit": true,
+    "csrf": true,
+    "rate_class": "mutation",
+    "maximum_body_bytes": 65536,
+    "exposure": "gateway",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": 900,
+    "resource": "security",
+    "test_ids": [
+      "route:security.users.sessions.revoke"
+    ]
+  },
+  {
+    "operation_id": "system.docs.read",
+    "owner": "all",
+    "permission": "system.docs.read",
+    "authentication": "human",
+    "assurance": "aal2_phishing_resistant",
+    "rls": false,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "read",
+    "maximum_body_bytes": 0,
+    "exposure": "disabled",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "system.health.read",
+    "owner": "all",
+    "permission": null,
+    "authentication": "public",
+    "assurance": null,
+    "rls": false,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "exempt",
+    "maximum_body_bytes": 0,
+    "exposure": "public",
+    "allowed_callers": [],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "system.metrics.read",
+    "owner": "all",
+    "permission": "system.metrics.read",
+    "authentication": "service",
+    "assurance": "workload",
+    "rls": false,
+    "audit": true,
+    "csrf": false,
+    "rate_class": "owner",
+    "maximum_body_bytes": 0,
+    "exposure": "cluster",
+    "allowed_callers": [
+      "metrics-collector"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  },
+  {
+    "operation_id": "system.readiness.read",
+    "owner": "all",
+    "permission": null,
+    "authentication": "service",
+    "assurance": "workload",
+    "rls": false,
+    "audit": false,
+    "csrf": false,
+    "rate_class": "owner",
+    "maximum_body_bytes": 0,
+    "exposure": "cluster",
+    "allowed_callers": [
+      "kubernetes-probe"
+    ],
+    "maximum_authentication_age_seconds": null,
+    "resource": "application",
+    "test_ids": []
+  }
+]

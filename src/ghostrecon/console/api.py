@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
@@ -8,6 +9,9 @@ import httpx
 
 from ghostrecon.common.config import Settings
 from ghostrecon.models.api import DashboardRole
+from ghostrecon.security.identity import AssuranceLevel, IdentityContext, IdentityType
+from ghostrecon.security.operations import operation_id_for_request
+from ghostrecon.security.workload import OBO_HEADER, SERVICE_HEADER, WorkloadSigner
 
 DEFAULT_ACTOR = "dashboard"
 
@@ -51,14 +55,14 @@ class ConsoleApiClient:
         timeout_seconds: int,
         actor: str = DEFAULT_ACTOR,
         role: str = DashboardRole.VIEWER.value,
-        auth_token: str | None = None,
+        settings: Settings | None = None,
         client_factory: type[httpx.Client] = httpx.Client,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
         self.actor = actor or DEFAULT_ACTOR
         self.role = role or DashboardRole.VIEWER.value
-        self.auth_token = auth_token
+        self.settings = settings
         self.client_factory = client_factory
 
     @classmethod
@@ -75,7 +79,7 @@ class ConsoleApiClient:
             timeout_seconds=settings.console_request_timeout_seconds,
             actor=actor,
             role=role,
-            auth_token=settings.api_auth_token,
+            settings=settings,
             client_factory=client_factory,
         )
 
@@ -83,16 +87,29 @@ class ConsoleApiClient:
         normalized = path if path.startswith("/") else f"/{path}"
         return f"{self.base_url}{normalized}"
 
-    def headers(self, *, idempotency_key: str | None = None) -> dict[str, str]:
-        headers = {
-            "Accept": "application/json",
-            "X-Actor": self.actor,
-            "X-Operator-Role": self.role,
-        }
+    def headers(
+        self, *, method: str = "GET", path: str = "", idempotency_key: str | None = None
+    ) -> dict[str, str]:
+        headers = {"Accept": "application/json"}
+        try:
+            from flask import request
+
+            if request.headers.get("Cookie"):
+                headers["Cookie"] = request.headers["Cookie"]
+            if request.headers.get("X-CSRF-Token"):
+                headers["X-CSRF-Token"] = request.headers["X-CSRF-Token"]
+        except RuntimeError:
+            pass
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        if self.auth_token:
-            headers["Authorization"] = f"Bearer {self.auth_token}"
+        if self.settings and self.settings.strict_runtime and path:
+            identity = _verified_identity_from_headers(self.settings)
+            if identity is None:
+                raise ConsoleApiError("verified console identity is unavailable", status_code=401)
+            signer = WorkloadSigner(self.settings)
+            operation = operation_id_for_request(method, path)
+            headers[SERVICE_HEADER] = signer.service_token("gateway-service")
+            headers[OBO_HEADER] = signer.obo_token(identity, "gateway-service", operation)
         return headers
 
     def get(
@@ -146,7 +163,7 @@ class ConsoleApiClient:
                 self.url_for(path),
                 params=clean_params(params),
                 json=payload,
-                headers=self.headers(idempotency_key=idempotency_key),
+                headers=self.headers(method=method, path=path, idempotency_key=idempotency_key),
             )
         except httpx.TimeoutException as exc:
             raise ConsoleApiError("gateway request timed out", path=path) from exc
@@ -171,14 +188,61 @@ def clean_params(params: dict[str, Any] | None) -> dict[str, Any]:
     return {key: value for key, value in (params or {}).items() if value not in (None, "")}
 
 
-def dashboard_context_from_headers() -> ConsoleRequestContext:
+def _verified_identity_from_headers(settings: Settings) -> IdentityContext | None:
     try:
         from flask import request
 
-        actor = request.headers.get("X-Actor") or DEFAULT_ACTOR
-        role = request.headers.get("X-Operator-Role") or DashboardRole.VIEWER.value
+        subject = request.headers.get("X-GhostRecon-Verified-Subject")
+        authenticated_at = request.headers.get("X-GhostRecon-Verified-Authenticated-At")
+        assurance = request.headers.get("X-GhostRecon-Verified-Assurance")
+        if not subject or not authenticated_at or not assurance:
+            return None
+        roles = frozenset(
+            filter(None, request.headers.get("X-GhostRecon-Verified-Roles", "").split(","))
+        )
+        permissions = frozenset(
+            filter(None, request.headers.get("X-GhostRecon-Verified-Permissions", "").split(","))
+        )
+        correlation_id = request.headers.get("X-GhostRecon-Verified-Correlation-ID", "")
+        return IdentityContext(
+            identity_type=IdentityType.HUMAN,
+            subject=subject,
+            actor_label=request.headers.get("X-GhostRecon-Verified-Actor", subject),
+            issuer="urn:ghostrecon:verified-gateway",
+            audience=("console-service",),
+            roles=roles,
+            permissions=permissions,
+            calling_service="console-service",
+            on_behalf_of_subject=subject,
+            authentication_method=request.headers.get(
+                "X-GhostRecon-Verified-Authentication-Method", "oidc"
+            ),
+            authenticated_at=datetime.fromisoformat(authenticated_at),
+            assurance=AssuranceLevel(assurance),
+            session_id=None,
+            correlation_id=correlation_id,
+            request_id=correlation_id,
+            claim_mapping_version="console.forwarded.v1",
+            permission_policy_version="sprint25b.v1",
+            environment=settings.profile.value,
+        )
+    except (RuntimeError, ValueError):
+        return None
+
+
+def dashboard_context_from_headers(settings: Settings | None = None) -> ConsoleRequestContext:
+    try:
+        from flask import request
+
+        actor = request.headers.get("X-GhostRecon-Verified-Actor") or DEFAULT_ACTOR
+        role = request.headers.get("X-GhostRecon-Verified-Role") or DashboardRole.VIEWER.value
     except RuntimeError:
         return ConsoleRequestContext()
+    if actor == DEFAULT_ACTOR and settings is not None and not settings.strict_runtime:
+        return ConsoleRequestContext(
+            actor="Local development administrator",
+            role=DashboardRole.ADMINISTRATOR.value,
+        )
     return ConsoleRequestContext(actor=actor, role=normalize_role(role))
 
 

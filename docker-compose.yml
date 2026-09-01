@@ -1,133 +1,140 @@
+x-service-env: &service-env
+  GHOSTRECON_PROFILE: local
+  GHOSTRECON_DATABASE_URL: postgresql+asyncpg://ghostrecon:ghostrecon@postgres:5432/ghostrecon
+  GHOSTRECON_REDIS_URL: redis://redis:6379/0
+  GHOSTRECON_EMAIL_VERIFIER_URL: http://email-verifier:8080
+  GHOSTRECON_AUTHENTICATION_BACKEND: local_oidc
+x-owner: &owner
+  build: .
+  environment: {<<: *service-env}
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+    migrate: {condition: service_completed_successfully}
+x-worker: &worker
+  build: .
+  environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: worker}
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+    migrate: {condition: service_completed_successfully}
+
 services:
   postgres:
     image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: ghostrecon
-      POSTGRES_USER: ghostrecon
-      POSTGRES_PASSWORD: ghostrecon
-    ports:
-      - "${GHOSTRECON_POSTGRES_PORT:-5432}:5432"
+    environment: {POSTGRES_DB: ghostrecon, POSTGRES_USER: ghostrecon, POSTGRES_PASSWORD: ghostrecon}
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ghostrecon -d ghostrecon"]
       interval: 5s
       timeout: 5s
       retries: 20
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-
+    volumes: [postgres-data:/var/lib/postgresql/data]
   redis:
     image: redis:7-alpine
-    ports:
-      - "${GHOSTRECON_REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 20
-
   migrate:
     build: .
-    command:
-      - sh
-      - -ec
-      - |
-        attempt=1
-        until alembic upgrade head; do
-          if [ "$$attempt" -ge 20 ]; then
-            echo "database migration failed after $$attempt attempts" >&2
-            exit 1
-          fi
-          echo "database unavailable; retrying migration in 3 seconds" >&2
-          attempt=$$((attempt + 1))
-          sleep 3
-        done
-    environment:
-      GHOSTRECON_PROFILE: local
-      GHOSTRECON_SERVICE_NAME: migration-job
-      GHOSTRECON_DATABASE_URL: postgresql+asyncpg://ghostrecon:ghostrecon@postgres:5432/ghostrecon
-      GHOSTRECON_REDIS_URL: redis://redis:6379/0
-      GHOSTRECON_EMAIL_VERIFIER_URL: http://email-verifier:8080
+    command: ["sh", "-ec", "attempt=1; until alembic upgrade head; do test \"$$attempt\" -lt 20 || exit 1; attempt=$$((attempt + 1)); sleep 3; done"]
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: migration-job}
     depends_on:
-      postgres:
-        condition: service_healthy
-
+      postgres: {condition: service_healthy}
+  local-oidc:
+    build: .
+    command: ["uvicorn", "ghostrecon.local_oidc_provider:app", "--host", "0.0.0.0", "--port", "8080"]
+    environment: {GHOSTRECON_PROFILE: local}
   gateway-service:
-    build: .
-    environment: &service-env
-      GHOSTRECON_PROFILE: local
-      GHOSTRECON_SERVICE_NAME: gateway-service
-      GHOSTRECON_DATABASE_URL: postgresql+asyncpg://ghostrecon:ghostrecon@postgres:5432/ghostrecon
-      GHOSTRECON_REDIS_URL: redis://redis:6379/0
-      GHOSTRECON_EMAIL_VERIFIER_URL: http://email-verifier:8080
-    ports:
-      - "${GHOSTRECON_HTTP_PORT:-8080}:8080"
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: gateway-service}
+    ports: ["${GHOSTRECON_HTTP_PORT:-8080}:8080"]
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
+      local-oidc: {condition: service_started}
   console-service:
-    build: .
+    <<: *owner
     environment:
       <<: *service-env
       GHOSTRECON_SERVICE_NAME: console-service
       GHOSTRECON_GATEWAY_BASE_URL: http://gateway-service:8080
-    ports:
-      - "${GHOSTRECON_CONSOLE_HTTP_PORT:-8082}:8080"
-    depends_on:
-      gateway-service:
-        condition: service_started
-      migrate:
-        condition: service_completed_successfully
-
-  worker:
-    build: .
-    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "--loglevel=INFO"]
-    environment:
-      <<: *service-env
-      GHOSTRECON_SERVICE_NAME: worker
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-
+  event-intelligence-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: event-intelligence-service}
+  incident-intelligence-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: incident-intelligence-service}
+  enrichment-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: enrichment-service}
+  email-intelligence-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: email-intelligence-service}
+  crm-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: crm-service}
+  sequencing-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: sequencing-service}
+  meeting-handoff-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: meeting-handoff-service}
+  scoring-routing-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: scoring-routing-service}
+  governance-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: governance-service}
+  reporting-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: reporting-service}
+  ingestion-service:
+    <<: *owner
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: ingestion-service}
+  source-fetch-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "source-fetch", "--loglevel=INFO"]
+  event-parser-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "event-parser", "--loglevel=INFO"]
+  incident-parser-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "incident-parser", "--loglevel=INFO"]
+  watch-monitor-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "watch-monitor", "--loglevel=INFO"]
+  enrichment-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "enrichment", "--loglevel=INFO"]
+  email-intelligence-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "email-intelligence", "--loglevel=INFO"]
+  governance-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "governance", "--loglevel=INFO"]
+  crm-export-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "crm-export", "--loglevel=INFO"]
+  sequencing-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "sequencing", "--loglevel=INFO"]
+  meeting-sync-worker:
+    <<: *worker
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "worker", "-Q", "meeting-sync", "--loglevel=INFO"]
   scheduler:
     build: .
-    command:
-      [
-        "celery",
-        "-A",
-        "ghostrecon.worker_runtime:celery_app",
-        "beat",
-        "--loglevel=INFO",
-        "--schedule=/tmp/celerybeat-schedule",
-      ]
-    environment:
-      <<: *service-env
-      GHOSTRECON_SERVICE_NAME: scheduler
+    command: ["celery", "-A", "ghostrecon.worker_runtime:celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    environment: {<<: *service-env, GHOSTRECON_SERVICE_NAME: scheduler}
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-
+      redis: {condition: service_healthy}
+      migrate: {condition: service_completed_successfully}
   email-verifier:
     image: umutert/emailvalidator:latest
-    environment:
-      REDIS_URL: redis://redis:6379
-    ports:
-      - "${GHOSTRECON_EMAIL_VERIFIER_PORT:-8081}:8080"
+    environment: {REDIS_URL: redis://redis:6379}
     depends_on:
-      redis:
-        condition: service_healthy
-
+      redis: {condition: service_healthy}
 volumes:
   postgres-data:

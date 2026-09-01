@@ -58,6 +58,19 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 {{- $strict := or (eq $profile "staging") (eq $profile "production") -}}
 {{- if $strict -}}
+  {{- if .Values.localOIDC.enabled -}}
+    {{- fail "localOIDC.enabled must be false in staging/production" -}}
+  {{- end -}}
+  {{- if not .Values.ingress.enabled -}}
+    {{- fail "ingress.enabled must be true in staging/production" -}}
+  {{- end -}}
+  {{- $_ := required "ingress.tlsSecretName is required in staging/production" .Values.ingress.tlsSecretName -}}
+  {{- if ne (get .Values.env "GHOSTRECON_DOCS_ENABLED" | default "true") "false" -}}
+    {{- fail "env.GHOSTRECON_DOCS_ENABLED must be false in staging/production" -}}
+  {{- end -}}
+  {{- if ne (get .Values.env "GHOSTRECON_AUTHENTICATION_BACKEND" | default "") "oidc" -}}
+    {{- fail "env.GHOSTRECON_AUTHENTICATION_BACKEND must be oidc in staging/production" -}}
+  {{- end -}}
   {{- $digestPattern := "^sha256:[a-f0-9]{64}$" -}}
   {{- if not (regexMatch $digestPattern (.Values.image.digest | default "")) -}}
     {{- fail "image.digest must be a SHA-256 digest in staging/production" -}}

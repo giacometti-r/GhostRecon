@@ -114,8 +114,8 @@ Sprint 9, Sprint 10, and Sprint 11 add review-gated sales activation after gover
 
 Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 
-- Dash is mounted at `/` while FastAPI keeps `/healthz`, `/readyz`, `/metrics`, `/docs`, and existing `/v1/*` review APIs. These system endpoints remain mounted without Sprint 25 policy enforcement.
-- Dashboard reads currently use `gateway-service`/`reporting-service` APIs with legacy `X-Actor` and `X-Operator-Role` context in local/test workflows; callbacks never query canonical tables. Strict staging/production profiles reject those headers, and replacement OIDC/session propagation is Sprint 25b work.
+- Dash is mounted only by the internal `console-service`; the gateway authenticates the browser and reverse-proxies the UI. The console no longer mounts owner `/v1/*` handlers.
+- Dashboard requests use the console workload identity and an operation-bound represented-user envelope. Caller-supplied actor/role headers and the demo role selector have been removed.
 - Mutating controls call owning feature-service APIs through the gateway for review decisions, bounded bulk review, event create/edit, participant enrichment queueing, incident corroborate/reject/revert, CRM export/retry, company watchlist promotion/toggle/contact discovery, contact-domain discovery, sequence pause/resume/cancel, and meeting handoff actions.
 - Event routes use coordinate-backed maps from structured venue address fields, and detail metadata is limited to governance reviewers.
 - Incident routes use company-specific rows, inline evidence/company rendering, corroborated-only watch promotion, and governance-reviewer-only metadata.
@@ -124,20 +124,9 @@ Sprint 12 adds the Python Dash operator dashboard inside `console-service`:
 - Failed dashboard reads render endpoint/status context on the page so gateway/reporting issues are visible during local demos.
 - Source-health operations are visible but read-only until source-operations APIs are implemented during hardening/pilot work.
 
-## Implemented Sprint 25a Security Foundation
+## Implemented Sprint 25b Production Security Boundary
 
-Sprint 25a adds shared, unit-tested primitives for normalized identity, additive RBAC and assurance,
-OIDC and short-lived Ed25519 service/OBO token validation, opaque session/CSRF secrets, an initial
-operation-policy registry, transport-level perimeter middleware, security persistence, expanded
-audit fields, and transaction-local PostgreSQL security context.
-
-This is not production authentication or authorization. There are no login/session routes,
-authoritative session repositories, route-policy binding, workload credential loading, authenticated
-service calls, active application RLS, or protected docs/metrics. In strict staging/production
-profiles the perimeter rejects legacy caller identity headers, so the current demo-oriented console
-flow is not a deployable production identity path. See the [security foundation
-reference](docs/security-foundation.md) and [Sprint 25a evidence
-report](docs/reports/sprint-25a-security-foundation.md).
+Sprint 25b binds OIDC, PostgreSQL-authoritative sessions, central route authorization, Ed25519 workload/OBO trust, signed queues, audit context, forced RLS, and perimeter limits end to end. Strict deployments expose only the TLS gateway; owners and Dash are internal, docs are disabled, and readiness/metrics require workload identities. Local/test uses a deterministic isolated identity provider. See the [production security guide](docs/production-security.md), [ADR](docs/adr/0007-production-identity-workload-rls.md), and [evidence report](docs/reports/sprint-25b-production-security.md).
 
 ## Source Policy
 

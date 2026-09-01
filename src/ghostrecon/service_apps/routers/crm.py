@@ -15,6 +15,7 @@ from ghostrecon.services.crm_exports import (
     start_crm_export,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import crm_router, gateway_router
 
 
@@ -35,7 +36,7 @@ async def crm_sync_account(payload: dict[str, object]) -> dict[str, object]:
 async def crm_export_start(
     request: CrmExportCreateRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> CrmExportBatchOut:
     try:
         return await start_crm_export(
@@ -63,7 +64,7 @@ async def crm_export_retry_failed(
     batch_id: str,
     request: CrmExportRetryRequest | None = None,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> CrmExportBatchOut:
     try:
         batch = await retry_failed_crm_export_items(

@@ -56,13 +56,49 @@ class Settings(BaseSettings):
     environment: Literal[None] = Field(default=None, exclude=True, repr=False)
     service_name: ServiceName = ServiceName.GATEWAY
     log_level: str = "INFO"
-    api_auth_token: str | None = Field(default=None, repr=False)
-
     database_url: PostgresDsn = Field(
         default="postgresql+asyncpg://ghostrecon:ghostrecon@postgres:5432/ghostrecon",
         repr=False,
     )
     redis_url: RedisDsn = Field(default="redis://redis:6379/0", repr=False)
+
+    # Sprint 25b identity and workload-security configuration.
+    authentication_backend: Literal["local_oidc", "oidc"] = "local_oidc"
+    oidc_issuer: str | None = None
+    oidc_client_id: str | None = None
+    oidc_client_secret: str | None = Field(default=None, repr=False)
+    oidc_redirect_uri: str | None = None
+    oidc_post_logout_redirect_uri: str | None = None
+    oidc_role_claim: str = "https://ghostrecon.example/roles"
+    oidc_required_claims: tuple[str, ...] = ("sub", "email", "email_verified")
+    oidc_allowed_algorithms: tuple[str, ...] = ("RS256",)
+    oidc_email_connection: str = "email"
+    oidc_phishing_resistant_amr: tuple[str, ...] = ("webauthn", "fido2", "passkey")
+    oidc_metadata_timeout_seconds: int = Field(default=5, ge=1, le=10)
+    oidc_provider_maximum_bytes: int = Field(default=1024 * 1024, ge=1024, le=1024 * 1024)
+    oidc_transaction_ttl_seconds: int = Field(default=600, ge=60, le=600)
+    oidc_jwks_cache_seconds: int = Field(default=300, ge=30, le=3600)
+    session_hmac_key: str | None = Field(default=None, repr=False)
+    oidc_transaction_encryption_key: str | None = Field(default=None, repr=False)
+    session_idle_seconds: int = Field(default=8 * 60 * 60, ge=60)
+    session_absolute_seconds: int = Field(default=24 * 60 * 60, ge=60)
+    remembered_session_idle_seconds: int = Field(default=7 * 24 * 60 * 60, ge=60)
+    remembered_session_absolute_seconds: int = Field(default=30 * 24 * 60 * 60, ge=60)
+    session_rotation_seconds: int = Field(default=15 * 60, ge=60)
+    privileged_recent_authentication_seconds: int = Field(default=15 * 60, ge=60)
+    provider_role_refresh_seconds: int = Field(default=5 * 60, ge=60)
+    principal_cache_seconds: int = Field(default=60, ge=1, le=60)
+    secure_cookies: bool = False
+    allowed_cors_origins: tuple[str, ...] = ()
+    trusted_proxy_cidrs: tuple[str, ...] = ()
+    docs_enabled: bool = True
+    service_identity: str | None = None
+    service_private_key_path: str | None = None
+    service_private_key_id: str | None = None
+    service_trust_bundle_path: str | None = None
+    service_token_lifetime_seconds: int = Field(default=120, ge=1, le=300)
+    obo_replay_fail_closed: bool = True
+    audit_hmac_key: str | None = Field(default=None, repr=False)
 
     crm_provider: CrmProvider = CrmProvider.LOCAL_DEMO
     attio_base_url: AnyHttpUrl = Field(default="https://api.attio.com", repr=False)

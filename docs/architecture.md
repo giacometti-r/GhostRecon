@@ -68,24 +68,11 @@ The existing `ingestion-service` remains for source imports and other compatibil
 - `console-service` remains the only dashboard UI, mounts the Python Dash app at `/`, consumes reporting/gateway reads, and sends writes only through owning gateway APIs.
 - Helm deploys implemented microservices independently. Event, incident, enrichment, email-intelligence, CRM, sequencing, meeting-handoff, governance, console, reporting, gateway, and ingestion services are registered in the chart; the shared source registry foundation remains in the common package.
 
-## Security Foundation Pattern
+## Production Security Pattern
 
-All FastAPI applications install the shared Sprint 25a perimeter. It assigns a bounded correlation
-ID, checks aggregate headers, query length, and declared `Content-Length`, rejects legacy identity
-and reserved internal headers in strict profiles, and adds security response headers. It is a
-transport boundary, not authentication or authorization middleware.
+The gateway owns browser OIDC and opaque, revocable PostgreSQL sessions. Every domain route is bound to a checked operation policy before body parsing; strict gateway calls are proxied to the owner with an audience-bound Ed25519 workload JWT and a one-time operation-bound OBO token. Owner services do not accept browser sessions or identity headers. Console-to-gateway calls follow the same workload and represented-user protocol.
 
-The security package defines immutable normalized identity, additive permissions and assurance,
-OIDC/RSA and internal Ed25519 validation helpers, opaque session/CSRF secrets, and an initial
-operation-policy registry. None is yet bound end to end to gateway routes, owner services, workers,
-or repositories. The current console/gateway actor and role flow therefore remains local/test-only;
-staging/production rejects those headers before replacement OIDC/session propagation exists.
-
-PostgreSQL now has security principals, role bindings, sessions, emergency grants, replay markers,
-policy versions, and expanded audit identity/decision fields. Transaction-local context uses bound
-`set_config(..., true)` calls. Migration `0015_security_foundation` creates three SELECT policies but
-does not enable or force RLS, provision runtime roles, or cover application tables. See [the security
-foundation reference](security-foundation.md) for the exact boundary.
+Celery deliveries are JSON-only and signed over task name, argument digest, audience, queue, correlation, expiry, and replay identifier. The ten worker queues and scheduler each have a distinct identity. Transaction-local verified context feeds separate CRUD RLS policies; migrations 0016-0019 classify, enable, and force the protected table set. Generated inventories live in [`docs/generated`](generated/), with operating detail in [production security](production-security.md).
 
 ## Canonical and Contract Pattern
 

@@ -39,6 +39,7 @@ from ghostrecon.services.governance import (
     update_crm_target,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import console_router, gateway_router, governance_router
 
 
@@ -47,7 +48,7 @@ from .registry import console_router, gateway_router, governance_router
 async def suppression_create(
     request: SuppressionCreate,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SuppressionOut:
     suppression = await create_suppression(
         request, actor=actor, idempotency_key=idempotency_key, settings=get_settings()
@@ -93,7 +94,7 @@ async def review_candidate_detail(candidate_id: str) -> ReviewCandidateOut:
 async def review_candidate_update(
     candidate_id: str,
     request: ReviewCandidateUpdateRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> ReviewCandidateOut:
     candidate = await update_review_candidate(
         candidate_id,
@@ -119,7 +120,7 @@ async def review_candidate_approve(
     candidate_id: str,
     request: ReviewDecisionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> ReviewDecisionOut:
     try:
         decision = await approve_review_candidate(
@@ -149,7 +150,7 @@ async def review_candidate_reject(
     candidate_id: str,
     request: ReviewDecisionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> ReviewDecisionOut:
     try:
         decision = await reject_review_candidate(
@@ -174,7 +175,7 @@ async def review_candidate_reject(
 async def review_candidates_bulk_decision(
     request: BulkReviewDecisionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> BulkReviewDecisionResult:
     try:
         decisions = await bulk_decide_review_candidates(
@@ -207,7 +208,7 @@ async def review_crm_targets(
 async def review_crm_target_update(
     crm_target_id: str,
     request: CrmTargetUpdateRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> CrmTargetOut:
     target = await update_crm_target(
         crm_target_id,
@@ -230,7 +231,7 @@ async def governance_corroborate_incident(
     incident_id: str,
     request: IncidentDecisionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> ReviewDecisionOut:
     try:
         decision = await corroborate_incident(
@@ -257,7 +258,7 @@ async def governance_reject_incident(
     incident_id: str,
     request: IncidentDecisionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> ReviewDecisionOut:
     try:
         decision = await reject_incident(
@@ -284,7 +285,7 @@ async def governance_revert_incident(
     incident_id: str,
     request: IncidentDecisionRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> ReviewDecisionOut:
     try:
         decision = await revert_incident(

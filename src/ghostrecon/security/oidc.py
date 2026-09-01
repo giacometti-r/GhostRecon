@@ -28,6 +28,8 @@ class OIDCTransaction:
     browser_binding: str
     return_path: str
     created_at: datetime
+    purpose: str = "login"
+    existing_session_id: str | None = None
 
     @classmethod
     def create(cls, return_path: str = "/") -> OIDCTransaction:
@@ -38,6 +40,7 @@ class OIDCTransaction:
             browser_binding=secrets.token_urlsafe(32),
             return_path=validate_return_path(return_path),
             created_at=datetime.now(UTC),
+            purpose="login",
         )
 
     @property
@@ -133,11 +136,12 @@ def verify_oidc_id_token(
         raise TokenValidationError("invalid token purpose")
     kid = header.get("kid")
     key = _select_rsa_key(jwks, kid=kid, algorithm=algorithm)
-    hash_algorithm = {
-        "RS256": hashes.SHA256,
-        "RS384": hashes.SHA384,
-        "RS512": hashes.SHA512,
-    }[algorithm]()
+    if algorithm == "RS256":
+        hash_algorithm = hashes.SHA256()
+    elif algorithm == "RS384":
+        hash_algorithm = hashes.SHA384()
+    else:
+        hash_algorithm = hashes.SHA512()
     try:
         key.verify(
             _decode_segment(encoded_signature),
@@ -198,9 +202,7 @@ def _validate_oidc_claims(
         raise TokenValidationError("token expired")
 
 
-def _select_rsa_key(
-    jwks: Mapping[str, Any], *, kid: Any, algorithm: Any
-) -> rsa.RSAPublicKey:
+def _select_rsa_key(jwks: Mapping[str, Any], *, kid: Any, algorithm: Any) -> rsa.RSAPublicKey:
     if not isinstance(kid, str) or not kid:
         raise TokenValidationError("missing signing key identifier")
     keys = jwks.get("keys")

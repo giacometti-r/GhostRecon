@@ -24,6 +24,7 @@ from ghostrecon.services.meeting import (
     retry_meeting_crm_sync,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import gateway_router, meeting_router
 
 
@@ -48,7 +49,7 @@ async def calendar_availability(
 async def meeting_create(
     request: MeetingCreateRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> MeetingHandoffOut:
     try:
         return await create_meeting(
@@ -95,7 +96,7 @@ async def meeting_detail(meeting_id: str) -> MeetingHandoffOut:
 async def meeting_generate_prep_packet(
     meeting_id: str,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> MeetingHandoffOut:
     meeting = await generate_meeting_prep_packet(
         meeting_id,
@@ -114,7 +115,7 @@ async def meeting_record_outcome(
     meeting_id: str,
     request: MeetingOutcomeRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> MeetingHandoffOut:
     meeting = await record_meeting_outcome(
         meeting_id,
@@ -133,7 +134,7 @@ async def meeting_record_outcome(
 async def meeting_cancel(
     meeting_id: str,
     request: MeetingActionRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> MeetingHandoffOut:
     try:
         meeting = await cancel_meeting(
@@ -156,7 +157,7 @@ async def meeting_cancel(
 @meeting_router.post("/v1/meetings/{meeting_id}/retry-sync", response_model=MeetingHandoffOut)
 async def meeting_retry_sync(
     meeting_id: str,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> MeetingHandoffOut:
     meeting = await retry_meeting_crm_sync(
         meeting_id,

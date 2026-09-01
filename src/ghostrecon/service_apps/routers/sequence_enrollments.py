@@ -21,6 +21,7 @@ from ghostrecon.services.sequencing import (
     resume_sequence_enrollment,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import gateway_router, sequencing_router
 
 
@@ -29,7 +30,7 @@ from .registry import gateway_router, sequencing_router
 async def sequence_enrollment_create(
     request: SequenceEnrollmentCreateRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceEnrollmentOut:
     try:
         return await create_sequence_enrollment(
@@ -53,7 +54,7 @@ async def sequence_enrollment_create(
 async def sequence_enrollment_import_crm_prospect(
     request: SequenceCrmProspectImportRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceEnrollmentOut:
     try:
         return await import_crm_prospect_to_sequence(
@@ -97,7 +98,7 @@ async def sequence_enrollment_detail(enrollment_id: str) -> SequenceEnrollmentOu
 async def sequence_enrollment_pause(
     enrollment_id: str,
     request: SequenceEnrollmentActionRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceEnrollmentOut:
     try:
         enrollment = await pause_sequence_enrollment(
@@ -119,7 +120,7 @@ async def sequence_enrollment_pause(
 async def sequence_enrollment_resume(
     enrollment_id: str,
     request: SequenceEnrollmentActionRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceEnrollmentOut:
     try:
         enrollment = await resume_sequence_enrollment(
@@ -141,7 +142,7 @@ async def sequence_enrollment_resume(
 async def sequence_enrollment_cancel(
     enrollment_id: str,
     request: SequenceEnrollmentActionRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceEnrollmentOut:
     try:
         enrollment = await cancel_sequence_enrollment(
@@ -166,7 +167,7 @@ async def sequence_enrollment_alert_create(
     enrollment_id: str,
     request: SequenceEmailAlertCreate,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceEmailAlertOut:
     alert = await create_sequence_email_alert(
         enrollment_id,

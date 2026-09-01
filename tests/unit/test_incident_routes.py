@@ -73,7 +73,7 @@ def test_incident_routes_return_incidents_and_promoted_watch_targets(monkeypatch
 
     async def fake_promote_incident_to_watchlist(incident_id, **kwargs):
         assert kwargs["version"] == 1
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         return _watch_target()
 
     async def fake_get_watch_target(watch_target_id, **kwargs):
@@ -97,7 +97,7 @@ def test_incident_routes_return_incidents_and_promoted_watch_targets(monkeypatch
     incidents = client.get("/v1/intelligence/incidents").json()["incidents"]
     watch = client.post(
         "/v1/intelligence/incidents/incident-1/promote-to-watchlist",
-        headers={"Idempotency-Key": "idem-1", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "idem-1", "X-Test-Metadata": "analyst@example.com"},
         json={"version": 1},
     ).json()
     watch_detail = client.get("/v1/intelligence/watch-targets/watch-1").json()
@@ -118,7 +118,7 @@ def test_incident_routes_return_incidents_and_promoted_watch_targets(monkeypatch
 def test_manual_incident_route_exposes_version(monkeypatch) -> None:
     async def fake_create_manual_incident(request, **kwargs):
         assert request.title == "Manual incident"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         return [_incident()]
 
     monkeypatch.setattr(routers.incidents, "create_manual_incident", fake_create_manual_incident)
@@ -126,7 +126,7 @@ def test_manual_incident_route_exposes_version(monkeypatch) -> None:
     client = TestClient(build_app(Settings(service_name="incident-intelligence-service")))
     response = client.post(
         "/v1/intelligence/incidents/manual",
-        headers={"Idempotency-Key": "manual-incident-1", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "manual-incident-1", "X-Test-Metadata": "analyst@example.com"},
         json={"title": "Manual incident", "affected_companies": ["Example Corp"]},
     )
 

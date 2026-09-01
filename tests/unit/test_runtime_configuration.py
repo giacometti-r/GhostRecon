@@ -24,6 +24,18 @@ from ghostrecon.models.db import CrmExportBatch
 from ghostrecon.services.search_adapters import search_provider_for_settings
 
 
+def _strict_security(service: str) -> dict[str, object]:
+    return {
+        "authentication_backend": "oidc",
+        "service_identity": service,
+        "service_private_key_path": "/run/secrets/service-key.pem",
+        "service_private_key_id": "key-1",
+        "service_trust_bundle_path": "/run/secrets/trust.json",
+        "audit_hmac_key": "a" * 32,
+        "docs_enabled": False,
+    }
+
+
 def test_runtime_profiles_and_services_are_published() -> None:
     assert {item.value for item in RuntimeProfile} == {
         "local",
@@ -50,6 +62,7 @@ def test_database_only_service_does_not_own_provider_credentials() -> None:
         profile="production",
         service_name="reporting-service",
         database_url="postgresql+asyncpg://reporter:strong-password@db.internal/ghostrecon",
+        **_strict_security("reporting-service"),
     )
     assert validate_configuration(settings) == ()
 
@@ -60,6 +73,7 @@ def test_crm_validation_is_scoped_to_attio_credentials() -> None:
         service_name="crm-service",
         database_url="postgresql+asyncpg://crm:strong-password@db.internal/ghostrecon",
         crm_provider="attio",
+        **_strict_security("crm-service"),
     )
     issues = validate_configuration(settings)
     assert {(item.setting_name, item.error_code) for item in issues} == {

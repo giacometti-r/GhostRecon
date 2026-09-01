@@ -14,7 +14,6 @@ from ghostrecon.console.components import (
     icon,
     nav_link,
 )
-from ghostrecon.models.api import DashboardRole
 
 from .constants import NAV_ITEMS
 from .crm_pages import crm_export_detail_page, crm_exports_page, crm_target_detail_page
@@ -42,10 +41,7 @@ from .source_pages import source_health_page
 
 
 def build_shell(settings: Settings) -> html.Div:
-    context = dashboard_context_from_headers()
-    role_options = [
-        {"label": role.value.replace("_", " "), "value": role.value} for role in DashboardRole
-    ]
+    context = dashboard_context_from_headers(settings)
     return html.Div(
         [
             dcc.Location(id="console-url", refresh=False),
@@ -72,15 +68,10 @@ def build_shell(settings: Settings) -> html.Div:
                                 value=context.actor,
                                 type="text",
                                 debounce=True,
+                                readOnly=True,
                             ),
-                            html.Label("Role", htmlFor="operator-role"),
-                            dcc.Dropdown(
-                                id="operator-role",
-                                value=context.role,
-                                options=role_options,
-                                clearable=False,
-                                searchable=False,
-                            ),
+                            html.Div(context.role.replace("_", " "), className="verified-role"),
+                            dcc.Input(id="operator-role", value=context.role, type="hidden"),
                             html.Button(
                                 [icon("refresh-cw"), html.Span("Refresh")],
                                 id="refresh-page",

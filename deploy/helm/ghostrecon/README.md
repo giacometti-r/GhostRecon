@@ -69,18 +69,11 @@ Expose `console-service` only through authenticated internal ingress or
 port-forwarding. The service keeps `/healthz`, `/readyz`, `/metrics`, `/docs`,
 and `/v1/*` routes ahead of the Dash catch-all route.
 
-## Sprint 25a Security Deployment Boundary
+## Sprint 25b Security Deployment Boundary
 
-The chart does not yet configure OIDC, session-HMAC keys, per-workload Ed25519 keys/trust bundles,
-Redis security namespaces/ACLs, distinct security/database runtime roles, gateway-only ingress, or
-the Sprint 25 NetworkPolicy model. The application image contains security primitives and strict
-perimeter behavior only.
+The chart renders gateway-only TLS ingress, internal owner/console services, default-deny network policies, distinct service accounts with token automount disabled, and separate read-only key/trust secret mounts for every service, worker queue, and scheduler. Production validation rejects local OIDC, mutable images, public docs, missing TLS, or a non-OIDC authentication backend.
 
-In staging/production, legacy `X-Actor` and `X-Operator-Role` headers are rejected, while replacement
-OIDC/session and workload authentication are not wired. `/readyz`, `/metrics`, `/docs`, `/redoc`, and
-`/openapi.json` also remain mounted without operation-policy enforcement. Do not treat the current
-chart as a completed production identity perimeter or invent security environment variables before
-the corresponding settings and templates are implemented.
+Provision each referenced `ghostrecon-<workload>-identity` Secret before deployment. Private keys must be unique and trust bundles may retain old public keys only during a bounded rotation overlap. Provider credentials are projected only into listed consumers through `secretProjection`.
 
 ## Google Calendar Meeting Handoff
 

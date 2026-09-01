@@ -97,8 +97,8 @@ def test_console_api_client_builds_urls_headers_and_errors() -> None:
     request = FakeHttpClient.requests[0]
     assert request.url == "http://gateway.test/v1/reporting/events"
     assert request.params == {"limit": 1}
-    assert request.headers["X-Actor"] == "analyst@example.com"
-    assert request.headers["X-Operator-Role"] == "analyst"
+    assert "X-Test-Metadata" not in request.headers
+    assert "X-Test-Role-Metadata" not in request.headers
     assert any_stale([payload]) is True
     assert degraded_dependencies([payload]) == ["source-a"]
 
@@ -414,16 +414,14 @@ def test_render_page_shows_sequence_workflow_and_structured_meeting_prep() -> No
         ),
         ("GET", "/v1/reporting/meetings/meeting-1"): (
             200,
-                {
-                    "metadata": _metadata(),
-                    "meeting": {
-                        "id": "meeting-1",
-                        "subject": "Security discovery",
-                        "status": "scheduled",
-                        "attendees": [
-                            {"display_name": "Taylor Ng", "email": "taylor.ng@example.com"}
-                        ],
-                        "prep_packet": {
+            {
+                "metadata": _metadata(),
+                "meeting": {
+                    "id": "meeting-1",
+                    "subject": "Security discovery",
+                    "status": "scheduled",
+                    "attendees": [{"display_name": "Taylor Ng", "email": "taylor.ng@example.com"}],
+                    "prep_packet": {
                         "account_summary": "Example Industries has active incident intent.",
                         "stakeholder_map": [{"name": "Taylor Ng", "role": "VP Security"}],
                         "likely_security_priorities": ["identity response"],

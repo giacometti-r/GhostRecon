@@ -11,6 +11,7 @@ from ghostrecon.models.api import (
     EntityResolutionCreate,
     SuppressionCheckRequest,
 )
+from ghostrecon.security.tasks import TASK_QUEUES, SignedTask
 from ghostrecon.services.company_crawler import run_company_crawl
 from ghostrecon.services.crm_exports import process_crm_export_batch
 from ghostrecon.services.email_candidates import generate_email_candidates
@@ -40,9 +41,11 @@ from ghostrecon.services.source_registry import fetch_source_by_id
 
 settings = get_settings()
 require_valid_configuration(settings)
+SignedTask.security_settings = settings
 
 celery_app = Celery(
     "ghostrecon",
+    task_cls=SignedTask,
     broker=str(settings.redis_url),
     backend=str(settings.redis_url),
 )
@@ -50,12 +53,16 @@ celery_app.conf.update(
     task_acks_late=True,
     task_reject_on_worker_lost=True,
     worker_prefetch_multiplier=1,
-    task_default_queue=settings.service_name,
+    task_default_queue="unclassified",
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    task_routes={name: {"queue": queue} for name, queue in TASK_QUEUES.items()},
     beat_schedule={
         "monitor-watch-targets-hourly": {
             "task": "ghostrecon.monitor_watch_targets",
             "schedule": settings.watch_monitoring_interval_seconds,
-            "options": {"queue": "worker"},
+            "options": {"queue": "watch-monitor"},
         }
     },
 )
@@ -181,6 +188,8 @@ def process_due_sequence_email_alerts_task(limit: int = 50) -> dict[str, object]
 
 
 @celery_app.task(name="ghostrecon.retry_meeting_crm_sync")
-def retry_meeting_crm_sync_task(meeting_id: str, actor: str = "system") -> dict[str, object] | None:
-    result = asyncio.run(retry_meeting_crm_sync(meeting_id, actor=actor, settings=settings))
+def retry_meeting_crm_sync_task(meeting_id: str) -> dict[str, object] | None:
+    result = asyncio.run(
+        retry_meeting_crm_sync(meeting_id, actor="meeting-sync-worker", settings=settings)
+    )
     return result.model_dump(mode="json") if result else None

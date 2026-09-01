@@ -1,4 +1,4 @@
-from fastapi import Header, HTTPException, Query
+from fastapi import HTTPException, Query
 
 from ghostrecon.common.config import get_settings
 from ghostrecon.models.api import (
@@ -16,6 +16,7 @@ from ghostrecon.services.sequencing import (
     send_approved_sequence_email,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import gateway_router, sequencing_router
 
 
@@ -54,7 +55,7 @@ async def sequence_activity_detail(activity_id: str) -> SequenceActivityOut:
 async def sequence_activity_approve_email(
     activity_id: str,
     request: SequenceActivityActionRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceActivityOut:
     try:
         activity = await send_approved_sequence_email(
@@ -81,7 +82,7 @@ async def sequence_activity_approve_email(
 async def sequence_activity_complete(
     activity_id: str,
     request: SequenceActivityActionRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceActivityOut:
     try:
         activity = await complete_sequence_activity(
@@ -108,7 +109,7 @@ async def sequence_activity_complete(
 async def sequence_activity_schedule_meeting(
     activity_id: str,
     request: SequenceActivityScheduleMeetingRequest,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> SequenceActivityOut:
     try:
         activity = await schedule_sequence_meeting_activity(

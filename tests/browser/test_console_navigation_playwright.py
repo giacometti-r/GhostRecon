@@ -63,7 +63,6 @@ def test_sidebar_routes_change_url_content_and_active_state(page, console_server
 
     page.goto(base_url)
     _heading(page, "Operator Overview").wait_for()
-    _select_role(page, "analyst")
 
     for route, heading in expected_routes.items():
         label = "Overview" if route == "/" else _nav_label(heading)
@@ -112,9 +111,8 @@ def test_detail_links_refresh_filters_pagination_role_and_action(page, console_s
 
     page.goto(f"{base_url}/review")
     approve = page.locator('button[title="Approve"]').first
-    assert approve.is_disabled()
+    assert approve.is_enabled()
     assert console_server["mutations"] == []
-    _select_role(page, "analyst")
     approve = page.locator('button[title="Approve"]').first
     playwright_sync_api.expect(approve).to_be_enabled()
     assert console_server["mutations"] == []
@@ -132,11 +130,6 @@ def test_gateway_failure_renders_actionable_notice(page, console_server) -> None
     page.get_by_text("Endpoint: /v1/reporting/events").wait_for()
     page.get_by_text("Status: 503").wait_for()
 
-
-def _select_role(page, role: str) -> None:
-    page.locator("#operator-role").click()
-    page.get_by_text(role, exact=True).click()
-    page.get_by_text(role, exact=True).wait_for()
 
 
 def _heading(page, name: str):
@@ -248,7 +241,7 @@ def _payload_for(path: str) -> dict[str, Any]:
         },
         "/v1/reporting/events/event-1": {
             "metadata": metadata,
-            "event": {"id": "event-1", "name": "Demo Event", "country": "US"},
+            "event": {"id": "event-1", "name": "Demo Event", "country": "US", "version": 1},
         },
         "/v1/intelligence/events/event-1/participants": {
             "participants": [{"published_name": "Ada Analyst", "organization": "DemoSec"}],
@@ -328,15 +321,11 @@ def _payload_for(path: str) -> dict[str, Any]:
             "items": [{"crm_target_id": "crm-target-1", "status": "failed"}],
         },
         "/v1/sequences/enrollments": {
-            "enrollments": [
-                {"id": "enroll-1", "sequence_id": "seq-1", "status": "active"}
-            ],
+            "enrollments": [{"id": "enroll-1", "sequence_id": "seq-1", "status": "active"}],
         },
         "/v1/reporting/meetings": {
             "metadata": metadata,
-            "meetings": [
-                {"id": "meeting-1", "subject": "Demo Meeting", "status": "scheduled"}
-            ],
+            "meetings": [{"id": "meeting-1", "subject": "Demo Meeting", "status": "scheduled"}],
         },
         "/v1/reporting/meetings/meeting-1": {
             "metadata": metadata,

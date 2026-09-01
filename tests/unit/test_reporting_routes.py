@@ -227,7 +227,7 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     monkeypatch.setattr(routers.reporting, "get_reporting_kpi_catalog", fake_kpis)
 
     client = TestClient(build_app(Settings(service_name="reporting-service")))
-    headers = {"X-Operator-Role": "analyst", "X-Actor": "analyst@example.com"}
+    headers = {"X-Test-Role-Metadata": "analyst", "X-Test-Metadata": "analyst@example.com"}
 
     events = client.get("/v1/reporting/events?limit=1", headers=headers).json()
     event_detail = client.get("/v1/reporting/events/event-1", headers=headers).json()
@@ -258,16 +258,16 @@ def test_reporting_routes_return_metadata_wrapped_contracts(monkeypatch) -> None
     assert kpis["kpis"]["review"] == ["approval_rate"]
     assert kpis["kpis"]["meeting_handoff"] == ["meetings_booked"]
     assert legacy_kpis["kpis"]["review"] == ["approval_rate"]
-    assert seen_roles == [DashboardRole.ANALYST]
+    assert seen_roles == [DashboardRole.ADMINISTRATOR]
 
 
-def test_reporting_rejects_unknown_operator_role() -> None:
+def test_reporting_ignores_untrusted_role_metadata() -> None:
     client = TestClient(build_app(Settings(service_name="reporting-service")))
 
     response = client.get("/v1/reporting/events", headers={"X-Operator-Role": "owner"})
 
-    assert response.status_code == 403
-    assert response.json()["detail"] == "unsupported operator role"
+    assert response.status_code == 400
+    assert response.json()["code"] == "reserved_identity_header"
 
 
 def test_reporting_cursor_helpers_are_offset_based_and_strict() -> None:

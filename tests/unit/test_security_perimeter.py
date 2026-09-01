@@ -26,9 +26,7 @@ def test_strict_perimeter_rejects_legacy_identity_headers() -> None:
 
 
 def test_strict_perimeter_rejects_external_obo_headers() -> None:
-    response = TestClient(_app()).post(
-        "/unsafe", headers={"X-GhostRecon-OBO": "attacker"}
-    )
+    response = TestClient(_app()).post("/unsafe", headers={"X-GhostRecon-OBO": "attacker"})
     assert response.status_code == 400
     assert response.json()["code"] == "reserved_internal_header"
 
@@ -42,7 +40,9 @@ def test_perimeter_enforces_body_bound_and_security_headers() -> None:
     assert too_large.status_code == 413
     assert too_large.json()["code"] == "body_too_large"
 
-    response = TestClient(_app()).post("/unsafe", content=b"{}")
+    response = TestClient(_app()).post(
+        "/unsafe", content=b"{}", headers={"Content-Type": "application/json"}
+    )
     assert response.status_code == 200
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"

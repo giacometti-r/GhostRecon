@@ -23,6 +23,15 @@ env:
   GHOSTRECON_IMAP_HOST: imap.company.ch
   GHOSTRECON_IMAP_USERNAME: ghostrecon
 
+  GHOSTRECON_AUTHENTICATION_BACKEND: oidc
+  GHOSTRECON_OIDC_ISSUER: https://company.eu.auth0.com/
+  GHOSTRECON_OIDC_CLIENT_ID: ghostrecon-production
+  GHOSTRECON_OIDC_REDIRECT_URI: https://ghostrecon.company.ch/auth/callback
+  GHOSTRECON_OIDC_POST_LOGOUT_REDIRECT_URI: https://ghostrecon.company.ch/auth/provider-logout/callback
+  GHOSTRECON_SECURE_COOKIES: "true"
+  GHOSTRECON_ALLOWED_CORS_ORIGINS: '["https://ghostrecon.company.ch"]'
+  GHOSTRECON_TRUSTED_PROXY_CIDRS: '["10.0.0.0/8"]'
+  GHOSTRECON_DOCS_ENABLED: "false"
 secretEnv:
   GHOSTRECON_ATTIO_ACCESS_TOKEN: test-attio-token
   GHOSTRECON_SERPAPI_API_KEY: test-serpapi-key
@@ -30,6 +39,10 @@ secretEnv:
   GHOSTRECON_SMTP_PASSWORD: test-smtp-password
   GHOSTRECON_IMAP_PASSWORD: test-imap-password
 
+  GHOSTRECON_SESSION_HMAC_KEY: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  GHOSTRECON_OIDC_TRANSACTION_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  GHOSTRECON_AUDIT_HMAC_KEY: cccccccccccccccccccccccccccccccc
+  GHOSTRECON_OIDC_CLIENT_SECRET: auth0-test-client-secret
 postgresql:
   image:
     tag: 17.10-alpine3.23
@@ -49,3 +62,11 @@ emailVerifier:
   image:
     tag: "1.0.0"
     digest: sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+
+ingress:
+  enabled: true
+  host: ghostrecon.company.ch
+  tlsSecretName: ghostrecon-production-tls
+
+localOIDC:
+  enabled: false

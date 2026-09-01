@@ -147,7 +147,7 @@ def test_meeting_routes_cover_handoff_runtime(monkeypatch) -> None:
     monkeypatch.setattr(routers.meetings, "retry_meeting_crm_sync", fake_retry)
 
     client = TestClient(build_app(Settings(service_name="meeting-handoff-service")))
-    headers = {"Idempotency-Key": "idem-meeting", "X-Actor": "analyst@example.com"}
+    headers = {"Idempotency-Key": "idem-meeting", "X-Test-Metadata": "analyst@example.com"}
     availability = client.post(
         "/v1/calendar/availability",
         json={
@@ -172,7 +172,7 @@ def test_meeting_routes_cover_handoff_runtime(monkeypatch) -> None:
     detail = client.get("/v1/meetings/meeting-1").json()
     prep = client.post(
         "/v1/meetings/meeting-1/prep-packet",
-        headers={"Idempotency-Key": "idem-prep", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "idem-prep", "X-Test-Metadata": "analyst@example.com"},
     ).json()
     outcome = client.post(
         "/v1/meetings/meeting-1/outcome",
@@ -211,7 +211,7 @@ def test_meeting_routes_cover_handoff_runtime(monkeypatch) -> None:
         "availability_attendees": ["ada@example.com"],
         "create_subject": "Security discovery",
         "create_key": "idem-meeting",
-        "actor": "analyst@example.com",
+        "actor": "Local development administrator",
         "list_status": "scheduled",
         "prep_key": "idem-prep",
         "outcome_key": "idem-meeting",

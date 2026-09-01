@@ -1,0 +1,186 @@
+GhostRecon Sprint 25b tool installation commands
+================================================
+
+Target platform: Ubuntu 22.04, 24.04, or 26.04 on amd64 or arm64.
+Run commands one section at a time. Review every sudo command before running it.
+Run repository commands from the GhostRecon repository root.
+
+
+1. Base operating-system tools
+------------------------------
+
+sudo apt-get update
+sudo apt-get install --yes ca-certificates curl wget gnupg apt-transport-https git make build-essential jq openssl age postgresql-client redis-tools python3 python3-dev python3-venv python3-pip pipx libpq-dev libffi-dev libssl-dev
+
+
+2. Docker Engine, Buildx, and Docker Compose
+---------------------------------------------
+
+# Skip this section when a working Docker Engine and Compose v2 plugin already exist.
+# These commands use Docker's official Ubuntu APT repository.
+
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+DOCKER_UBUNTU_CODENAME="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")"
+DOCKER_ARCHITECTURE="$(dpkg --print-architecture)"
+printf 'Types: deb\nURIs: https://download.docker.com/linux/ubuntu\nSuites: %s\nComponents: stable\nArchitectures: %s\nSigned-By: /etc/apt/keyrings/docker.asc\n' "$DOCKER_UBUNTU_CODENAME" "$DOCKER_ARCHITECTURE" | sudo tee /etc/apt/sources.list.d/docker.sources
+
+sudo apt-get update
+sudo apt-get install --yes docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo systemctl enable --now docker
+
+# Optional: permit the current user to run Docker without sudo. Log out and back in
+# after this command. Membership in the docker group is effectively root-equivalent.
+sudo usermod -aG docker "$USER"
+
+
+3. Python environment, application dependencies, and browser runtime
+---------------------------------------------------------------------
+
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install ".[dev]"
+
+# Installs Chromium plus the Ubuntu libraries required by Playwright browser tests.
+python -m playwright install --with-deps chromium
+
+# Graphify is needed to query and refresh this repository's knowledge graph.
+pipx install graphifyy
+pipx ensurepath
+
+
+4. Helm
+-------
+
+HELM_APT_KEY_FINGERPRINT="DDF78C3E6EBB2D2CC223C95C62BA89D07698DBC6"
+curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey -o /tmp/ghostrecon-helm.gpg
+
+HELM_DOWNLOADED_FINGERPRINT="$(gpg --show-keys --with-colons /tmp/ghostrecon-helm.gpg | awk -F: '$1 == "fpr" {print $10}' | head -n 1)"
+test "$HELM_DOWNLOADED_FINGERPRINT" = "$HELM_APT_KEY_FINGERPRINT"
+
+gpg --dearmor < /tmp/ghostrecon-helm.gpg | sudo tee /usr/share/keyrings/helm.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install --yes helm
+
+
+5. Trivy image vulnerability scanner
+------------------------------------
+
+wget -qO /tmp/ghostrecon-trivy-public.key https://aquasecurity.github.io/trivy-repo/deb/public.key
+gpg --dearmor < /tmp/ghostrecon-trivy-public.key | sudo tee /usr/share/keyrings/trivy.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/trivy.gpg] https://aquasecurity.github.io/trivy-repo/deb generic main" | sudo tee /etc/apt/sources.list.d/trivy.list
+sudo apt-get update
+sudo apt-get install --yes trivy
+
+# The first scan downloads Trivy's vulnerability database and therefore needs network access.
+
+
+6. Syft SBOM generator
+----------------------
+
+# Pin the installer to the approved release used for Sprint 25b evidence.
+SYFT_VERSION="v1.51.1"
+SYFT_INSTALL_DIR="$(mktemp -d /tmp/ghostrecon-syft.XXXXXX)"
+curl -sSfL https://get.anchore.io/syft -o "$SYFT_INSTALL_DIR/install-syft.sh"
+sh "$SYFT_INSTALL_DIR/install-syft.sh" -b "$SYFT_INSTALL_DIR/bin" "$SYFT_VERSION"
+sudo install -m 0755 "$SYFT_INSTALL_DIR/bin/syft" /usr/local/bin/syft
+
+
+7. SOPS and the Helm Secrets plugin
+-----------------------------------
+
+# Ubuntu supplies Age in section 1. SOPS is installed from its pinned upstream release.
+SOPS_VERSION="3.13.3"
+SOPS_ARCHITECTURE="$(dpkg --print-architecture)"
+case "$SOPS_ARCHITECTURE" in
+  amd64|arm64) ;;
+  *) echo "Unsupported SOPS architecture: $SOPS_ARCHITECTURE"; false ;;
+esac
+
+curl -fsSL "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.${SOPS_ARCHITECTURE}" -o /tmp/ghostrecon-sops
+sudo install -m 0755 /tmp/ghostrecon-sops /usr/local/bin/sops
+
+# Helm 4 core plugin, sufficient for `helm secrets template` used by this repository.
+helm plugin install oci://ghcr.io/jkroepke/helm-secrets/secrets:4.7.7
+
+# Use this instead only when `helm version --short` reports Helm 3:
+# helm plugin install https://github.com/jkroepke/helm-secrets --version v4.7.7
+
+
+8. Verify the installation
+--------------------------
+
+git --version
+make --version
+python3 --version
+docker version
+docker buildx version
+docker compose version
+psql --version
+redis-cli --version
+helm version --short
+helm plugin list
+trivy --version
+syft version
+sops --version
+age --version
+jq --version
+openssl version
+graphify --help
+
+. .venv/bin/activate
+python -m pytest --version
+python -m ruff --version
+python -m mypy --version
+python -m bandit --version
+python -m playwright --version
+
+
+9. Repository gates enabled by these tools
+-------------------------------------------
+
+. .venv/bin/activate
+make lint
+make type
+make security
+make test
+make migration-check
+make helm-check
+docker compose config --quiet
+make docker-build
+make image-scan
+make sbom
+python scripts/generate_security_matrices.py --check
+git diff --check
+graphify update .
+
+Important: the Makefile's `ghostrecon:local` scan is a local diagnostic gate. Sprint
+25b release evidence must scan an immutable OCI digest, generate both SBOM formats
+from that exact digest, and record the commit, digest, tool versions, timestamps,
+artifact SHA-256 checksums, CI run, and any narrowly approved unexpired exceptions.
+
+
+10. Required access that cannot be installed with APT or pip
+-------------------------------------------------------------
+
+- An isolated Auth0 staging/test tenant and permission to configure its application,
+  callback/logout URLs, OIDC claims/actions, email OTP connection, and WebAuthn/passkey
+  phishing-resistant step-up policy.
+- A dedicated test mailbox that can receive Auth0 email OTP messages.
+- A passkey-capable authenticator/browser and the ability to enroll and remove test
+  credentials.
+- A protected container registry and CI runner that can build, push, inspect, and scan
+  the same immutable image digest without exposing registry credentials.
+- A disposable PostgreSQL database and Redis instance (Docker Compose can provide both)
+  for real non-owner-role, pooled-connection, multi-process session, bootstrap, audit,
+  migration upgrade/downgrade, and rollback tests.
+- Permission to retain the Trivy JSON report, SPDX JSON SBOM, CycloneDX JSON SBOM,
+  checksums, logs, browser evidence, and approval records as protected CI artifacts.
+
+Do not put Auth0 client secrets, OTPs, passkeys, database credentials, registry tokens,
+Age private keys, cookies, authorization codes, or raw identity claims in this file,
+the repository, terminal transcripts, scanner reports, or CI logs.

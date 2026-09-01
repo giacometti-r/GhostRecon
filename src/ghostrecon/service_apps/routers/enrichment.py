@@ -30,6 +30,7 @@ from ghostrecon.services.enrichment_workflows import (
     list_entity_resolutions,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import enrichment_router, gateway_router
 
 
@@ -48,7 +49,7 @@ async def domain_enrichment(request: DomainEnrichmentRequest):
 )
 async def enrichment_watch_target_find_contact(
     watch_target_id: str,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> WatchTargetContactDiscoveryResult:
     result = await discover_watch_target_contacts(
         watch_target_id,
@@ -70,7 +71,7 @@ async def enrichment_watch_target_find_contact(
 )
 async def enrichment_contact_candidate_discover_domain(
     candidate_id: str,
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> ContactDomainDiscoveryResult:
     result = await discover_contact_candidate_domain(
         candidate_id,
@@ -93,7 +94,7 @@ async def enrichment_contact_candidate_discover_domain(
 async def enrichment_contact_candidate_discover_email(
     candidate_id: str,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> EmailCandidatePersistResult:
     records = await discover_contact_candidate_email(
         candidate_id,
@@ -177,7 +178,7 @@ async def enrichment_event_participant_enrich_target(
     participant_id: str,
     request: EventParticipantEnrichRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> EventParticipantEnrichResult:
     try:
         return await enrich_event_participant_target(

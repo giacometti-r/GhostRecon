@@ -84,9 +84,7 @@ def upgrade() -> None:
         sa.Column("policy_version", sa.String(64), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
-    op.create_index(
-        "ix_security_sessions_principal_id", "security_sessions", ["principal_id"]
-    )
+    op.create_index("ix_security_sessions_principal_id", "security_sessions", ["principal_id"])
     op.create_index("ix_security_sessions_revoked_at", "security_sessions", ["revoked_at"])
     op.create_table(
         "security_emergency_grants",
@@ -200,3 +198,43 @@ def downgrade() -> None:
         ("security_principals", "security_principal_self_select"),
     ):
         op.execute(sa.text(f'DROP POLICY IF EXISTS "{policy}" ON "{table}"'))
+    for column in (
+        "correlation_id",
+        "decision",
+        "operation",
+        "service_subject",
+        "human_subject",
+    ):
+        op.drop_index(f"ix_audit_events_{column}", table_name="audit_events")
+    for column in (
+        "integrity_hmac",
+        "network_metadata",
+        "correlation_id",
+        "request_id",
+        "environment",
+        "mapping_version",
+        "policy_version",
+        "assurance",
+        "denial_category",
+        "decision",
+        "permission",
+        "operation",
+        "identity_type",
+        "on_behalf_of_subject",
+        "service_subject",
+        "human_subject",
+    ):
+        op.drop_column("audit_events", column)
+    op.drop_table("security_policy_versions")
+    op.drop_index("ix_security_replay_markers_expires_at", table_name="security_replay_markers")
+    op.drop_table("security_replay_markers")
+    op.drop_index(
+        "ix_security_emergency_grants_principal_id", table_name="security_emergency_grants"
+    )
+    op.drop_table("security_emergency_grants")
+    op.drop_index("ix_security_sessions_revoked_at", table_name="security_sessions")
+    op.drop_index("ix_security_sessions_principal_id", table_name="security_sessions")
+    op.drop_table("security_sessions")
+    op.drop_index("ix_security_role_bindings_principal_id", table_name="security_role_bindings")
+    op.drop_table("security_role_bindings")
+    op.drop_table("security_principals")

@@ -15,6 +15,20 @@ serviceAccount:
   create: true
   name: ghostrecon
 
+
+workloadKeyId: current
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ghostrecon.local
+  tlsSecretName: ghostrecon-tls
+
+networkPolicy:
+  enabled: true
+
+localOIDC:
+  enabled: true
 env:
   GHOSTRECON_LOG_LEVEL: INFO
   GHOSTRECON_GEOCODER_PROVIDER: local_demo
@@ -115,6 +129,18 @@ services:
   - console-service
   - reporting-service
 
+
+workerQueues:
+  - {name: source-fetch, queue: source-fetch}
+  - {name: event-parser, queue: event-parser}
+  - {name: incident-parser, queue: incident-parser}
+  - {name: watch-monitor, queue: watch-monitor}
+  - {name: enrichment, queue: enrichment}
+  - {name: email-intelligence, queue: email-intelligence}
+  - {name: governance, queue: governance}
+  - {name: crm-export, queue: crm-export}
+  - {name: sequencing, queue: sequencing}
+  - {name: meeting-sync, queue: meeting-sync}
 workers:
   enabled: true
   replicaCount: 1
@@ -128,7 +154,7 @@ preflight:
   backoffLimit: 0
 
 secretProjection:
-  gateway-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_ATTIO_ACCESS_TOKEN, GHOSTRECON_OPENSERP_API_KEY, GHOSTRECON_SERPAPI_API_KEY, GHOSTRECON_GOOGLE_PRIVATE_KEY, GHOSTRECON_SMTP_PASSWORD, GHOSTRECON_IMAP_PASSWORD]
+  gateway-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_REDIS_URL, GHOSTRECON_SESSION_HMAC_KEY, GHOSTRECON_OIDC_TRANSACTION_ENCRYPTION_KEY, GHOSTRECON_AUDIT_HMAC_KEY, GHOSTRECON_OIDC_CLIENT_SECRET, GHOSTRECON_ATTIO_ACCESS_TOKEN, GHOSTRECON_OPENSERP_API_KEY, GHOSTRECON_SERPAPI_API_KEY, GHOSTRECON_GOOGLE_PRIVATE_KEY, GHOSTRECON_SMTP_PASSWORD, GHOSTRECON_IMAP_PASSWORD]
   event-intelligence-service: [GHOSTRECON_DATABASE_URL]
   incident-intelligence-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_SERPAPI_API_KEY]
   crm-service: [GHOSTRECON_DATABASE_URL, GHOSTRECON_ATTIO_ACCESS_TOKEN]

@@ -27,10 +27,10 @@ async def set_security_context(
         "ghostrecon.operation": operation,
         "ghostrecon.permissions": ",".join(sorted(identity.permissions)),
         "ghostrecon.policy_version": identity.permission_policy_version,
-        "ghostrecon.governance_capability": str(
-            "governance.read" in identity.permissions
-        ).lower(),
+        "ghostrecon.governance_capability": str("governance.read" in identity.permissions).lower(),
         "ghostrecon.correlation_id": identity.correlation_id,
+        "ghostrecon.context_valid": "1",
+        "ghostrecon.calling_workload": identity.calling_service or identity.subject,
     }
     for name, value in values.items():
         await session.execute(

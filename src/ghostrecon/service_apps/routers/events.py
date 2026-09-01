@@ -21,6 +21,7 @@ from ghostrecon.services.event_intelligence import (
     update_event,
 )
 
+from .dependencies import VERIFIED_ACTOR
 from .registry import event_intelligence_router, gateway_router
 
 
@@ -51,7 +52,7 @@ async def intelligence_events(
 async def intelligence_create_manual_event(
     request: ManualEventCreate,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> CyberEventOut:
     try:
         event = await create_manual_event(
@@ -71,7 +72,7 @@ async def intelligence_patch_event(
     event_id: str,
     request: EventUpdateRequest,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> CyberEventOut:
     try:
         event = await update_event(
@@ -134,7 +135,7 @@ async def intelligence_create_event_participant(
     event_id: str,
     request: EventParticipantCreate,
     idempotency_key: str = Header(alias="Idempotency-Key"),
-    actor: str = Header(default="system", alias="X-Actor"),
+    actor: str = VERIFIED_ACTOR,
 ) -> EventParticipantOut:
     participant = await create_event_participant(
         event_id,

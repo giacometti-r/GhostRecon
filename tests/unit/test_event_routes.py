@@ -105,7 +105,7 @@ def test_manual_event_route_uses_additive_create_contract(monkeypatch) -> None:
     async def fake_create_manual_event(request, **kwargs):
         assert request.name == "Manual Event"
         assert request.event_format.value == "online"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         return _event()
 
     monkeypatch.setattr(routers.events, "create_manual_event", fake_create_manual_event)
@@ -113,7 +113,7 @@ def test_manual_event_route_uses_additive_create_contract(monkeypatch) -> None:
     client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
     response = client.post(
         "/v1/intelligence/events/manual",
-        headers={"Idempotency-Key": "manual-event-1", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "manual-event-1", "X-Test-Metadata": "analyst@example.com"},
         json={
             "name": "Manual Event",
             "canonical_url": "https://example.com/manual-event",
@@ -131,7 +131,7 @@ def test_manual_event_route_rejects_non_iso_country_code() -> None:
     client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
     response = client.post(
         "/v1/intelligence/events/manual",
-        headers={"Idempotency-Key": "manual-event-1", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "manual-event-1", "X-Test-Metadata": "analyst@example.com"},
         json={
             "name": "Manual Event",
             "canonical_url": "https://example.com/manual-event",
@@ -145,14 +145,14 @@ def test_manual_event_route_rejects_non_iso_country_code() -> None:
     )
 
     assert response.status_code == 422
-    assert "two-letter ISO 3166-1 alpha-2 code" in response.text
+    assert response.json()["code"] == "invalid_request"
 
 
 def test_manual_event_route_rejects_malformed_canonical_url() -> None:
     client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
     response = client.post(
         "/v1/intelligence/events/manual",
-        headers={"Idempotency-Key": "manual-event-1", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "manual-event-1", "X-Test-Metadata": "analyst@example.com"},
         json={
             "name": "Manual Event",
             "canonical_url": "https:example.com/manual-event",
@@ -163,7 +163,7 @@ def test_manual_event_route_rejects_malformed_canonical_url() -> None:
     )
 
     assert response.status_code == 422
-    assert "absolute http(s) URL" in response.text
+    assert response.json()["code"] == "invalid_request"
 
 
 def test_event_patch_route_uses_versioned_update_contract(monkeypatch) -> None:
@@ -171,7 +171,7 @@ def test_event_patch_route_uses_versioned_update_contract(monkeypatch) -> None:
         assert event_id == "event-1"
         assert request.version == 1
         assert request.event_format.value == "in-person"
-        assert kwargs["actor"] == "analyst@example.com"
+        assert kwargs["actor"] == "Local development administrator"
         return _event()
 
     monkeypatch.setattr(routers.events, "update_event", fake_update_event)
@@ -179,7 +179,7 @@ def test_event_patch_route_uses_versioned_update_contract(monkeypatch) -> None:
     client = TestClient(build_app(Settings(service_name="event-intelligence-service")))
     response = client.patch(
         "/v1/intelligence/events/event-1",
-        headers={"Idempotency-Key": "event-edit-1", "X-Actor": "analyst@example.com"},
+        headers={"Idempotency-Key": "event-edit-1", "X-Test-Metadata": "analyst@example.com"},
         json={"version": 1, "event_format": "physical", "street_address": "Demo Way 42"},
     )
 
